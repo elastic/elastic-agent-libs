@@ -42,7 +42,7 @@ pipeline {
                 gofmt -l . | read && echo "Code differs from gofmt's style. Run 'gofmt -w .'" 1>&2 && exit 1 || true
               ''')
               sh(label: 'Mage check', script: 'mage check')
-              sh(label: 'Go vet', script: 'go vet')
+              sh(label: 'Go vet', script: 'go vet ./...')
             }
           }
         }
@@ -64,19 +64,6 @@ pipeline {
           }
         }
         stages {
-          stage('build'){
-            steps {
-              withGithubNotify(context: "Build-${GO_VERSION}-${PLATFORM}") {
-                deleteDir()
-                unstash 'source'
-                dir("${BASE_DIR}"){
-                  withGoEnv(){
-                    cmd(label: 'Go build', script: 'go build')
-                  }
-                }
-              }
-            }
-          }
           stage('Test') {
             steps {
               withGithubNotify(context: "Test-${GO_VERSION}-${PLATFORM}") {
