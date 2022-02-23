@@ -204,6 +204,7 @@ func Check() error {
 }
 
 // UpdateGoVersion makes required changes in order to switch to a new version of Go set in `./.go-version`.
+// nolint: deadcode,unparam // it's used as a `mage` target and requires returning an error
 func UpdateGoVersion() error {
 	mg.Deps(Linter.UpdateGoVersion)
 	return nil
