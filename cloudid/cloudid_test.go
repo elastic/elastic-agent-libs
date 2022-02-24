@@ -98,7 +98,7 @@ func TestDecodeError(t *testing.T) {
 		},
 		{
 			cloudID:  "dXMtY2VudHJhbDEuZ2NwLmNsb3VkLmVzLmlvJDhhMDI4M2FmMDQxZjE5NWY3NzI5YmMwNGM2NmEwZg==",
-			errorMsg: "Expected at least 3 parts",
+			errorMsg: "expected at least 3 parts",
 		},
 	}
 
@@ -218,7 +218,7 @@ func TestOverwriteErrors(t *testing.T) {
 			inCfg: map[string]interface{}{
 				"cloud.id": "blah",
 			},
-			errMsg: "Error decoding cloud.id",
+			errMsg: "error decoding cloud.id",
 		},
 		{
 			name: "invalid cloud.auth",
@@ -234,7 +234,7 @@ func TestOverwriteErrors(t *testing.T) {
 				"cloud.id":              "cloudidtest:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQyNDlmM2FmMWY0ZWVlMjRhODRlM2I0MDFlNjhhMWIyYSRkNGFjNzU1OWQ0Njc0YjdjOTFhYmUxMDg1NmQ4NDMwNA==",
 				"output.logstash.hosts": "localhost:544",
 			},
-			errMsg: "The cloud.id setting enables the Elasticsearch output, but you already have the logstash output enabled",
+			errMsg: "the cloud.id setting enables the Elasticsearch output, but you already have the logstash output enabled",
 		},
 	}
 
