@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/elastic/elastic-agent-libs/mapstr"
 )
@@ -58,9 +59,12 @@ func TestPutRenames(t *testing.T) {
 	assert := assert.New(t)
 
 	a := mapstr.M{}
-	Put(a, "com.docker.swarm.task", "x")
-	Put(a, "com.docker.swarm.task.id", 1)
-	Put(a, "com.docker.swarm.task.name", "foobar")
+	err := Put(a, "com.docker.swarm.task", "x")
+	require.Nil(t, err)
+	err = Put(a, "com.docker.swarm.task.id", 1)
+	require.Nil(t, err)
+	err = Put(a, "com.docker.swarm.task.name", "foobar")
+	require.Nil(t, err)
 	assert.Equal(mapstr.M{"com": mapstr.M{"docker": mapstr.M{"swarm": mapstr.M{
 		"task": mapstr.M{
 			"id":    1,
@@ -70,9 +74,12 @@ func TestPutRenames(t *testing.T) {
 
 	// order is not important:
 	b := mapstr.M{}
-	Put(b, "com.docker.swarm.task.id", 1)
-	Put(b, "com.docker.swarm.task.name", "foobar")
-	Put(b, "com.docker.swarm.task", "x")
+	err = Put(b, "com.docker.swarm.task.id", 1)
+	require.Nil(t, err)
+	err = Put(b, "com.docker.swarm.task.name", "foobar")
+	require.Nil(t, err)
+	err = Put(b, "com.docker.swarm.task", "x")
+	require.Nil(t, err)
 	assert.Equal(mapstr.M{"com": mapstr.M{"docker": mapstr.M{"swarm": mapstr.M{
 		"task": mapstr.M{
 			"id":    1,

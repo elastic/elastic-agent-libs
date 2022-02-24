@@ -27,12 +27,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
-func TestMUpdate(t *testing.T) {
+func TestMapStrUpdate(t *testing.T) {
 	assert := assert.New(t)
 
 	a := M{
@@ -49,7 +50,7 @@ func TestMUpdate(t *testing.T) {
 	assert.Equal(a, M{"a": 1, "b": 3, "c": 4})
 }
 
-func TestMDeepUpdate(t *testing.T) {
+func TestMapStrDeepUpdate(t *testing.T) {
 	tests := []struct {
 		a, b, expected M
 	}{
@@ -106,7 +107,7 @@ func TestMDeepUpdate(t *testing.T) {
 	}
 }
 
-func TestMUnion(t *testing.T) {
+func TestMapStrUnion(t *testing.T) {
 	assert := assert.New(t)
 
 	a := M{
@@ -118,12 +119,12 @@ func TestMUnion(t *testing.T) {
 		"c": 4,
 	}
 
-	c := MUnion(a, b)
+	c := Union(a, b)
 
 	assert.Equal(c, M{"a": 1, "b": 3, "c": 4})
 }
 
-func TestMCopyFieldsTo(t *testing.T) {
+func TestMapStrCopyFieldsTo(t *testing.T) {
 	assert := assert.New(t)
 
 	m := M{
@@ -164,7 +165,7 @@ func TestMCopyFieldsTo(t *testing.T) {
 	assert.Equal(M{"a": M{"a1": 2, "a2": 3}, "c": M{"c1": 1, "c3": M{"c32": 2}}, "b": 2}, c)
 }
 
-func TestMDelete(t *testing.T) {
+func TestMapStrDelete(t *testing.T) {
 	assert := assert.New(t)
 
 	m := M{
@@ -269,7 +270,7 @@ func TestMPut(t *testing.T) {
 	assert.Equal(t, M{"subMap": M{"newMap": M{"a": 1}}}, m)
 }
 
-func TestMGetValue(t *testing.T) {
+func TestMapStrGetValue(t *testing.T) {
 
 	tests := []struct {
 		input  M
@@ -852,7 +853,7 @@ func TestFlatten(t *testing.T) {
 	}
 }
 
-func BenchmarkMFlatten(b *testing.B) {
+func BenchmarkMapStrFlatten(b *testing.B) {
 	m := M{
 		"test": 15,
 		"hello": M{
@@ -871,9 +872,10 @@ func BenchmarkMFlatten(b *testing.B) {
 	}
 }
 
-// Ensure the M is marshaled in logs the same way it is by json.Marshal.
-func TestMJSONLog(t *testing.T) {
-	logp.DevelopmentSetup(logp.ToObserverOutput())
+// Ensure the MapStr is marshaled in logs the same way it is by json.Marshal.
+func TestMapStrJSONLog(t *testing.T) {
+	err := logp.DevelopmentSetup(logp.ToObserverOutput())
+	require.Nil(t, err)
 
 	m := M{
 		"test": 15,
@@ -908,12 +910,13 @@ func TestMJSONLog(t *testing.T) {
 		// Zap adds a newline to end the JSON object.
 		actualJSON := strings.TrimSpace(buf.String())
 
-		assert.Equal(t, string(expectedJSON), actualJSON)
+		assert.Equal(t, expectedJSON, actualJSON)
 	}
 }
 
-func BenchmarkMLogging(b *testing.B) {
-	logp.DevelopmentSetup(logp.ToDiscardOutput())
+func BenchmarkMapStrLogging(b *testing.B) {
+	err := logp.DevelopmentSetup(logp.ToDiscardOutput())
+	require.Nil(b, err)
 	logger := logp.NewLogger("benchtest")
 
 	m := M{
@@ -948,7 +951,7 @@ func BenchmarkWalkMap(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			globalM.GetValue("test.world.ok")
+			_, _ = globalM.GetValue("test.world.ok")
 		}
 	})
 
@@ -963,7 +966,7 @@ func BenchmarkWalkMap(b *testing.B) {
 				},
 			}
 
-			m.Put("hello.world.new", 17)
+			_, _ = m.Put("hello.world.new", 17)
 		}
 	})
 
@@ -972,7 +975,7 @@ func BenchmarkWalkMap(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			m := M{}
 
-			m.Put("a.b.c", 17)
+			_, _ = m.Put("a.b.c", 17)
 		}
 	})
 
@@ -980,8 +983,8 @@ func BenchmarkWalkMap(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			globalM.HasKey("hello.world.ok")
-			globalM.HasKey("hello.world.no_ok")
+			_, _ = globalM.HasKey("hello.world.ok")
+			_, _ = globalM.HasKey("hello.world.no_ok")
 		}
 	})
 
@@ -989,7 +992,7 @@ func BenchmarkWalkMap(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			globalM.HasKey("hello")
+			_, _ = globalM.HasKey("hello")
 		}
 	})
 
@@ -1004,7 +1007,7 @@ func BenchmarkWalkMap(b *testing.B) {
 					},
 				},
 			}
-			m.Put("hello.world.test", 17)
+			_, _ = m.Put("hello.world.test", 17)
 		}
 	})
 }

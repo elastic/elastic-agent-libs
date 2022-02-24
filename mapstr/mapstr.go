@@ -155,7 +155,7 @@ func (m M) Clone() M {
 	result := M{}
 
 	for k, v := range m {
-		if innerMap, ok := tryToM(v); ok {
+		if innerMap, ok := tryToMapStr(v); ok {
 			v = innerMap.Clone()
 		}
 		result[k] = v
@@ -237,8 +237,11 @@ func (m M) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	sort.Strings(keys)
 	for _, k := range keys {
 		v := debugM[k]
-		if inner, ok := tryToM(v); ok {
-			enc.AddObject(k, inner)
+		if inner, ok := tryToMapStr(v); ok {
+			err := enc.AddObject(k, inner)
+			if err != nil {
+				return fmt.Errorf("failed to add object: %w", err)
+			}
 			continue
 		}
 		zap.Any(k, v).AddTo(enc)
@@ -249,14 +252,14 @@ func (m M) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 // Format implements fmt.Formatter
 func (m M) Format(f fmt.State, c rune) {
 	if f.Flag('+') || f.Flag('#') {
-		io.WriteString(f, m.String())
+		_, _ = io.WriteString(f, m.String())
 		return
 	}
 
 	debugM := m.Clone()
 	config.ApplyLoggingMask(map[string]interface{}(debugM))
 
-	io.WriteString(f, debugM.String())
+	_, _ = io.WriteString(f, debugM.String())
 }
 
 // Flatten flattens the given M and returns a flat M.
@@ -283,7 +286,7 @@ func flatten(prefix string, in, out M) M {
 			fullKey = prefix + "." + k
 		}
 
-		if m, ok := tryToM(v); ok {
+		if m, ok := tryToMapStr(v); ok {
 			flatten(fullKey, m, out)
 		} else {
 			out[fullKey] = v
@@ -292,10 +295,10 @@ func flatten(prefix string, in, out M) M {
 	return out
 }
 
-// MUnion creates a new M containing the union of the
+// Union creates a new M containing the union of the
 // key-value pairs of the two maps. If the same key is present in
 // both, the key-value pairs from dict2 overwrite the ones from dict1.
-func MUnion(dict1 M, dict2 M) M {
+func Union(dict1 M, dict2 M) M {
 	dict := M{}
 
 	for k, v := range dict1 {
@@ -363,7 +366,7 @@ func mergeFieldsGetDestMap(target, from M, underRoot bool) (M, error) {
 		} else {
 			// Use existing 'fields' value.
 			var err error
-			destMap, err = toM(f)
+			destMap, err = toMapStr(f)
 			if err != nil {
 				return nil, err
 			}
@@ -413,18 +416,18 @@ func AddTagsWithKey(ms M, key string, tags []string) error {
 	return nil
 }
 
-// toM performs a type assertion on v and returns a M. v can be either
-// a M or a map[string]interface{}. If it's any other type or nil then
+// toMapStr performs a type assertion on v and returns a MapStr. v can be either
+// a MapStr or a map[string]interface{}. If it's any other type or nil then
 // an error is returned.
-func toM(v interface{}) (M, error) {
-	m, ok := tryToM(v)
+func toMapStr(v interface{}) (M, error) {
+	m, ok := tryToMapStr(v)
 	if !ok {
 		return nil, errors.Errorf("expected map but type is %T", v)
 	}
 	return m, nil
 }
 
-func tryToM(v interface{}) (M, bool) {
+func tryToMapStr(v interface{}) (M, bool) {
 	switch m := v.(type) {
 	case M:
 		return m, true
@@ -472,7 +475,7 @@ func mapFind(
 			}
 		}
 
-		v, err := toM(d)
+		v, err := toMapStr(d)
 		if err != nil {
 			return "", nil, nil, false, err
 		}
