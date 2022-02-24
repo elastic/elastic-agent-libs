@@ -19,12 +19,12 @@ package mapstr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -410,7 +410,7 @@ func AddTagsWithKey(ms M, key string, tags []string) error {
 		}
 		subMap[k] = arr
 	default:
-		return errors.Errorf("expected string array by type is %T", oldTags)
+		return fmt.Errorf("expected string array by type is %T", oldTags)
 
 	}
 	return nil
@@ -422,7 +422,7 @@ func AddTagsWithKey(ms M, key string, tags []string) error {
 func toMapStr(v interface{}) (M, error) {
 	m, ok := tryToMapStr(v)
 	if !ok {
-		return nil, errors.Errorf("expected map but type is %T", v)
+		return nil, fmt.Errorf("expected map but type is %T", v)
 	}
 	return m, nil
 }
