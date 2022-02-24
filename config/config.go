@@ -359,6 +359,8 @@ func DebugString(c *C, filterPrivate bool) string {
 	return strings.Join(bufs, "\n")
 }
 
+// ApplyLoggingMask redacts the values of keys that might
+// contain sensitive data (password, passphrase, etc.).
 func ApplyLoggingMask(c interface{}) {
 	switch cfg := c.(type) {
 	case map[string]interface{}:

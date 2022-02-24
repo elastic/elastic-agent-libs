@@ -221,7 +221,7 @@ func (m M) String() string {
 }
 
 // MarshalLogObject implements the zapcore.ObjectMarshaler interface and allows
-// for more efficient marshaling of M in structured logging.
+// for more efficient marshaling of mapstr.M in structured logging.
 func (m M) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if len(m) == 0 {
 		return nil
