@@ -13,12 +13,6 @@ issues:
   # Default: 50
   max-issues-per-linter: 0
 
-  exclude-rules:
-    # tests for types that are only sometimes equivalent
-    # (ex: uint and uint64) result in false positive lint warnings
-    path: atomic/atomic_test.go
-    text: "lines are duplicate of"
-
 output:
   sort-results: true
 

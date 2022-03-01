@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//nolint:dupl // equivalent tests (ex: uint and uint64) result in false positive lint warnings
 package atomic
 
 import (
