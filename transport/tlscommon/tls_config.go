@@ -94,7 +94,7 @@ var (
 // By default VerifyConnection is set to client mode.
 func (c *TLSConfig) ToConfig() *tls.Config {
 	if c == nil {
-		return &tls.Config{}
+		return &tls.Config{} //nolint:gosec // empty TLS config
 	}
 
 	minVersion, maxVersion := extractMinMaxVersion(c.Versions)

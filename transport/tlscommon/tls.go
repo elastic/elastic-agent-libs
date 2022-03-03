@@ -98,7 +98,7 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 			break
 		}
 
-		if x509.IsEncryptedPEMBlock(block) {
+		if x509.IsEncryptedPEMBlock(block) { //nolint: staticcheck // deprecated, we have to get rid of it
 			var buffer []byte
 			var err error
 			if len(pass) == 0 {
@@ -106,7 +106,7 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 			} else {
 				// Note, decrypting pem might succeed even with wrong password, but
 				// only noise will be stored in buffer in this case.
-				buffer, err = x509.DecryptPEMBlock(block, pass)
+				buffer, err = x509.DecryptPEMBlock(block, pass) //nolint: staticcheck // deprecated, we have to get rid of it
 			}
 
 			if err != nil {

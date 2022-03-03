@@ -19,6 +19,7 @@ package tlscommon
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -106,7 +107,7 @@ func TestCAPinning(t *testing.T) {
 
 				server := &http.Server{
 					Handler: mux,
-					TLSConfig: &tls.Config{
+					TLSConfig: &tls.Config{ //nolint:gosec // testing
 						Certificates: []tls.Certificate{
 							serverCert,
 						},
@@ -115,8 +116,7 @@ func TestCAPinning(t *testing.T) {
 
 				// Start server and shut it down when the tests are over.
 				go func() {
-					err := server.ServeTLS(l, "", "")
-					require.NoError(t, err)
+					_ = server.ServeTLS(l, "", "")
 				}()
 				defer l.Close()
 
@@ -145,7 +145,7 @@ func TestCAPinning(t *testing.T) {
 
 				port := strings.TrimPrefix(hostToConnect, "127.0.0.1:")
 
-				req, err := http.NewRequest("GET", "https://localhost:"+port, nil)
+				req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:"+port, nil)
 				require.NoError(t, err)
 				resp, err := client.Do(req)
 				require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestCAPinning(t *testing.T) {
 
 		server := &http.Server{
 			Handler: mux,
-			TLSConfig: &tls.Config{
+			TLSConfig: &tls.Config{ //nolint:gosec // testing
 				Certificates: []tls.Certificate{
 					serverCert,
 				},
@@ -202,8 +202,7 @@ func TestCAPinning(t *testing.T) {
 
 		// Start server and shut it down when the tests are over.
 		go func() {
-			err := server.ServeTLS(l, "", "")
-			require.NoError(t, err)
+			_ = server.ServeTLS(l, "", "")
 		}()
 		defer l.Close()
 
@@ -230,7 +229,7 @@ func TestCAPinning(t *testing.T) {
 
 		port := strings.TrimPrefix(hostToConnect, "127.0.0.1:")
 
-		req, err := http.NewRequest("GET", "https://localhost:"+port, nil)
+		req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:"+port, nil)
 		require.NoError(t, err)
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -268,7 +267,7 @@ func TestCAPinning(t *testing.T) {
 
 		server := &http.Server{
 			Handler: mux,
-			TLSConfig: &tls.Config{
+			TLSConfig: &tls.Config{ //nolint:gosec // testing
 				Certificates: []tls.Certificate{
 					serverCert,
 				},
@@ -277,8 +276,7 @@ func TestCAPinning(t *testing.T) {
 
 		// Start server and shut it down when the tests are over.
 		go func() {
-			err := server.ServeTLS(l, "", "")
-			require.NoError(t, err)
+			_ = server.ServeTLS(l, "", "")
 		}()
 		defer l.Close()
 
@@ -305,11 +303,10 @@ func TestCAPinning(t *testing.T) {
 
 		port := strings.TrimPrefix(hostToConnect, "127.0.0.1:")
 
-		req, err := http.NewRequest("GET", "https://localhost:"+port, nil)
+		req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:"+port, nil)
 		require.NoError(t, err)
-		resp, err := client.Do(req)
+		_, err = client.Do(req)
 		require.Error(t, err)
-		resp.Body.Close()
 	})
 }
 
