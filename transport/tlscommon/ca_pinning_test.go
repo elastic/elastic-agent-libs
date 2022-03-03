@@ -305,7 +305,7 @@ func TestCAPinning(t *testing.T) {
 
 		req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:"+port, nil)
 		require.NoError(t, err)
-		_, err = client.Do(req)
+		_, err = client.Do(req) //nolint: bodyclose // body cannot be closed because it is nil
 		require.Error(t, err)
 	})
 }
