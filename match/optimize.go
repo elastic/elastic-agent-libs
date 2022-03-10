@@ -42,7 +42,7 @@ func optimize(r *syntax.Regexp) *syntax.Regexp {
 			changed = changed || upd
 		}
 
-		if changed == false {
+		if !changed {
 			return r
 		}
 	}
@@ -144,12 +144,12 @@ func concatRepetition(r *syntax.Regexp) (bool, *syntax.Regexp) {
 	}
 
 	// concatenate repetitions in sub-expressions first
-	var subs []*syntax.Regexp
+	subs := make([]*syntax.Regexp, len(r.Sub))
 	changed := false
-	for _, sub := range r.Sub {
+	for i, sub := range r.Sub {
 		changedSub, tmp := concatRepetition(sub)
 		changed = changed || changedSub
-		subs = append(subs, tmp)
+		subs[i] = tmp
 	}
 
 	var concat []*syntax.Regexp

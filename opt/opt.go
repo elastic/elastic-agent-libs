@@ -70,12 +70,12 @@ func (opt Int) ValueOr(i int) int {
 }
 
 // Fold implements the folder interface for OptUint
-func (in *Int) Fold(v structform.ExtVisitor) error {
-	if in.exists {
-		value := in.value
-		v.OnInt(value)
+func (opt *Int) Fold(v structform.ExtVisitor) error {
+	if opt.exists {
+		value := opt.value
+		_ = v.OnInt(value)
 	} else {
-		v.OnNil()
+		_ = v.OnNil()
 	}
 	return nil
 }
@@ -135,12 +135,12 @@ func SumOptUint(opts ...Uint) uint64 {
 }
 
 // Fold implements the folder interface for OptUint
-func (in *Uint) Fold(v structform.ExtVisitor) error {
-	if in.exists {
-		value := in.value
-		v.OnUint64(value)
+func (opt *Uint) Fold(v structform.ExtVisitor) error {
+	if opt.exists {
+		value := opt.value
+		_ = v.OnUint64(value)
 	} else {
-		v.OnNil()
+		_ = v.OnNil()
 	}
 	return nil
 }
@@ -191,12 +191,12 @@ func (opt Float) ValueOr(f float64) float64 {
 }
 
 // Fold implements the folder interface for OptUint
-func (in *Float) Fold(v structform.ExtVisitor) error {
-	if in.exists {
-		value := in.value
-		v.OnFloat64(value)
+func (opt *Float) Fold(v structform.ExtVisitor) error {
+	if opt.exists {
+		value := opt.value
+		_ = v.OnFloat64(value)
 	} else {
-		v.OnNil()
+		_ = v.OnNil()
 	}
 	return nil
 }

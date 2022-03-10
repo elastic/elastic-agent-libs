@@ -124,7 +124,10 @@ func (c *Converter) Convert(to, from interface{}) (err error) {
 //                in `to` will not be overwritten.
 //   `omit`, `-`: Do not convert the field.
 func Convert(to, from interface{}) (err error) {
-	c := convPool.Get().(*Converter)
+	c, ok := convPool.Get().(*Converter)
+	if !ok {
+		return fmt.Errorf("cannot convert to %v from %v", to, from)
+	}
 	defer convPool.Put(c)
 	return c.Convert(to, from)
 }
@@ -154,7 +157,7 @@ func unfoldTimestamp(to *time.Time) gotype.UnfoldState {
 
 func (u *timeUnfolder) OnString(ctx gotype.UnfoldCtx, in string) (err error) {
 	if u.st != timeUnfoldInit {
-		return fmt.Errorf("Unexpected string '%v' when trying to unfold a timestamp", in)
+		return fmt.Errorf("unexpected string '%v' when trying to unfold a timestamp", in)
 	}
 
 	*u.to, err = time.Parse(time.RFC3339, in)

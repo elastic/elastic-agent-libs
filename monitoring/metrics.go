@@ -26,10 +26,11 @@ import (
 	"time"
 
 	"github.com/elastic/elastic-agent-libs/atomic"
+	"github.com/elastic/elastic-agent-libs/transform/typeconv"
 )
 
-// TsLayout is the layout to be used in the timestamp marshaling/unmarshaling.
-const TSLayout = "2006-01-02T15:04:05.000Z"
+// TSLayout is the layout to be used in the timestamp marshaling/unmarshaling.
+const TSLayout = typeconv.TSLayout
 
 // makeExpvar wraps a callback for registering a metrics with expvar.Publish.
 type makeExpvar func() string
