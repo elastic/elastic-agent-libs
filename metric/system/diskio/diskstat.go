@@ -48,6 +48,7 @@ type IOMetric struct {
 }
 
 // IOStat carries disk statistics for all devices
+// nolint: nolintlint // platform diffs
 // nolint: structcheck,unused // needed by some platforms
 type IOStat struct {
 	lastDiskIOCounters map[string]disk.IOCountersStat
