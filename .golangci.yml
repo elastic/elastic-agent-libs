@@ -147,7 +147,7 @@ linters-settings:
             recommendations:
               - errors
               - fmt
-            reason: "This package is deprecated, use `fmt.Errorf` with `%w` instead"
+            reason: "This package is deprecated"
         - github.com/elastic/beats/v7:
             reason: "There must be no Beats dependency"
 
