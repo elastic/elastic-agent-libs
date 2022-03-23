@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/elastic/beats/v7/libbeat/common"
+	"github.com/elastic/elastic-agent-libs/config"
 )
 
 // HTTPClientProxySettings provides common HTTP proxy setup support.
@@ -38,7 +38,7 @@ type HTTPClientProxySettings struct {
 	// variables are ignored.
 	URL *ProxyURI `config:"proxy_url" yaml:"proxy_url,omitempty"`
 
-	// Headers configures additonal headers that are send to the proxy
+	// Headers configures additional headers that are send to the proxy
 	// during CONNECT requests.
 	Headers ProxyHeaders `config:"proxy_headers" yaml:"proxy_headers,omitempty"`
 
@@ -71,7 +71,7 @@ func DefaultHTTPClientProxySettings() HTTPClientProxySettings {
 // Unpack sets the proxy settings from a config object.
 // Note: Unpack is automatically used by the configuration system if `cfg.Unpack(&x)` is and X contains
 // a field of type HTTPClientProxySettings.
-func (settings *HTTPClientProxySettings) Unpack(cfg *common.Config) error {
+func (settings *HTTPClientProxySettings) Unpack(cfg *config.C) error {
 	tmp := struct {
 		URL     string            `config:"proxy_url"`
 		Disable bool              `config:"proxy_disable"`

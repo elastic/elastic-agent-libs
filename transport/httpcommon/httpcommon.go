@@ -24,10 +24,10 @@ import (
 	"go.elastic.co/apm/module/apmhttp"
 	"golang.org/x/net/http2"
 
-	"github.com/elastic/beats/v7/libbeat/common"
-	"github.com/elastic/beats/v7/libbeat/common/transport"
-	"github.com/elastic/beats/v7/libbeat/common/transport/tlscommon"
-	"github.com/elastic/beats/v7/libbeat/logp"
+	"github.com/elastic/elastic-agent-libs/config"
+	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/elastic-agent-libs/transport"
+	"github.com/elastic/elastic-agent-libs/transport/tlscommon"
 )
 
 // HTTPTransportSettings provides common HTTP settings for HTTP clients.
@@ -40,7 +40,7 @@ type HTTPTransportSettings struct {
 
 	Proxy HTTPClientProxySettings `config:",inline" yaml:",inline"`
 
-	// TODO: Add more settings:
+	// Add more settings:
 	//  - DisableKeepAlive
 	//  - MaxIdleConns
 	//  - IdleConnTimeout
@@ -157,7 +157,7 @@ func DefaultHTTPTransportSettings() HTTPTransportSettings {
 }
 
 // Unpack reads a config object into the settings.
-func (settings *HTTPTransportSettings) Unpack(cfg *common.Config) error {
+func (settings *HTTPTransportSettings) Unpack(cfg *config.C) error {
 	tmp := struct {
 		TLS     *tlscommon.Config `config:"ssl"`
 		Timeout time.Duration     `config:"timeout"`
@@ -230,8 +230,11 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 	var rt http.RoundTripper
 	if extra.http2 {
 		rt, err = settings.http2RoundTripper(tls, dialer, tlsDialer, opts...)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		rt, err = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
+		rt = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
 	}
 
 	for _, opt := range opts {
@@ -246,12 +249,12 @@ func (settings *HTTPTransportSettings) httpRoundTripper(
 	tls *tlscommon.TLSConfig,
 	dialer, tlsDialer transport.Dialer,
 	opts ...TransportOption,
-) (*http.Transport, error) {
+) *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.DialContext = nil
 	t.DialTLSContext = nil
-	t.Dial = dialer.Dial
-	t.DialTLS = tlsDialer.Dial
+	t.Dial = dialer.Dial       // nolint: staticcheck // use deprecated function to preserve functionality
+	t.DialTLS = tlsDialer.Dial // nolint: staticcheck // use deprecated function to preserve functionality
 	t.TLSClientConfig = tls.ToConfig()
 	t.ForceAttemptHTTP2 = false
 	t.Proxy = settings.Proxy.ProxyFunc()
@@ -267,7 +270,7 @@ func (settings *HTTPTransportSettings) httpRoundTripper(
 		}
 	}
 
-	return t, nil
+	return t
 }
 
 func (settings *HTTPTransportSettings) http2RoundTripper(
@@ -275,11 +278,7 @@ func (settings *HTTPTransportSettings) http2RoundTripper(
 	dialer, tlsDialer transport.Dialer,
 	opts ...TransportOption,
 ) (*http2.Transport, error) {
-	t1, err := settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
-	if err != nil {
-		return nil, err
-	}
-
+	t1 := settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
 	t2, err := http2.ConfigureTransports(t1)
 	if err != nil {
 		return nil, err
@@ -363,7 +362,7 @@ func WithNOProxy() TransportOption {
 }
 
 // WithoutProxyEnvironmentVariables disables support for the HTTP_PROXY, HTTPS_PROXY and
-// NO_PROXY envionrment variables. Explicitely configured proxy URLs will still applied.
+// NO_PROXY envionrment variables. Explicitly configured proxy URLs will still applied.
 func WithoutProxyEnvironmentVariables() TransportOption {
 	return transportOptFunc(func(settings *HTTPTransportSettings, t *http.Transport) {
 		if settings.Proxy.Disable || settings.Proxy.URL == nil {
@@ -392,7 +391,7 @@ func HeaderRoundTripper(rt http.RoundTripper, headers map[string]string) http.Ro
 	return &headerRoundTripper{headers, rt}
 }
 
-// WithHeaderRoundTripper instuments the HTTP client via a custom http.RoundTripper.
+// WithHeaderRoundTripper instruments the HTTP client via a custom http.RoundTripper.
 // This RoundTripper will add headers to each request if the key is not present.
 func WithHeaderRoundTripper(headers map[string]string) TransportOption {
 	return WithModRoundtripper(func(rt http.RoundTripper) http.RoundTripper {
