@@ -46,7 +46,7 @@ jobs:
           version: v1.44.2
 
           # Give the job more time to execute.
-          args: "--timeout=15m --whole-files"
+          args: --timeout=15m --whole-files
 
           # Optional: if set to true then the action will use pre-installed Go.
           skip-go-installation: true
