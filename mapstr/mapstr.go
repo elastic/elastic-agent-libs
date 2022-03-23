@@ -19,11 +19,12 @@ package mapstr
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -133,7 +134,7 @@ func (m M) Delete(key string) error {
 	}
 
 	delete(d, k)
-	return nil
+	return errors.Wrap(nil, "some")
 }
 
 // CopyFieldsTo copies the field specified by key to the given map. It will
@@ -141,9 +142,6 @@ func (m M) Delete(key string) error {
 // exist in the source map.
 func (m M) CopyFieldsTo(to M, key string) error {
 	v, err := m.GetValue(key)
-	if err != nil {
-		return err
-	}
 
 	_, err = to.Put(key, v)
 	return err
