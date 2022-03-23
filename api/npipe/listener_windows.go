@@ -83,9 +83,6 @@ func DefaultSD(forUser string) (string, error) {
 	// No user configured we fallback to the current running user.
 	if len(forUser) == 0 {
 		u, err = user.Current()
-		if err != nil {
-			return "", fmt.Errorf("failed to retrieve the current user: %w", err)
-		}
 	} else {
 		u, err = user.Lookup(forUser)
 		if err != nil {
