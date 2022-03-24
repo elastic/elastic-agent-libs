@@ -18,7 +18,6 @@
 package service
 
 import (
-	"errors"
 	"os"
 	"syscall"
 	"time"
@@ -90,7 +89,8 @@ const couldNotConnect syscall.Errno = 1063
 func ProcessWindowsControlEvents(stopCallback func()) {
 	defer close(serviceInstance.executeFinished)
 
-	isInteractive, err := svc.IsWindowsService()
+	// nolint: staticcheck // keep using the deprecated method in order to maintain the existing behavior
+	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		logp.Err("IsAnInteractiveSession: %v", err)
 		return
@@ -109,26 +109,24 @@ func ProcessWindowsControlEvents(stopCallback func()) {
 		return
 	}
 
-	var errnoErr syscall.Errno
-	if errors.As(err, &errnoErr) {
-		if errnoErr == couldNotConnect {
-			/*
-				 If, as in the case of Jenkins, the process is started as an interactive process, but the invoking process
-				 is itself a service, beats will incorrectly try to register a service handler. We don't want to swallow
-				 errors, so we should still log this, but only as Info. The only ill effect should be a couple extra
-				 idle go routines.
+	// nolint: errorlint // this system error is a special case
+	if errnoErr, ok := err.(syscall.Errno); ok && errnoErr == couldNotConnect {
+		/*
+			 If, as in the case of Jenkins, the process is started as an interactive process, but the invoking process
+			 is itself a service, beats will incorrectly try to register a service handler. We don't want to swallow
+			 errors, so we should still log this, but only as Info. The only ill effect should be a couple extra
+			 idle go routines.
 
-				 Ideally we could detect this better, but the only reliable way is with StartServiceCtrlDispatcherW, which
-				 is invoked in go with svc.Run. Unfortunately, this also starts some goroutines ahead of time for various
-				 reasons. As the docs state for StartServiceCtrlDispatcherW when a 1063 errno is returned:
+			 Ideally we could detect this better, but the only reliable way is with StartServiceCtrlDispatcherW, which
+			 is invoked in go with svc.Run. Unfortunately, this also starts some goroutines ahead of time for various
+			 reasons. As the docs state for StartServiceCtrlDispatcherW when a 1063 errno is returned:
 
-				 "This error is returned if the program is being run as a console application rather than as a service.
-				  If the program will be run as a console application for debugging purposes, structure it such that
-					service-specific code is not called when this error is returned."
-			*/
-			logp.Info("Attempted to register Windows service handlers, but this is not a service. No action necessary")
-			return
-		}
+			 "This error is returned if the program is being run as a console application rather than as a service.
+			  If the program will be run as a console application for debugging purposes, structure it such that
+				service-specific code is not called when this error is returned."
+		*/
+		logp.Info("Attempted to register Windows service handlers, but this is not a service. No action necessary")
+		return
 	}
 
 	logp.Err("Windows service setup failed: %+v", err)

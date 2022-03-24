@@ -15,17 +15,37 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build windows || nacl || plan9
-// +build windows nacl plan9
-
-package logp
+package httpcommon
 
 import (
-	"errors"
+	"encoding/json"
+	"testing"
 
-	"go.uber.org/zap/zapcore"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
 
-func newSyslog(_ zapcore.Encoder, _ zapcore.LevelEnabler) (zapcore.Core, error) {
-	return nil, errors.New("syslog is not supported on this OS")
+func TestYamlSerializeDeserializeProxyHeaders(t *testing.T) {
+	raw := `key1: value1
+key2: value2
+`
+	var proxyHeaders ProxyHeaders
+	err := yaml.Unmarshal([]byte(raw), &proxyHeaders)
+	require.NoError(t, err)
+
+	out, err := yaml.Marshal(proxyHeaders)
+	require.NoError(t, err)
+	require.Equal(t, raw, string(out))
+}
+
+func TestJSONSerializeDeserializeProxyHeaders(t *testing.T) {
+	raw := `{"key1":"value1","key2":"value2"}`
+
+	var proxyHeaders ProxyHeaders
+	err := json.Unmarshal([]byte(raw), &proxyHeaders)
+	require.NoError(t, err)
+
+	out, err := json.Marshal(proxyHeaders)
+	require.NoError(t, err)
+	require.Equal(t, raw, string(out))
 }
