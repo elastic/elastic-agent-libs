@@ -35,16 +35,11 @@ import (
 
 	"github.com/joeshaw/multierror"
 
-	"github.com/elastic/beats/v7/libbeat/common"
-	"github.com/elastic/beats/v7/libbeat/common/transport/httpcommon"
-	"github.com/elastic/beats/v7/libbeat/common/useragent"
-	"github.com/elastic/beats/v7/libbeat/logp"
-)
-
-var (
-	// We started using Saved Objects API in 7.15. But to help integration
-	// developers migrate their dashboards we are more lenient.
-	MinimumRequiredVersionSavedObjects = common.MustNewVersion("7.14.0")
+	"github.com/elastic/elastic-agent-libs/config"
+	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/elastic-agent-libs/transport/httpcommon"
+	"github.com/elastic/elastic-agent-libs/useragent"
+	"github.com/elastic/elastic-agent-libs/version"
 )
 
 type Connection struct {
@@ -56,7 +51,7 @@ type Connection struct {
 	Headers      http.Header
 
 	HTTP    *http.Client
-	Version common.Version
+	Version version.V
 }
 
 type Client struct {
@@ -128,22 +123,22 @@ func extractMessage(result []byte) error {
 }
 
 // NewKibanaClient builds and returns a new Kibana client
-func NewKibanaClient(cfg *common.Config, beatname string) (*Client, error) {
+func NewKibanaClient(cfg *config.C, binaryName, version, commit, buildtime string) (*Client, error) {
 	config := DefaultClientConfig()
 	if err := cfg.Unpack(&config); err != nil {
 		return nil, err
 	}
 
-	return NewClientWithConfig(&config, beatname)
+	return NewClientWithConfig(&config, binaryName, version, commit, buildtime)
 }
 
 // NewClientWithConfig creates and returns a kibana client using the given config
-func NewClientWithConfig(config *ClientConfig, beatname string) (*Client, error) {
-	return NewClientWithConfigDefault(config, 5601, beatname)
+func NewClientWithConfig(config *ClientConfig, binaryName, version, commit, buildtime string) (*Client, error) {
+	return NewClientWithConfigDefault(config, 5601, binaryName, version, commit, buildtime)
 }
 
 // NewClientWithConfig creates and returns a kibana client using the given config
-func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, beatname string) (*Client, error) {
+func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryName, version, commit, buildtime string) (*Client, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -152,7 +147,7 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, beatname 
 	if config.SpaceID != "" {
 		p = path.Join(p, "s", config.SpaceID)
 	}
-	kibanaURL, err := common.MakeURL(config.Protocol, p, config.Host, defaultPort)
+	kibanaURL, err := MakeURL(config.Protocol, p, config.Host, defaultPort)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Kibana host: %v", err)
 	}
@@ -186,10 +181,10 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, beatname 
 		headers.Set(k, v)
 	}
 
-	if beatname == "" {
-		beatname = "Libbeat"
+	if binaryName == "" {
+		binaryName = "Libbeat"
 	}
-	userAgent := useragent.UserAgent(beatname)
+	userAgent := useragent.UserAgent(binaryName, version, commit, buildtime)
 	rt, err := config.Transport.Client(httpcommon.WithHeaderRoundTripper(map[string]string{"User-Agent": userAgent}))
 	if err != nil {
 		return nil, err
@@ -337,7 +332,7 @@ func (client *Client) readVersion() error {
 		versionString += "-SNAPSHOT"
 	}
 
-	version, err := common.NewVersion(versionString)
+	version, err := version.New(versionString)
 	if err != nil {
 		return fmt.Errorf("fail to parse kibana version (%v): %+v", versionString, err)
 	}
@@ -348,7 +343,7 @@ func (client *Client) readVersion() error {
 
 // GetVersion returns the version read from kibana. The version is not set if
 // IgnoreVersion was set when creating the client.
-func (client *Client) GetVersion() common.Version { return client.Version }
+func (client *Client) GetVersion() version.V { return client.Version }
 
 func (client *Client) ImportMultiPartFormFile(url string, params url.Values, filename string, contents string) error {
 	buf := &bytes.Buffer{}
@@ -380,26 +375,6 @@ func (client *Client) ImportMultiPartFormFile(url string, params url.Values, fil
 }
 
 func (client *Client) Close() error { return nil }
-
-// GetDashboard returns the dashboard with the given id with the index pattern removed
-func (client *Client) GetDashboard(id string) ([]byte, error) {
-	if client.Version.LessThan(MinimumRequiredVersionSavedObjects) {
-		return nil, fmt.Errorf("Kibana version must be at least " + MinimumRequiredVersionSavedObjects.String())
-	}
-
-	body := fmt.Sprintf(`{"objects": [{"type": "dashboard", "id": "%s" }], "includeReferencesDeep": true, "excludeExportDetails": true}`, id)
-	statusCode, response, err := client.Request("POST", "/api/saved_objects/_export", nil, nil, strings.NewReader(body))
-	if err != nil || statusCode >= 300 {
-		return nil, fmt.Errorf("error exporting dashboard: %+v, code: %d", err, statusCode)
-	}
-
-	result, err := RemoveIndexPattern(response)
-	if err != nil {
-		return nil, fmt.Errorf("error removing index pattern: %+v", err)
-	}
-
-	return result, nil
-}
 
 // truncateString returns a truncated string if the length is greater than 250
 // runes. If the string is truncated "... (truncated)" is appended. Newlines are

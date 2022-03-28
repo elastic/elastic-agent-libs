@@ -27,7 +27,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/elastic/beats/v7/libbeat/common"
+	"github.com/elastic/elastic-agent-libs/config"
+)
+
+const (
+	binaryName = "Testbeat"
+	v          = "9.9.9"
+	commit     = "1234abcd"
+	buildTime  = "20001212"
 )
 
 func TestErrorJson(t *testing.T) {
@@ -126,7 +133,7 @@ func TestNewKibanaClient(t *testing.T) {
 	}))
 	defer kibanaTs.Close()
 
-	client, err := NewKibanaClient(common.MustNewConfigFrom(fmt.Sprintf(`
+	client, err := NewKibanaClient(config.MustNewConfigFrom(fmt.Sprintf(`
 protocol: http
 host: %s
 headers:
@@ -134,7 +141,7 @@ headers:
   content-type: text/plain
   accept: text/plain
   kbn-xsrf: 0
-`, kibanaTs.Listener.Addr().String())), "Testbeat")
+`, kibanaTs.Listener.Addr().String())), binaryName, v, commit, buildTime)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
@@ -167,14 +174,14 @@ func TestNewKibanaClientWithMultipartData(t *testing.T) {
 	}))
 	defer kibanaTs.Close()
 
-	client, err := NewKibanaClient(common.MustNewConfigFrom(fmt.Sprintf(`
+	client, err := NewKibanaClient(config.MustNewConfigFrom(fmt.Sprintf(`
 protocol: http
 host: %s
 headers:
   content-type: multipart/form-data; boundary=46bea21be603a2c2ea6f51571a5e1baf5ea3be8ebd7101199320607b36ff
   accept: text/plain
   kbn-xsrf: 0
-`, kibanaTs.Listener.Addr().String())), "Testbeat")
+`, kibanaTs.Listener.Addr().String())), binaryName, v, commit, buildTime)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 

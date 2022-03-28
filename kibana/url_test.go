@@ -18,7 +18,7 @@
 //go:build !integration
 // +build !integration
 
-package common
+package kibana
 
 import (
 	"fmt"
