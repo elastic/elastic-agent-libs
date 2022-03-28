@@ -102,7 +102,7 @@ func ParseURL(raw string, hints ...ParseHint) (*url.URL, error) {
 		hints = append(hints, WithDefaultScheme("http"))
 	}
 
-	if strings.Index(raw, "://") == -1 {
+	if !strings.Contains(raw, "://") {
 		for _, hint := range hints {
 			raw = hint(raw)
 		}

@@ -58,23 +58,23 @@ func New(version string) (*V, error) {
 
 	versions := strings.Split(version, ".")
 	if len(versions) != 3 {
-		return nil, fmt.Errorf("Passed version is not semver: %s", version)
+		return nil, fmt.Errorf("passed version is not semver: %s", version)
 	}
 
 	var err error
 	v.Major, err = strconv.Atoi(versions[0])
 	if err != nil {
-		return nil, fmt.Errorf("Could not convert major to integer: %s", versions[0])
+		return nil, fmt.Errorf("could not convert major to integer: %s", versions[0])
 	}
 
 	v.Minor, err = strconv.Atoi(versions[1])
 	if err != nil {
-		return nil, fmt.Errorf("Could not convert minor to integer: %s", versions[1])
+		return nil, fmt.Errorf("could not convert minor to integer: %s", versions[1])
 	}
 
 	v.Bugfix, err = strconv.Atoi(versions[2])
 	if err != nil {
-		return nil, fmt.Errorf("Could not convert bugfix to integer: %s", versions[2])
+		return nil, fmt.Errorf("could not convert bugfix to integer: %s", versions[2])
 	}
 
 	return &v, nil

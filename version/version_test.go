@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//nolint:dupl // equivalent tests with different expected values
 package version
 
 import (

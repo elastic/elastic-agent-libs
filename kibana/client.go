@@ -42,6 +42,8 @@ import (
 	"github.com/elastic/elastic-agent-libs/version"
 )
 
+const statusAPI = "/api/status"
+
 type Connection struct {
 	URL          string
 	Username     string
@@ -72,7 +74,7 @@ func extractError(result []byte) error {
 		Message    string
 		Attributes struct {
 			Objects []struct {
-				Id    string
+				ID    string
 				Error struct {
 					Message string
 				}
@@ -85,9 +87,9 @@ func extractError(result []byte) error {
 	var errs multierror.Errors
 	if kibanaResult.Message != "" {
 		for _, err := range kibanaResult.Attributes.Objects {
-			errs = append(errs, fmt.Errorf("id: %s, message: %s", err.Id, err.Error.Message))
+			errs = append(errs, fmt.Errorf("id: %s, message: %s", err.ID, err.Error.Message))
 		}
-		return fmt.Errorf("%s: %+v", kibanaResult.Message, errs.Err())
+		return fmt.Errorf("%s: %w", kibanaResult.Message, errs.Err())
 	}
 	return nil
 }
@@ -96,25 +98,25 @@ func extractMessage(result []byte) error {
 	var kibanaResult struct {
 		Success bool
 		Errors  []struct {
-			Id    string
+			ID    string
 			Type  string
 			Error struct {
 				Type       string
 				References []struct {
 					Type string
-					Id   string
+					ID   string
 				}
 			}
 		}
 	}
 	if err := json.Unmarshal(result, &kibanaResult); err != nil {
-		return nil
+		return nil // nolint: nilerr // we suppress some malformed errors on purpose
 	}
 
 	if !kibanaResult.Success {
 		var errs multierror.Errors
 		for _, err := range kibanaResult.Errors {
-			errs = append(errs, fmt.Errorf("error: %s, asset ID=%s; asset type=%s; references=%+v", err.Error.Type, err.Id, err.Type, err.Error.References))
+			errs = append(errs, fmt.Errorf("error: %s, asset ID=%s; asset type=%s; references=%+v", err.Error.Type, err.ID, err.Type, err.Error.References))
 		}
 		return errs.Err()
 	}
@@ -149,12 +151,12 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryNam
 	}
 	kibanaURL, err := MakeURL(config.Protocol, p, config.Host, defaultPort)
 	if err != nil {
-		return nil, fmt.Errorf("invalid Kibana host: %v", err)
+		return nil, fmt.Errorf("invalid Kibana host: %w", err)
 	}
 
 	u, err := url.Parse(kibanaURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse the Kibana URL: %v", err)
+		return nil, fmt.Errorf("failed to parse the Kibana URL: %w", err)
 	}
 
 	username := config.Username
@@ -205,7 +207,7 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryNam
 
 	if !config.IgnoreVersion {
 		if err = client.readVersion(); err != nil {
-			return nil, fmt.Errorf("fail to get the Kibana version: %v", err)
+			return nil, fmt.Errorf("fail to get the Kibana version: %w", err)
 		}
 	}
 
@@ -217,20 +219,16 @@ func (conn *Connection) Request(method, extraPath string,
 
 	resp, err := conn.Send(method, extraPath, params, headers, body)
 	if err != nil {
-		return 0, nil, fmt.Errorf("fail to execute the HTTP %s request: %v", method, err)
+		return 0, nil, fmt.Errorf("fail to execute the HTTP %s request: %w", method, err)
 	}
 	defer resp.Body.Close()
 
-	var retError error
-	if resp.StatusCode >= 300 {
-		retError = fmt.Errorf("%v", resp.Status)
-	}
-
 	result, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0, nil, fmt.Errorf("fail to read response %s", err)
+		return 0, nil, fmt.Errorf("fail to read response: %w", err)
 	}
 
+	var retError error
 	if resp.StatusCode >= 300 {
 		retError = extractError(result)
 	} else {
@@ -254,7 +252,7 @@ func (conn *Connection) SendWithContext(ctx context.Context, method, extraPath s
 
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
-		return nil, fmt.Errorf("fail to create the HTTP %s request: %+v", method, err)
+		return nil, fmt.Errorf("fail to create the HTTP %s request: %w", method, err)
 	}
 
 	if conn.Username != "" || conn.Password != "" {
@@ -305,14 +303,9 @@ func (client *Client) readVersion() error {
 		} `json:"version"`
 	}
 
-	type kibanaVersionResponse5x struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-	}
-
-	code, result, err := client.Connection.Request("GET", "/api/status", nil, nil, nil)
+	code, result, err := client.Connection.Request("GET", statusAPI, nil, nil, nil)
 	if err != nil || code >= 400 {
-		return fmt.Errorf("HTTP GET request to %s/api/status fails: %v. Response: %s.",
+		return fmt.Errorf("HTTP GET request to %s/api/status fails: %w. Response: %s",
 			client.Connection.URL, err, truncateString(result))
 	}
 
@@ -321,7 +314,7 @@ func (client *Client) readVersion() error {
 	var kibanaVersion kibanaVersionResponse
 	err = json.Unmarshal(result, &kibanaVersion)
 	if err != nil {
-		return fmt.Errorf("fail to unmarshal the response from GET %s/api/status. Response: %s. Kibana status api returns: %v",
+		return fmt.Errorf("fail to unmarshal the response from GET %s/api/status. Response: %s. Kibana status api returns: %w",
 			client.Connection.URL, truncateString(result), err)
 	}
 
@@ -334,7 +327,7 @@ func (client *Client) readVersion() error {
 
 	version, err := version.New(versionString)
 	if err != nil {
-		return fmt.Errorf("fail to parse kibana version (%v): %+v", versionString, err)
+		return fmt.Errorf("fail to parse kibana version (%v): %w", versionString, err)
 	}
 
 	client.Version = *version
@@ -355,11 +348,11 @@ func (client *Client) ImportMultiPartFormFile(url string, params url.Values, fil
 
 	p, err := w.CreatePart(pHeaders)
 	if err != nil {
-		return fmt.Errorf("failed to create multipart writer for payload: %+v", err)
+		return fmt.Errorf("failed to create multipart writer for payload: %w", err)
 	}
 	_, err = io.Copy(p, strings.NewReader(contents))
 	if err != nil {
-		return fmt.Errorf("failed to copy contents of the object: %+v", err)
+		return fmt.Errorf("failed to copy contents of the object: %w", err)
 	}
 	w.Close()
 
@@ -367,7 +360,7 @@ func (client *Client) ImportMultiPartFormFile(url string, params url.Values, fil
 	headers.Add("Content-Type", w.FormDataContentType())
 	statusCode, response, err := client.Connection.Request("POST", url, params, headers, buf)
 	if err != nil || statusCode >= 300 {
-		return fmt.Errorf("returned %d to import file: %v. Response: %s", statusCode, err, response)
+		return fmt.Errorf("returned %d to import file: %w. Response: %s", statusCode, err, response)
 	}
 
 	client.log.Debugf("Imported multipart file to %s with params %v", url, params)
