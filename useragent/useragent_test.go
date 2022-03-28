@@ -24,10 +24,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	v         = "9.9.9"
+	commit    = "1234abcd"
+	buildTime = "20001212"
+)
+
 func TestUserAgent(t *testing.T) {
-	ua := UserAgent("FakeBeat")
+	ua := UserAgent("FakeBeat", v, commit, buildTime)
 	assert.Regexp(t, regexp.MustCompile("^Elastic-FakeBeat"), ua)
 
-	ua2 := UserAgent("FakeBeat", "integration_name/1.2.3")
+	ua2 := UserAgent("FakeBeat", v, commit, buildTime, "integration_name/1.2.3")
 	assert.Regexp(t, regexp.MustCompile("; integration_name\\/1\\.2\\.3\\)$"), ua2)
 }
