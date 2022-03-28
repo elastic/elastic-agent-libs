@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package common
+package version
 
 import (
 	"encoding/json"
@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-type Version struct {
+type V struct {
 	version string
 	Major   int
 	Minor   int
@@ -32,20 +32,20 @@ type Version struct {
 	Meta    string
 }
 
-// MustNewVersion creates a version from the given version string.
-// If the version string is invalid, MustNewVersion panics.
-func MustNewVersion(version string) *Version {
-	v, err := NewVersion(version)
+// MustNew creates a version from the given version string.
+// If the version string is invalid, MustNew panics.
+func MustNew(version string) *V {
+	v, err := New(version)
 	if err != nil {
 		panic(err)
 	}
 	return v
 }
 
-// NewVersion expects a string in the format:
+// New expects a string in the format:
 // major.minor.bugfix(-meta)
-func NewVersion(version string) (*Version, error) {
-	v := Version{
+func New(version string) (*V, error) {
+	v := V{
 		version: version,
 	}
 
@@ -81,17 +81,17 @@ func NewVersion(version string) (*Version, error) {
 }
 
 // IsValid returns true if the version object stores a successfully parsed version number.
-func (v *Version) IsValid() bool {
+func (v *V) IsValid() bool {
 	return v.version != ""
 }
 
-func (v *Version) IsMajor(major int) bool {
+func (v *V) IsMajor(major int) bool {
 	return major == v.Major
 }
 
 // LessThan returns true if v is strictly smaller than v1. When comparing, the major,
 // minor, bugfix and pre-release numbers are compared in order.
-func (v *Version) LessThanOrEqual(withMeta bool, v1 *Version) bool {
+func (v *V) LessThanOrEqual(withMeta bool, v1 *V) bool {
 	if withMeta && v.version == v1.version {
 		return true
 	}
@@ -120,7 +120,7 @@ func (v *Version) LessThanOrEqual(withMeta bool, v1 *Version) bool {
 
 // LessThan returns true if v is strictly smaller than v1. When comparing, the major,
 // minor and bugfix numbers are compared in order. The meta part is not taken into account.
-func (v *Version) LessThan(v1 *Version) bool {
+func (v *V) LessThan(v1 *V) bool {
 	lessThan := v.LessThanMajorMinor(v1)
 	if lessThan {
 		return true
@@ -137,7 +137,7 @@ func (v *Version) LessThan(v1 *Version) bool {
 
 // LessThanMajorMinor returns true if v is smaller or equal to v1 based on the major and minor version. The bugfix version and meta part are not taken into account.
 // minor numbers are compared in order. The and bugfix version and meta part is not taken into account.
-func (v *Version) LessThanMajorMinor(v1 *Version) bool {
+func (v *V) LessThanMajorMinor(v1 *V) bool {
 	if v.Major < v1.Major {
 		return true
 	} else if v.Major == v1.Major {
@@ -148,11 +148,11 @@ func (v *Version) LessThanMajorMinor(v1 *Version) bool {
 	return false
 }
 
-func (v *Version) String() string {
+func (v *V) String() string {
 	return v.version
 }
 
-func (v *Version) metaIsLessThanOrEqual(v1 *Version) bool {
+func (v *V) metaIsLessThanOrEqual(v1 *V) bool {
 	if v.Meta == "" && v1.Meta == "" {
 		return true
 	}
@@ -167,14 +167,14 @@ func (v *Version) metaIsLessThanOrEqual(v1 *Version) bool {
 
 // UnmarshalJSON unmarshals a JSON string version representation into a Version struct
 // Implements https://golang.org/pkg/encoding/json/#Unmarshaler
-func (v *Version) UnmarshalJSON(version []byte) error {
+func (v *V) UnmarshalJSON(version []byte) error {
 	var versionStr string
 	err := json.Unmarshal(version, &versionStr)
 	if err != nil {
 		return err
 	}
 
-	ver, err := NewVersion(versionStr)
+	ver, err := New(versionStr)
 	if err != nil {
 		return err
 	}

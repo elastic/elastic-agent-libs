@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package common
+package version
 
 import (
 	"testing"
@@ -27,22 +27,22 @@ func TestVersion(t *testing.T) {
 	tests := []struct {
 		version string
 		err     bool
-		result  Version
+		result  V
 	}{
 		{
 			version: "1.2.3",
 			err:     false,
-			result:  Version{Major: 1, Minor: 2, Bugfix: 3, version: "1.2.3"},
+			result:  V{Major: 1, Minor: 2, Bugfix: 3, version: "1.2.3"},
 		},
 		{
 			version: "1.3.3",
 			err:     false,
-			result:  Version{Major: 1, Minor: 3, Bugfix: 3, version: "1.3.3"},
+			result:  V{Major: 1, Minor: 3, Bugfix: 3, version: "1.3.3"},
 		},
 		{
 			version: "1.3.2-alpha1",
 			err:     false,
-			result:  Version{Major: 1, Minor: 3, Bugfix: 2, version: "1.3.2-alpha1", Meta: "alpha1"},
+			result:  V{Major: 1, Minor: 3, Bugfix: 2, version: "1.3.2-alpha1", Meta: "alpha1"},
 		},
 		{
 			version: "alpha1",
@@ -51,7 +51,7 @@ func TestVersion(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, err := NewVersion(test.version)
+		v, err := New(test.version)
 		if test.err {
 			assert.Error(t, err)
 			continue
@@ -150,9 +150,9 @@ func TestLessThanOrEqual(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, err := NewVersion(test.version)
+		v, err := New(test.version)
 		assert.NoError(t, err)
-		v1, err := NewVersion(test.version1)
+		v1, err := New(test.version1)
 		assert.NoError(t, err)
 
 		assert.Equal(t, test.result, v.LessThanOrEqual(test.meta, v1), test.name)
@@ -199,9 +199,9 @@ func TestVersionLessThan(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, err := NewVersion(test.version)
+		v, err := New(test.version)
 		assert.NoError(t, err)
-		v1, err := NewVersion(test.version1)
+		v1, err := New(test.version1)
 		assert.NoError(t, err)
 
 		assert.Equal(t, v.LessThan(v1), test.result, test.name)
@@ -248,9 +248,9 @@ func TestVersionLessThanMajorMinor(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, err := NewVersion(test.version)
+		v, err := New(test.version)
 		assert.NoError(t, err)
-		v1, err := NewVersion(test.version1)
+		v1, err := New(test.version1)
 		assert.NoError(t, err)
 
 		assert.Equal(t, v.LessThanMajorMinor(v1), test.result, test.name)
