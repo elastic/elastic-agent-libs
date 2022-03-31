@@ -19,7 +19,7 @@ package opt
 
 // The types here work as wrappers for the sake of go-structform
 // Due to structform's streaming type, we can't declare nested types
-// inside of struct tag directives, so in the numerious cases where we have
+// inside of struct tag directives, so in the numerous cases where we have
 // fields like thing.bytes, thing.pct, etc, use these wrappers to keep it somewhat clean
 
 // BytesOpt wraps a uint64 byte value in an option type
