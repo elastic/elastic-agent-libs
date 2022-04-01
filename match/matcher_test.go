@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+// nolint: dupl // test cases are similar
 package match
 
 import (

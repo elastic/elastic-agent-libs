@@ -151,11 +151,6 @@ func isPrefixNumDate(r *syntax.Regexp) bool {
 	return true
 }
 
-// isdotStar checks the term being `.*`.
-func isdotStar(r *syntax.Regexp) bool {
-	return eqRegex(r, patDotStar)
-}
-
 func isEmptyText(r *syntax.Regexp) bool {
 	return eqRegex(r, patEmptyText)
 }

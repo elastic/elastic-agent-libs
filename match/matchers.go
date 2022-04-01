@@ -261,5 +261,5 @@ func stringToBytes(s string) (b []byte) {
 	pb.Data = ps.Data
 	pb.Len = ps.Len
 	pb.Cap = ps.Len
-	return
+	return b
 }
