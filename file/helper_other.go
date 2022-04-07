@@ -22,6 +22,7 @@ package file
 
 import (
 	"os"
+	"path/filepath"
 )
 
 // SafeFileRotate safely rotates an existing file under path and replaces it with the tempfile
