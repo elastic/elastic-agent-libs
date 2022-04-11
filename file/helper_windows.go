@@ -41,6 +41,9 @@ func SafeFileRotate(path, tempfile string) error {
 		return e
 	}
 
+	// .old file will still exist if path file is already there, it should be removed
+	_ = os.Remove(old)
+
 	// sync all files
 	return SyncParent(path)
 }
