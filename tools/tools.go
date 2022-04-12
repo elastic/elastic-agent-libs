@@ -17,4 +17,4 @@
 
 package tools
 
-import _ "go.elastic.co/go-licence-detector"
+import _ "go.elastic.co/go-licence-detector" //nolint:typecheck // it is tool dependency
