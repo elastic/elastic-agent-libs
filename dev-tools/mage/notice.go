@@ -15,43 +15,26 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build mage
-// +build mage
-
-package main
+package mage
 
 import (
-	"os"
+	"path/filepath"
 
 	"github.com/magefile/mage/mg"
 
-	"github.com/elastic/elastic-agent-libs/dev-tools/mage"
 	"github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
 )
 
-// Aliases are shortcuts to long target names.
-// nolint: deadcode // it's used by `mage`.
-var Aliases = map[string]interface{}{
-	"llc":  mage.Linter.LastChange,
-	"lint": mage.Linter.All,
-}
+func GenerateNotice(depsIn string) error {
+	mg.Deps(InstallGoNoticeGen)
 
-// Check runs all the checks
-// nolint: deadcode,unparam // it's used as a `mage` target and requires returning an error
-func Check() error {
-	mg.Deps(mage.Deps.CheckModuleTidy)
-	return nil
-}
-
-// Notice generates a NOTICE.txt file for the module.
-func Notice() error {
-	gotool.Mod.Tidy()
-	gotool.Download(gotool.Download.All())
-	out, _ := gotool.ListDepsForNotice()
-	depsFile, _ := os.CreateTemp("", "depsout")
-	defer os.Remove(depsFile.Name())
-	_, _ = depsFile.Write([]byte(out))
-	depsFile.Close()
-
-	return mage.GenerateNotice(depsFile.Name())
+	generator := gotool.NoticeGenerator
+	return generator(
+		generator.Dependencies(depsIn),
+		generator.IncludeIndirect(),
+		generator.Overrides(filepath.Join("dev-tools", "templates", "notice", "overrides.json")),
+		generator.Rules(filepath.Join("dev-tools", "templates", "notice", "rules.json")),
+		generator.NoticeTemplate(filepath.Join("dev-tools", "templates", "notice", "NOTICE.txt.tmpl")),
+		generator.NoticeOutput("NOTICE.txt"),
+	)
 }
