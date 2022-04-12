@@ -23,9 +23,6 @@ type goDownload func(opts ...ArgOpt) error
 // Get runs `go get` and provides optionals for adding command line arguments.
 var Get goGet = runGoGet
 
-// Download runs `go get` and provides optionals for adding command line arguments.
-var Download goDownload = runGoDownload
-
 func runGoGet(opts ...ArgOpt) error {
 	args := buildArgs(opts)
 	return runVGo("get", args)
@@ -34,6 +31,9 @@ func runGoGet(opts ...ArgOpt) error {
 func (goGet) Download() ArgOpt          { return flagBoolIf("-d", true) }
 func (goGet) Update() ArgOpt            { return flagBoolIf("-u", true) }
 func (goGet) Package(pkg string) ArgOpt { return posArg(pkg) }
+
+// Download runs `go download` and provides optionals for adding command line arguments.
+var Download goDownload = runGoDownload
 
 func runGoDownload(opts ...ArgOpt) error {
 	args := buildArgs(opts)

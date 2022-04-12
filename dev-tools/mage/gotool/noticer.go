@@ -21,24 +21,13 @@ import "github.com/magefile/mage/sh"
 
 type goNoticeGenerator func(opts ...ArgOpt) error
 
-// Licenser runs `go-licenser` and provides optionals for adding command line arguments.
+// NoticeGenerator runs `go-license-detector` and provides optionals for adding command line arguments.
 var NoticeGenerator goNoticeGenerator = runGoNoticeGenerator
 
 func runGoNoticeGenerator(opts ...ArgOpt) error {
 	args := buildArgs(opts).build()
 	return sh.RunV("go-licence-detector", args...)
 }
-
-// @echo "Generating NOTICE"
-// go mod tidy
-// go mod download
-// go list -m -json all | go run go.elastic.co/go-licence-detector \
-// -includeIndirect \
-// -rules dev-tools/notice/rules.json \
-// -overrides dev-tools/notice/overrides.json \
-// -noticeTemplate dev-tools/notice/NOTICE.txt.tmpl \
-// -noticeOut NOTICE.txt \
-// -depsOut ""
 
 func (goNoticeGenerator) Dependencies(path string) ArgOpt   { return flagArg("-in", path) }
 func (goNoticeGenerator) IncludeIndirect() ArgOpt           { return flagBoolIf("-includeIndirect", true) }
