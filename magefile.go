@@ -45,7 +45,6 @@ func Check() error {
 
 // Notice generates a NOTICE.txt file for the module.
 func Notice() error {
-
 	return mage.GenerateNotice(
 		filepath.Join("dev-tools", "templates", "notice", "overrides.json"),
 		filepath.Join("dev-tools", "templates", "notice", "rules.json"),
