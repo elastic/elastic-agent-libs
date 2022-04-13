@@ -21,12 +21,12 @@
 package main
 
 import (
-	"os"
+	"path/filepath"
 
 	"github.com/magefile/mage/mg"
 
+	// mage:import
 	"github.com/elastic/elastic-agent-libs/dev-tools/mage"
-	"github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
 )
 
 // Aliases are shortcuts to long target names.
@@ -45,13 +45,10 @@ func Check() error {
 
 // Notice generates a NOTICE.txt file for the module.
 func Notice() error {
-	gotool.Mod.Tidy()
-	gotool.Download(gotool.Download.All())
-	out, _ := gotool.ListDepsForNotice()
-	depsFile, _ := os.CreateTemp("", "depsout")
-	defer os.Remove(depsFile.Name())
-	_, _ = depsFile.Write([]byte(out))
-	depsFile.Close()
 
-	return mage.GenerateNotice(depsFile.Name())
+	return mage.GenerateNotice(
+		filepath.Join("dev-tools", "templates", "notice", "overrides.json"),
+		filepath.Join("dev-tools", "templates", "notice", "rules.json"),
+		filepath.Join("dev-tools", "templates", "notice", "NOTICE.txt.tmpl"),
+	)
 }

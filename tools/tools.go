@@ -15,6 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build tools
+// +build tools
+
 package tools
 
-import _ "go.elastic.co/go-licence-detector" //nolint:typecheck // it is tool dependency
+import _ "go.elastic.co/go-licence-detector"

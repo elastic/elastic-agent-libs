@@ -208,7 +208,7 @@ func getLines(out string, err error) ([]string, error) {
 	return res, nil
 }
 
-func callGo(env map[string]string, cmd string, opts ...string) (string, error) {
+func callGo(env map[string]string, cmd string, opts ...string) (string, error) { //nolint:unparam // not always receives list
 	args := []string{cmd}
 	args = append(args, opts...)
 	return sh.OutputWith(env, mg.GoCmd(), args...)
@@ -219,10 +219,6 @@ func runVGo(cmd string, args *Args) error {
 		_, err := sh.Exec(env, os.Stdout, os.Stderr, cmd, args...)
 		return err
 	}, cmd, args)
-}
-
-func runGo(cmd string, args *Args) error {
-	return execGoWith(sh.RunWith, cmd, args)
 }
 
 func execGoWith(

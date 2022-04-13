@@ -18,23 +18,35 @@
 package mage
 
 import (
-	"path/filepath"
+	"fmt"
+	"os"
 
 	"github.com/magefile/mage/mg"
 
 	"github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
 )
 
-func GenerateNotice(depsIn string) error {
-	mg.Deps(InstallGoNoticeGen)
+func GenerateNotice(overrides, rules, noticeTemplate string) error {
+	mg.Deps(InstallGoNoticeGen, Deps.CheckModuleTidy)
+
+	err := gotool.Mod.Download(gotool.Download.All())
+	if err != nil {
+		return fmt.Errorf("error while downloading dependencies: %w", err)
+	}
+
+	out, _ := gotool.ListDepsForNotice()
+	depsFile, _ := os.CreateTemp("", "depsout")
+	defer os.Remove(depsFile.Name())
+	_, _ = depsFile.Write([]byte(out))
+	depsFile.Close()
 
 	generator := gotool.NoticeGenerator
 	return generator(
-		generator.Dependencies(depsIn),
+		generator.Dependencies(depsFile.Name()),
 		generator.IncludeIndirect(),
-		generator.Overrides(filepath.Join("dev-tools", "templates", "notice", "overrides.json")),
-		generator.Rules(filepath.Join("dev-tools", "templates", "notice", "rules.json")),
-		generator.NoticeTemplate(filepath.Join("dev-tools", "templates", "notice", "NOTICE.txt.tmpl")),
+		generator.Overrides(overrides),
+		generator.Rules(rules),
+		generator.NoticeTemplate(noticeTemplate),
 		generator.NoticeOutput("NOTICE.txt"),
 	)
 }
