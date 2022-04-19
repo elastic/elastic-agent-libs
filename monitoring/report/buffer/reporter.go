@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/elastic/elastic-agent-libs/config"
+	c "github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/monitoring"
 )
 
@@ -40,7 +40,7 @@ type reporter struct {
 }
 
 // MakeReporter creates and starts a reporter with the given config.
-func MakeReporter(cfg *config.C) (*reporter, error) {
+func MakeReporter(cfg *c.C) (*reporter, error) {
 	config := defaultConfig()
 	if cfg != nil {
 		if err := cfg.Unpack(&config); err != nil {
@@ -113,5 +113,5 @@ func (r *reporter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(p)
+	_, _ = w.Write(p)
 }
