@@ -44,7 +44,7 @@ var (
 	numberRE = "\\d{1,2}"
 	alphaRE  = "[[:alpha:]]*"
 
-	delimiterRE = regexp.MustCompile("(?s)(.*?)%\\{([^}]*?)}")
+	delimiterRE = regexp.MustCompile(`(?s)(.*?)%\{([^}]*?)}`)
 	suffixRE    = regexp.MustCompile("(.+?)" + // group 1 for key name
 		"(" + ordinalIndicator + "(" + numberRE + ")" + ")?" + // group 2, 3 for ordinal
 		"(" + fixedLengthIndicator + "(" + numberRE + ")" + ")?" + // group 4, 5 for fixed length
@@ -58,7 +58,6 @@ var (
 	errEmpty                     = errors.New("empty string provided")
 	errMixedPrefixIndirectAppend = errors.New("mixed prefix `&+`")
 	errMixedPrefixAppendIndirect = errors.New("mixed prefix `&+`")
-	errEmptyKey                  = errors.New("empty key")
 	errInvalidDatatype           = errors.New("invalid data type")
 	errMissingDatatype           = errors.New("missing data type")
 )

@@ -74,7 +74,7 @@ func (f baseField) IsGreedy() bool {
 }
 
 func (f baseField) MarkGreedy() {
-	f.greedy = true
+	f.greedy = true //nolint:staticcheck // it is displayed in the logs
 }
 
 func (f baseField) Ordinal() int {

@@ -26,7 +26,7 @@ import (
 type parser struct {
 	delimiters      []delimiter
 	fields          []field
-	fieldsIdMap     map[int]int
+	fieldsIDMap     map[int]int
 	referenceFields []field
 }
 
@@ -46,8 +46,8 @@ func newParser(tokenizer string) (*parser, error) {
 		return nil, errInvalidTokenizer
 	}
 
-	var delimiters []delimiter
-	var fields []field
+	var delimiters []delimiter //nolint:prealloc // we do not know how big it is going to be
+	var fields []field         //nolint:prealloc // we do not know how big it is going to be
 
 	pos := 0
 	for id, m := range matches {
@@ -82,9 +82,9 @@ func newParser(tokenizer string) (*parser, error) {
 	sort.Slice(fields, func(i, j int) bool {
 		return fields[i].Ordinal() < fields[j].Ordinal()
 	})
-	fieldsIdMap := make(map[int]int)
+	fieldsIDMap := make(map[int]int)
 	for i, f := range fields {
-		fieldsIdMap[f.ID()] = i
+		fieldsIDMap[f.ID()] = i
 	}
 
 	// List of fields needed for indirection but don't need to appear in the final event.
@@ -98,7 +98,7 @@ func newParser(tokenizer string) (*parser, error) {
 	return &parser{
 		delimiters:      delimiters,
 		fields:          fields,
-		fieldsIdMap:     fieldsIdMap,
+		fieldsIDMap:     fieldsIDMap,
 		referenceFields: referenceFields,
 	}, nil
 }

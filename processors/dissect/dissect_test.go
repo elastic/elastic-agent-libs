@@ -114,6 +114,7 @@ func TestDissectConversion(t *testing.T) {
 
 func TestEmptyString(t *testing.T) {
 	d, err := New("%{hello}")
+	assert.NoError(t, err)
 	_, err = d.Dissect("")
 	assert.Equal(t, errEmpty, err)
 }
@@ -134,12 +135,12 @@ var tests []dissectTest
 func init() {
 	content, err := ioutil.ReadFile("testdata/dissect_tests.json")
 	if err != nil {
-		fmt.Printf("could not read the content of 'dissect_tests', error: %s", err)
+		os.Stderr.WriteString(fmt.Sprintf("could not read the content of 'dissect_tests', error: %s\n", err))
 		os.Exit(1)
 	}
 
 	if err := json.Unmarshal(content, &tests); err != nil {
-		fmt.Printf("could not parse the content of 'dissect_tests', error: %s", err)
+		os.Stderr.WriteString(fmt.Sprintf("could not parse the content of 'dissect_tests', error: %s\n", err))
 		os.Exit(1)
 	}
 }
@@ -179,6 +180,20 @@ var results Map
 var o [][]string
 
 func BenchmarkDissect(b *testing.B) {
+	const by = `18-Apr-2018 06:53:20.411 INFO [http-nio-8080-exec-1] org.apache.coyote.http11.Http11Processor.service Error parsing HTTP request header
+ Note: further occurrences of HTTP header parsing errors will be logged at DEBUG level.
+ java.lang.IllegalArgumentException: Invalid character found in method name. HTTP method names must be tokens
+    at org.apache.coyote.http11.Http11InputBuffer.parseRequestLine(Http11InputBuffer.java:426)
+    at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:687)
+    at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:66)
+    at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:790)
+    at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1459)
+    at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:49)
+    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+    at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61)
+    at java.lang.Thread.run(Thread.java:748) MACHINE[hello]`
+
 	for _, test := range tests {
 		if test.Skip {
 			continue
@@ -215,21 +230,8 @@ func BenchmarkDissect(b *testing.B) {
 	})
 
 	b.Run("Larger regular expression", func(b *testing.B) {
-		re := regexp.MustCompile("^(\\d{2})-(\\w{3})-(\\d{4})\\s([0-9:.]+)\\s(\\w+)\\s\\[([a-zA-Z0-9-]+)\\]\\s([a-zA-Z0-9.]+)\\s(.+)")
+		re := regexp.MustCompile(`^(\d{2})-(\w{3})-(\d{4})\s([0-9:.]+)\s(\w+)\s\[([a-zA-Z0-9-]+)\]\s([a-zA-Z0-9.]+)\s(.+)`)
 
-		by := `18-Apr-2018 06:53:20.411 INFO [http-nio-8080-exec-1] org.apache.coyote.http11.Http11Processor.service Error parsing HTTP request header
- Note: further occurrences of HTTP header parsing errors will be logged at DEBUG level.
- java.lang.IllegalArgumentException: Invalid character found in method name. HTTP method names must be tokens
-    at org.apache.coyote.http11.Http11InputBuffer.parseRequestLine(Http11InputBuffer.java:426)
-    at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:687)
-    at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:66)
-    at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:790)
-    at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1459)
-    at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:49)
-    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-    at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61)
-    at java.lang.Thread.run(Thread.java:748)`
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			o = re.FindAllStringSubmatch(by, -1)
@@ -237,21 +239,8 @@ func BenchmarkDissect(b *testing.B) {
 	})
 
 	b.Run("regular expression to match end of line", func(b *testing.B) {
-		re := regexp.MustCompile("MACHINE\\[(\\w+)\\]$")
+		re := regexp.MustCompile(`MACHINE\[(\w+)\]$`)
 
-		by := `18-Apr-2018 06:53:20.411 INFO [http-nio-8080-exec-1] org.apache.coyote.http11.Http11Processor.service Error parsing HTTP request header
- Note: further occurrences of HTTP header parsing errors will be logged at DEBUG level.
- java.lang.IllegalArgumentException: Invalid character found in method name. HTTP method names must be tokens
-    at org.apache.coyote.http11.Http11InputBuffer.parseRequestLine(Http11InputBuffer.java:426)
-    at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:687)
-    at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:66)
-    at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:790)
-    at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1459)
-    at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:49)
-    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-    at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61)
-    at java.lang.Thread.run(Thread.java:748) MACHINE[hello]`
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			o = re.FindAllStringSubmatch(by, -1)

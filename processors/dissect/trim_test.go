@@ -77,11 +77,7 @@ func benchStripASCII(b *testing.B, l int) {
 }
 
 func benchStripUTF8(b *testing.B, l int) {
-	trimmer, err := newUTF8Trimmer(" ", true, true)
-	if !assert.NoError(b, err) {
-		b.Fail()
-		return
-	}
+	trimmer := newUTF8Trimmer(" ", true, true)
 	benchStrip(b, l, trimmer)
 }
 

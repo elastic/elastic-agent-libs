@@ -30,8 +30,8 @@ type trimmer interface {
 }
 
 func newTrimmer(trimChars string, trimLeft, trimRight bool) (t trimmer, err error) {
-	if t, err = newASCIITrimmer(trimChars, trimLeft, trimRight); err == errOnlyASCII {
-		t, err = newUTF8Trimmer(trimChars, trimLeft, trimRight)
+	if t, err = newASCIITrimmer(trimChars, trimLeft, trimRight); errors.Is(err, errOnlyASCII) {
+		t = newUTF8Trimmer(trimChars, trimLeft, trimRight)
 	}
 	return t, err
 }
@@ -74,15 +74,15 @@ type utf8trimmer struct {
 	left, right bool
 }
 
-func newUTF8Trimmer(trimChars string, trimLeft, trimRight bool) (trimmer, error) {
+func newUTF8Trimmer(trimChars string, trimLeft, trimRight bool) trimmer {
 	return utf8trimmer{
 		// Function that returns true when the rune is not in trimChars.
 		fn: func(r rune) bool {
-			return strings.IndexRune(trimChars, r) == -1
+			return !strings.ContainsRune(trimChars, r)
 		},
 		left:  trimLeft,
 		right: trimRight,
-	}, nil
+	}
 }
 
 func (t utf8trimmer) Trim(s string, start, end int) (int, int) {

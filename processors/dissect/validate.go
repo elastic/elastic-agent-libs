@@ -33,7 +33,7 @@ func validate(p *parser) error {
 			}
 		}
 
-		if found == false {
+		if !found {
 			return fmt.Errorf("missing reference for key '%s'", field.Key())
 		}
 	}

@@ -123,7 +123,7 @@ func (d *Dissector) extract(s string) (positions, error) {
 		start = offset
 
 		// corresponding field of the delimiter
-		field := d.parser.fields[d.parser.fieldsIdMap[i]]
+		field := d.parser.fields[d.parser.fieldsIDMap[i]]
 
 		// for fixed-length field, just step the same size of its length
 		if field.IsFixedLength() {
@@ -165,7 +165,7 @@ func (d *Dissector) extract(s string) (positions, error) {
 		dl = dl.Next()
 	}
 
-	field := d.parser.fields[d.parser.fieldsIdMap[i]]
+	field := d.parser.fields[d.parser.fieldsIDMap[i]]
 
 	if field.IsFixedLength() && offset+field.Length() != len(s) {
 		return nil, fmt.Errorf("last fixed length key `%s` (length: %d) does not fit into remaining: `%s`, (offset: %d)",
@@ -205,9 +205,9 @@ func (d *Dissector) resolveConvert(s string, p positions) MapConverted {
 		} else {
 			key := f.Key()
 			if k, ok := lookup[f.Key()]; ok {
-				key = k.(string)
+				key, _ = k.(string)
 			}
-			v, _ := m[key]
+			v := m[key]
 			if f.DataType() != "" {
 				mc[key] = convertData(f.DataType(), v)
 			} else {
@@ -261,7 +261,7 @@ func transformType(typ dataType, value string) (interface{}, error) {
 		return float32(f), err
 	case Double:
 		d, err := strconv.ParseFloat(value, 64)
-		return float64(d), err
+		return d, err
 	case Boolean:
 		return strconv.ParseBool(value)
 	case IP:

@@ -40,7 +40,10 @@ func CheckNoChanges() error {
 
 	if len(changes) > 0 {
 		if mg.Verbose() {
-			GitDiff()
+			err = GitDiff()
+			if err != nil {
+				return fmt.Errorf("failed to run git diff: %w", err)
+			}
 		}
 
 		return fmt.Errorf("some files are not up-to-date. "+

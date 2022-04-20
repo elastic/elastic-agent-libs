@@ -119,7 +119,7 @@ func (m *multiByte) MarkGreedy() {
 }
 
 func (m *multiByte) String() string {
-	return fmt.Sprintf("delimiter: multibyte (match: '%s', len: %d)", string(m.needle), m.Len())
+	return fmt.Sprintf("delimiter: multibyte (match: '%s', len: %d)", m.needle, m.Len())
 }
 
 func (m *multiByte) Delimiter() string {
