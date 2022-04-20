@@ -32,6 +32,7 @@ type trimmer interface {
 func newTrimmer(trimChars string, trimLeft, trimRight bool) (t trimmer, err error) {
 	if t, err = newASCIITrimmer(trimChars, trimLeft, trimRight); errors.Is(err, errOnlyASCII) {
 		t = newUTF8Trimmer(trimChars, trimLeft, trimRight)
+		err = nil
 	}
 	return t, err
 }
