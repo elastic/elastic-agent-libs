@@ -133,7 +133,6 @@ const (
 )
 
 var tlsVerificationModes = map[string]TLSVerificationMode{
-	"":            VerifyFull,
 	"full":        VerifyFull,
 	"strict":      VerifyStrict,
 	"none":        VerifyNone,
