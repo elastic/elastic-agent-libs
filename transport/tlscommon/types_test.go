@@ -18,6 +18,7 @@
 package tlscommon
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,4 +36,32 @@ func TestMarshallText(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, bytes)
 	require.Equal(t, "none", string(bytes))
+}
+
+func TestLoadWithEmptyStringVerificationMode(t *testing.T) {
+	cfg, err := load(`
+    enabled: true
+    certificate: mycert.pem
+    key: mycert.key
+    verification_mode: ""
+    supported_protocols: [TLSv1.1, TLSv1.2]
+    renegotiation: freely
+  `)
+
+	assert.NoError(t, err)
+	assert.Equal(t, cfg.VerificationMode, VerifyFull)
+}
+
+func TestLoadWithEmptyVerificationMode(t *testing.T) {
+	cfg, err := load(`
+    enabled: true
+    verification_mode:
+    supported_protocols: [TLSv1.1, TLSv1.2]
+    curve_types:
+      - P-521
+    renegotiation: freely
+  `)
+
+	assert.NoError(t, err)
+	assert.Equal(t, cfg.VerificationMode, VerifyFull)
 }

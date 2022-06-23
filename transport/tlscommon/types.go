@@ -166,6 +166,11 @@ func (m *TLSVerificationMode) Unpack(in interface{}) error {
 		return fmt.Errorf("verification mode must be an identifier")
 	}
 
+	if s == "" {
+		*m = VerifyFull
+		return nil
+	}
+
 	mode, found := tlsVerificationModes[s]
 	if !found {
 		return fmt.Errorf("unknown verification mode '%v'", s)
