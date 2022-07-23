@@ -190,6 +190,7 @@ func NewFileRotator(filename string, options ...RotatorOption) (*Rotator, error)
 	if r.log != nil {
 		r.log.Debugw("Initialized file rotator",
 			"filename", r.filename,
+			"extension", r.extension,
 			"max_size_bytes", r.maxSizeBytes,
 			"max_backups", r.maxBackups,
 			"permissions", r.permissions,
