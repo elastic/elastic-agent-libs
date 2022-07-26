@@ -35,9 +35,9 @@ import (
 
 const (
 	linterInstallURL             = "https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh"
-	linterInstallFilename        = "./build/intall-golang-ci.sh"
+	linterInstallFilename        = "./build/install-golang-ci.sh"
 	linterBinaryFilename         = "./build/golangci-lint"
-	linterVersion                = "v1.45.2"
+	linterVersion                = "v1.47.2"
 	linterConfigFilename         = "./.golangci.yml"
 	linterConfigTemplateFilename = "./dev-tools/templates/.golangci.yml"
 )
@@ -100,6 +100,16 @@ func (Linter) CheckConfig() error {
 // using the official installation script downloaded from GitHub.
 // If the linter binary already exists does nothing.
 func (Linter) Install() error {
+	return install(false)
+}
+
+// ForceInstall force installs the linter regardless of whether it exists or not.
+// Useful primarily when the linter version should be updated.
+func (Linter) ForceInstall() error {
+	return install(true)
+}
+
+func install(force bool) error {
 	dirPath := filepath.Dir(linterBinaryFilename)
 	err := os.MkdirAll(dirPath, 0700)
 	if err != nil {
@@ -107,11 +117,11 @@ func (Linter) Install() error {
 	}
 
 	_, err = os.Stat(linterBinaryFilename)
-	if err == nil {
+	if !force && err == nil {
 		log.Println("The linter has been already installed, skipping...")
 		return nil
 	}
-	if !errors.Is(err, os.ErrNotExist) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("failed check if file %q exists: %w", linterBinaryFilename, err)
 	}
 
