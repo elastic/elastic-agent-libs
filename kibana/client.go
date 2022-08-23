@@ -305,12 +305,12 @@ func (client *Client) readVersion() error {
 
 	code, result, err := client.Connection.Request("GET", statusAPI, nil, nil, nil)
 	if err != nil {
-		return fmt.Errorf("HTTP GET request to %s/api/status fails: %w. Response: %s",
-			client.Connection.URL, err, truncateString(result))
+		return fmt.Errorf("HTTP GET request to %s/api/status fails: %w (status=%d). Response: %s",
+			client.Connection.URL, err, code, truncateString(result))
 	}
 	if code >= 400 {
-		return fmt.Errorf("HTTP GET request to %s/api/status fails. Response: %s",
-			client.Connection.URL, truncateString(result))
+		return fmt.Errorf("HTTP GET request to %s/api/status fails: status=%d. Response: %s",
+			client.Connection.URL, code, truncateString(result))
 	}
 
 	var versionString string
