@@ -69,7 +69,12 @@ pipeline {
                 unstash 'source'
                 dir("${BASE_DIR}"){
                   withGoEnv(){
-                    goTestJUnit(options: '-v ./...', output: 'junit-report.xml')
+                    whenTrue(isDarwin()) {
+                      cmd(label: 'go test', script: 'go test -v .../.')
+                    }
+                    whenFalse(isDarwin()) {
+                      goTestJUnit(options: '-v ./...', output: 'junit-report.xml')
+                    }
                   }
                 }
               }
