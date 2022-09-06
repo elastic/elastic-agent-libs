@@ -70,7 +70,7 @@ pipeline {
                 dir("${BASE_DIR}"){
                   withGoEnv(){
                     whenTrue(isDarwin()) {
-                      cmd(label: 'go test', script: 'go test -v .../.')
+                      cmd(label: 'go test', script: 'go test -v ./...')
                     }
                     whenFalse(isDarwin()) {
                       goTestJUnit(options: '-v ./...', output: 'junit-report.xml')
