@@ -69,6 +69,8 @@ pipeline {
                 unstash 'source'
                 dir("${BASE_DIR}"){
                   withGoEnv(){
+                    // goTestSum for go1.18.5 on MacOS produces a segmentation violation. See https://github.com/elastic/elastic-agent-libs/pull/80
+                    // For the time being there will not junit transformation in MacOS
                     whenTrue(isDarwin()) {
                       cmd(label: 'go test', script: 'go test -v ./...')
                     }
