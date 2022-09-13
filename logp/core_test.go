@@ -96,6 +96,36 @@ func TestLoggerLevel(t *testing.T) {
 	}
 }
 
+func TestLoggerSetLevel(t *testing.T) {
+	if err := DevelopmentSetup(ToObserverOutput()); err != nil {
+		t.Fatal(err)
+	}
+
+	const loggerName = "tester"
+	logger := NewLogger(loggerName)
+
+	logger.Debug("debug")
+	logs := ObserverLogs().TakeAll()
+	if assert.Len(t, logs, 1) {
+		assert.Equal(t, zap.DebugLevel, logs[0].Level)
+		assert.Equal(t, loggerName, logs[0].LoggerName)
+		assert.Equal(t, "debug", logs[0].Message)
+	}
+
+	SetLevel(zap.InfoLevel)
+	logger.Info("info")
+	logs = ObserverLogs().TakeAll()
+	if assert.Len(t, logs, 1) {
+		assert.Equal(t, zap.InfoLevel, logs[0].Level)
+		assert.Equal(t, loggerName, logs[0].LoggerName)
+		assert.Equal(t, "info", logs[0].Message)
+	}
+
+	logger.Debug("debug")
+	logs = ObserverLogs().TakeAll()
+	assert.Empty(t, logs, 1)
+}
+
 func TestL(t *testing.T) {
 	if err := DevelopmentSetup(ToObserverOutput()); err != nil {
 		t.Fatal(err)
