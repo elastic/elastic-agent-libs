@@ -57,7 +57,7 @@ func TestLogger(t *testing.T) {
 
 func TestLoggerLevel(t *testing.T) {
 	if err := DevelopmentSetup(ToObserverOutput()); err != nil {
-		t.Fatal(err)
+		t.Fatalf("cannot initialise logger on development mode: %+v", err)
 	}
 
 	const loggerName = "tester"
