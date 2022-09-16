@@ -279,8 +279,11 @@ func storeLogger(l *coreLogger) {
 }
 
 func SetLevel(lvl zapcore.Level) {
-	coreLogger := loadLogger()
-	coreLogger.level.SetLevel(lvl)
+	loadLogger().level.SetLevel(lvl)
+}
+
+func GetLevel() zapcore.Level {
+	return loadLogger().level.Level()
 }
 
 // newMultiCore creates a sink that sends to multiple cores.
