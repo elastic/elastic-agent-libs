@@ -45,17 +45,3 @@ func TestNilReg(t *testing.T) {
 	require.NotNil(t, testUint)
 
 }
-
-func TestTypeMismatch(t *testing.T) {
-	valName := "testmetric"
-	testReg := Default.NewRegistry("safe_registry")
-	testUint := NewUint(testReg, valName)
-	require.NotNil(t, testUint)
-	defer func() {
-		recErr := recover()
-		require.NotNil(t, recErr)
-		t.Logf("Got expected error: %v", recErr)
-	}()
-	NewFloat(testReg, valName)
-
-}
