@@ -40,6 +40,7 @@ type Config struct {
 	Renegotiation        TLSRenegotiationSupport `config:"renegotiation" yaml:"renegotiation"`
 	CASha256             []string                `config:"ca_sha256" yaml:"ca_sha256,omitempty"`
 	CATrustedFingerprint string                  `config:"ca_trusted_fingerprint" yaml:"ca_trusted_fingerprint,omitempty"`
+	PeerName             string                  `config:"peer_name" yaml:"peer_name,omitempty"`
 }
 
 // LoadTLSConfig will load a certificate from config with all TLS based keys
@@ -92,6 +93,7 @@ func LoadTLSConfig(config *Config) (*TLSConfig, error) {
 		Renegotiation:        tls.RenegotiationSupport(config.Renegotiation),
 		CASha256:             config.CASha256,
 		CATrustedFingerprint: config.CATrustedFingerprint,
+		PeerName:             config.PeerName,
 	}, nil
 }
 

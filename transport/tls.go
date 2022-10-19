@@ -51,9 +51,13 @@ func TestTLSDialer(
 			return nil, fmt.Errorf("unsupported network type %v", network)
 		}
 
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, err
+		host := config.PeerName
+		if host == "" {
+			var err error
+			host, _, err = net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		var tlsConfig *tls.Config

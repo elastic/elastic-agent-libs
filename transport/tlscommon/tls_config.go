@@ -83,6 +83,9 @@ type TLSConfig struct {
 	// time returns the current time as the number of seconds since the epoch.
 	// If time is nil, TLS uses time.Now.
 	time func() time.Time
+
+	// PeerName specifies the SAN name or IP that must be present in the peer certificate.
+	PeerName string
 }
 
 var (
@@ -117,6 +120,7 @@ func (c *TLSConfig) ToConfig() *tls.Config {
 		ClientAuth:         c.ClientAuth,
 		Time:               c.time,
 		VerifyConnection:   makeVerifyConnection(c),
+		ServerName:         c.PeerName,
 	}
 }
 
@@ -134,7 +138,9 @@ func (c *TLSConfig) BuildModuleClientConfig(host string) *tls.Config {
 	}
 
 	config := c.ToConfig()
-	config.ServerName = host
+	if host != "" {
+		config.ServerName = host
+	}
 	return config
 }
 
@@ -152,7 +158,9 @@ func (c *TLSConfig) BuildServerConfig(host string) *tls.Config {
 	}
 
 	config := c.ToConfig()
-	config.ServerName = host
+	if host != "" {
+		config.ServerName = host
+	}
 	config.VerifyConnection = makeVerifyServerConnection(c)
 	return config
 }
