@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - dev-tools: added GoImports target #74
+- transport/tlscommon: New ssl.peer_name config option #86
 
 ### Changed
 
