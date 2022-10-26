@@ -47,6 +47,7 @@ func (m *beatService) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	changes <- svc.Status{State: svc.StartPending}
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 
+	log := logp.NewLogger("service_windows")
 loop:
 	for c := range r {
 		switch c.Cmd {
@@ -55,18 +56,28 @@ loop:
 			// Testing deadlock from https://code.google.com/p/winsvc/issues/detail?id=4
 			time.Sleep(100 * time.Millisecond)
 			changes <- c.CurrentStatus
-		case svc.Stop, svc.Shutdown:
+
+		// The svc.Cmd tye does not implement the Stringer interface and its
+		// underlying type is an integer, therefore it's needed to manually log them.
+		case svc.Stop:
+			log.Info("received state change 'svc.Stop' from windows service manager")
+			break
+		case svc.Shutdown:
+			log.Info("received state change 'svc.Shutdown' from windows service manager")
 			break loop
 		default:
-			logp.Err("Unexpected control request: $%d. Ignored.", c)
+			log.Errorf("Unexpected control request: $%d. Ignored.", c)
 		}
 	}
 	changes <- svc.Status{State: svc.StopPending}
+	log.Info("changed windows service state to svc.StopPending, invoking stopCallback")
 	m.stopCallback()
+
 	// Block until notifyWindowsServiceStopped below is called. This is required
 	// as the windows/svc package will transition the service to STOPPED state
 	// once this function returns.
 	<-m.done
+	log.Debug("windows service state changed to svc.Stopped")
 	return ssec, errno
 }
 
@@ -104,7 +115,6 @@ func ProcessWindowsControlEvents(stopCallback func()) {
 
 	serviceInstance.stopCallback = stopCallback
 	err = run(os.Args[0], serviceInstance)
-
 	if err == nil {
 		return
 	}
