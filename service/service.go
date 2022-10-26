@@ -38,7 +38,7 @@ import (
 
 // HandleSignals manages OS signals that ask the service/daemon to stop.
 // The stopFunction should break the loop in the Beat so that
-// the service shutdowns gracefully.
+// the service shuts down gracefully.
 func HandleSignals(stopFunction func(), cancel context.CancelFunc) {
 	var callback sync.Once
 	logger := logp.NewLogger("service")
