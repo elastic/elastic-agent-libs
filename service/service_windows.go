@@ -61,10 +61,11 @@ loop:
 		// underlying type is an integer, therefore it's needed to manually log them.
 		case svc.Stop:
 			log.Info("received state change 'svc.Stop' from windows service manager")
-			break
+			break loop
 		case svc.Shutdown:
 			log.Info("received state change 'svc.Shutdown' from windows service manager")
 			break loop
+
 		default:
 			log.Errorf("Unexpected control request: $%d. Ignored.", c)
 		}
@@ -100,7 +101,7 @@ const couldNotConnect syscall.Errno = 1063
 func ProcessWindowsControlEvents(stopCallback func()) {
 	defer close(serviceInstance.executeFinished)
 
-	// nolint: staticcheck // keep using the deprecated method in order to maintain the existing behavior
+	//nolint:staticcheck // keep using the deprecated method in order to maintain the existing behavior
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		logp.Err("IsAnInteractiveSession: %v", err)
