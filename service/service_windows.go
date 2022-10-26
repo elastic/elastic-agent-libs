@@ -120,7 +120,7 @@ func ProcessWindowsControlEvents(stopCallback func()) {
 		return
 	}
 
-	// nolint: errorlint // this system error is a special case
+	//nolint:errorlint // this system error is a special case
 	if errnoErr, ok := err.(syscall.Errno); ok && errnoErr == couldNotConnect {
 		/*
 			 If, as in the case of Jenkins, the process is started as an interactive process, but the invoking process
