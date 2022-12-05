@@ -27,6 +27,55 @@ import (
 )
 
 func TestExternalConfigLoading(t *testing.T) {
+	authCfg := map[string]interface{}{
+		"data_stream": map[string]interface{}{
+			"dataset": "system.auth",
+			"type":    "logs",
+		},
+		"exclude_files": []interface{}{".gz$"},
+		"id":            "logfile-system.auth-my-id",
+		"paths":         []interface{}{"/var/log/auth.log*", "/var/log/secure*"},
+		"use_output":    "default",
+	}
+	syslogCfg := map[string]interface{}{
+		"data_stream": map[string]interface{}{
+			"dataset": "system.syslog",
+			"type":    "logs",
+		},
+		"type":          "logfile",
+		"id":            "logfile-system.syslog-my-id",
+		"exclude_files": []interface{}{".gz$"},
+		"paths":         []interface{}{"/var/log/messages*", "/var/log/syslog*"},
+		"use_output":    "default",
+	}
+
+	diskioCfg := map[string]interface{}{
+		"data_stream": map[string]interface{}{
+			"dataset": "system.diskio",
+			"type":    "metrics",
+		},
+		"id":         "system/metrics-system.diskio-my-id",
+		"metricsets": []interface{}{"diskio"},
+		"period":     "10s",
+	}
+	filesystemCfg := map[string]interface{}{
+		"data_stream": map[string]interface{}{
+			"dataset": "system.filesystem",
+			"type":    "metrics",
+		},
+		"id":         "system/metrics-system.filesystem-my-id",
+		"metricsets": []interface{}{"filesystem"},
+		"period":     "30s",
+	}
+
+	outputCfg := map[string]interface{}{
+		"default": map[string]interface{}{
+			"type":    "elasticsearch",
+			"hosts":   []interface{}{"127.0.0.1:9201"},
+			"api-key": "my-secret-key",
+		},
+	}
+
 	cases := map[string]struct {
 		configs        []string
 		inputsFolder   string
@@ -51,13 +100,7 @@ func TestExternalConfigLoading(t *testing.T) {
 			},
 			inputsFolder: "",
 			expectedConfig: map[string]interface{}{
-				"outputs": map[string]interface{}{
-					"default": map[string]interface{}{
-						"type":    "elasticsearch",
-						"hosts":   []interface{}{"127.0.0.1:9201"},
-						"api-key": "my-secret-key",
-					},
-				},
+				"outputs": outputCfg,
 				"agent": map[string]interface{}{
 					"logging": map[string]interface{}{
 						"level": "debug",
@@ -84,45 +127,10 @@ func TestExternalConfigLoading(t *testing.T) {
 					},
 				},
 				"inputs": []interface{}{
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.auth",
-							"type":    "logs",
-						},
-						"exclude_files": []interface{}{".gz$"},
-						"id":            "logfile-system.auth-my-id",
-						"paths":         []interface{}{"/var/log/auth.log*", "/var/log/secure*"},
-						"use_output":    "default",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.syslog",
-							"type":    "logs",
-						},
-						"type":          "logfile",
-						"id":            "logfile-system.syslog-my-id",
-						"exclude_files": []interface{}{".gz$"},
-						"paths":         []interface{}{"/var/log/messages*", "/var/log/syslog*"},
-						"use_output":    "default",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.diskio",
-							"type":    "metrics",
-						},
-						"id":         "system/metrics-system.diskio-my-id",
-						"metricsets": []interface{}{"diskio"},
-						"period":     "10s",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.filesystem",
-							"type":    "metrics",
-						},
-						"id":         "system/metrics-system.filesystem-my-id",
-						"metricsets": []interface{}{"filesystem"},
-						"period":     "30s",
-					},
+					authCfg,
+					syslogCfg,
+					diskioCfg,
+					filesystemCfg,
 				},
 			},
 		},
@@ -134,13 +142,7 @@ func TestExternalConfigLoading(t *testing.T) {
 			},
 			inputsFolder: filepath.Join("testdata", "inputs", "*.yml"),
 			expectedConfig: map[string]interface{}{
-				"outputs": map[string]interface{}{
-					"default": map[string]interface{}{
-						"type":    "elasticsearch",
-						"hosts":   []interface{}{"127.0.0.1:9201"},
-						"api-key": "my-secret-key",
-					},
-				},
+				"outputs": outputCfg,
 				"inputs": []interface{}{
 					map[string]interface{}{
 						"type":                  "system/metrics",
@@ -153,45 +155,10 @@ func TestExternalConfigLoading(t *testing.T) {
 							},
 						},
 					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.auth",
-							"type":    "logs",
-						},
-						"exclude_files": []interface{}{".gz$"},
-						"id":            "logfile-system.auth-my-id",
-						"paths":         []interface{}{"/var/log/auth.log*", "/var/log/secure*"},
-						"use_output":    "default",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.syslog",
-							"type":    "logs",
-						},
-						"type":          "logfile",
-						"id":            "logfile-system.syslog-my-id",
-						"exclude_files": []interface{}{".gz$"},
-						"paths":         []interface{}{"/var/log/messages*", "/var/log/syslog*"},
-						"use_output":    "default",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.diskio",
-							"type":    "metrics",
-						},
-						"id":         "system/metrics-system.diskio-my-id",
-						"metricsets": []interface{}{"diskio"},
-						"period":     "10s",
-					},
-					map[string]interface{}{
-						"data_stream": map[string]interface{}{
-							"dataset": "system.filesystem",
-							"type":    "metrics",
-						},
-						"id":         "system/metrics-system.filesystem-my-id",
-						"metricsets": []interface{}{"filesystem"},
-						"period":     "30s",
-					},
+					authCfg,
+					syslogCfg,
+					diskioCfg,
+					filesystemCfg,
 				},
 			},
 		},
