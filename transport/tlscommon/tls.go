@@ -56,7 +56,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 
 	keyPEM, err := ReadPEMFile(log, key, config.Passphrase)
 	if err != nil {
-		log.Errorf("Failed reading key file %v: %+v", key, err)
+		log.Errorf("Failed reading key file: %+v", err)
 		return nil, fmt.Errorf("%w %v", err, key)
 	}
 
@@ -66,7 +66,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 		return nil, err
 	}
 
-	log.Debugf("Loading certificate: %v and key %v", certificate, key)
+	log.Debugf("Loading certificate: %v", certificate)
 	return &cert, nil
 }
 
