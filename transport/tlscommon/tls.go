@@ -67,7 +67,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 	}
 
 	// Do not log the key if it was provided as a string in the configuration to avoid
-	// leaking private keys in the debug logs. Log when the key when it is a file path.
+	// leaking private keys in the debug logs. Log when the key is a file path.
 	if IsPEMString(key) {
 		log.Debugf("Loading certificate: %v with key from PEM string in config", certificate)
 	} else {
