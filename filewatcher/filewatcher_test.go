@@ -76,5 +76,5 @@ func TestFileWatcher(t *testing.T) {
 	files, changed, err = watcher.Scan()
 	assert.Len(t, files, 2, "number of files watched")
 	assert.NoError(t, err)
-	assert.True(t, changed, "'changed' must be truem one file has been removed")
+	assert.True(t, changed, "'changed' must be true, one file has been removed")
 }

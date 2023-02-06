@@ -42,10 +42,11 @@ func New(files ...string) *FileWatcher {
 
 // Scan scans all file paths and checks if the number of files or the modtime of the files changed
 // It returns the list of existing files, a boolean if anything in has changed and potential errors.
-// To detect changes not only mod time is compared but also the hash of the files list. This is required to
+// To detect changes not only modtime is compared but also the hash of the files list. This is required to
 // also detect files which were removed.
-// The modtime is compared based on second as normally mod-time is in seconds. If it is unclear if something changed
-// the method will return true for the changes. It is strongly recommend to call scan not more frequent then 1s.
+// Normally, the modtime is presented in seconds, so the change detection is also based on seconds.
+// When it's unclear whether something changed or not the method will return `true` to make sure potential changes are handled.
+// It is strongly recommended to call `Scan` not more than once a second.
 func (f *FileWatcher) Scan() ([]string, bool, error) {
 	updatedFiles := false
 	files := []string{}
