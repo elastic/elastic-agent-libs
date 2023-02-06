@@ -62,10 +62,13 @@ func (f *FileWatcher) Scan() ([]string, bool, error) {
 		}
 
 		// Check if one of the files was changed recently
-		// File modification time can be in seconds. -1 + truncation is to cover for files which
-		// were created during this second.
-		// If the last scan was at 09:02:15.00001 it will pick up files which were modified also 09:02:14
-		// As this scan no necessarily picked up files form 09:02:14
+		// File modification time usually is in seconds. We subtract a
+		// second and truncate to account for files which  were
+		// created during this second the scan is running.
+		// If the last scan was at 09:02:15.00001 it will pick up
+		// files which were modified at 09:02:14.
+		// Otherwise this scan would not necessarily pick up files
+		// form 09:02:14.
 		// TODO: How could this be improved / simplified? Behaviour was sometimes flaky. Is ModTime updated with delay?
 		if info.ModTime().After(f.lastScan.Add(-1 * time.Second).Truncate(time.Second)) {
 			updatedFiles = true
