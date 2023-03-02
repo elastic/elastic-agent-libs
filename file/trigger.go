@@ -30,6 +30,7 @@ const (
 	rotateReasonFileSize
 	rotateReasonManualTrigger
 	rotateReasonTimeInterval
+	rotateReasonDate
 )
 
 func (rr rotateReason) String() string {
@@ -42,6 +43,8 @@ func (rr rotateReason) String() string {
 		return "manual trigger"
 	case rotateReasonTimeInterval:
 		return "time interval"
+	case rotateReasonDate:
+		return "date rotate"
 	default:
 		return "unknown"
 	}
@@ -64,6 +67,7 @@ func newTriggers(rotateOnStartup bool, interval time.Duration, maxSizeBytes uint
 	if maxSizeBytes > 0 {
 		triggers = append(triggers, &sizeTrigger{maxSizeBytes: maxSizeBytes, size: 0})
 	}
+	triggers = append(triggers, &dateTrigger{})
 	return triggers
 }
 
@@ -76,6 +80,26 @@ func (t *initTrigger) TriggerRotation(_ uint) rotateReason {
 	if !t.triggered {
 		t.triggered = true
 		return rotateReasonInitializing
+	}
+	return rotateReasonNoRotate
+}
+
+// date Trigger is triggered by every date.
+type dateTrigger struct {
+	lastDate time.Time
+}
+
+func (t *dateTrigger) TriggerRotation(_ uint) rotateReason {
+	if &(t.lastDate) == nil {
+		t.lastDate = time.Now()
+		return rotateReasonNoRotate
+	}
+	now := time.Now()
+	_, _, d1 := now.Date()
+	_, _, d2 := t.lastDate.Date()
+	if d1 != d2 {
+		t.lastDate = now
+		return rotateReasonDate
 	}
 	return rotateReasonNoRotate
 }
