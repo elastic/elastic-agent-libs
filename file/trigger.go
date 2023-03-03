@@ -90,7 +90,7 @@ type dateTrigger struct {
 }
 
 func (t *dateTrigger) TriggerRotation(_ uint) rotateReason {
-	if &(t.lastDate) == nil {
+	if t.lastDate.IsZero() {
 		t.lastDate = time.Now()
 		return rotateReasonNoRotate
 	}
