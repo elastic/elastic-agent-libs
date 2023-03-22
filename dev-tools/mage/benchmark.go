@@ -56,7 +56,7 @@ func (Benchmark) Deps() error {
 // Run execute the go benchmark tests for this repository, define OUTPUT to write results into a file
 func (Benchmark) Run(ctx context.Context) error {
 	mg.Deps(Benchmark.Deps)
-	fmt.Println(">> go Test:", "Benchmark")
+	log.Println(">> go Test: Benchmark")
 	outputFile := os.Getenv("OUTPUT")
 	benchmarkCountOverride := os.Getenv("BENCH_COUNT")
 	if benchmarkCountOverride != "" {
@@ -91,7 +91,7 @@ func (Benchmark) Run(ctx context.Context) error {
 // Diff compare 2 benchmark outputs, Required BASE variable for parsing results, define NEXT to compare base with next and optional OUTPUT to write to file
 func (Benchmark) Diff(ctx context.Context) error {
 	mg.Deps(Benchmark.Deps)
-	fmt.Println(">> running: benchstat")
+	log.Println(">> running: benchstat")
 	outputFile := os.Getenv("OUTPUT")
 	baseFile := os.Getenv("BASE")
 	nextFile := os.Getenv("NEXT")
@@ -153,7 +153,6 @@ func runCommand(ctx context.Context, env map[string]string, cmd string, outputFi
 	c.Stdin = os.Stdin
 
 	log.Println("exec:", cmd, strings.Join(args, " "))
-	fmt.Println("exec:", cmd, strings.Join(args, " "))
 
 	exitCode := c.Run()
 	return c, exitCode
