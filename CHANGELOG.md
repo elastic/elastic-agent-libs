@@ -6,17 +6,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - dev-tools: added GoImports target #74
+- api: add `AddHandler` to server type #111
 
 ### Changed
 
 - service: Improve shutdown logs #87
 - dev-tools: upgrade golangci-lint to v1.50.1
+- api: export handler helper types #111
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+- api: export type used by `AddHandlerFunc` #111
 
 ## [0.2.11]
 
