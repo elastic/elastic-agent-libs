@@ -63,6 +63,11 @@ func New(log *logp.Logger, mux *http.ServeMux, c *config.C) (*Server, error) {
 	return &Server{mux: mux, l: l, config: cfg, log: log.Named("api")}, nil
 }
 
+// AddRoute adds a route to the server mux
+func (s *Server) AddRoute(path string, handler HandlerFunc) {
+	s.mux.HandleFunc(path, handler)
+}
+
 // Start starts the HTTP server and accepting new connection.
 func (s *Server) Start() {
 	s.log.Info("Starting stats endpoint")
