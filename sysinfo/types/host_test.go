@@ -24,20 +24,40 @@ import (
 )
 
 func TestHostInfo_FQDNAwareHostname(t *testing.T) {
-	hostInfo := HostInfo{
-		Hostname: "foo",
-		FQDN:     "foo.bar.baz",
-	}
-
 	tests := map[string]struct {
+		hostInfo HostInfo
 		wantFQDN bool
 		expected string
 	}{
-		"want_fqdn": {
+		"want_fqdn_is_set": {
+			hostInfo: HostInfo{
+				FQDN:     "foo.bar.baz",
+				Hostname: "foo",
+			},
 			wantFQDN: true,
 			expected: "foo.bar.baz",
 		},
-		"no_fqdn": {
+		"want_fqdn_not_set": {
+			hostInfo: HostInfo{
+				FQDN:     "",
+				Hostname: "foo",
+			},
+			wantFQDN: true,
+			expected: "foo",
+		},
+		"dont_want_fqdn_is_set": {
+			hostInfo: HostInfo{
+				FQDN:     "foo.bar.baz",
+				Hostname: "foo",
+			},
+			wantFQDN: false,
+			expected: "foo",
+		},
+		"dont_want_fqdn_not_set": {
+			hostInfo: HostInfo{
+				FQDN:     "",
+				Hostname: "foo",
+			},
 			wantFQDN: false,
 			expected: "foo",
 		},
@@ -45,7 +65,7 @@ func TestHostInfo_FQDNAwareHostname(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			actual := hostInfo.FQDNAwareHostname(test.wantFQDN)
+			actual := test.hostInfo.FQDNAwareHostname(test.wantFQDN)
 			require.Equal(t, test.expected, actual)
 		})
 	}

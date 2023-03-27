@@ -24,9 +24,16 @@ type HostInfo types.HostInfo
 // FQDNAwareHostname returns the system hostname, honoring the given
 // flag to report the FQDN or not.
 func (host HostInfo) FQDNAwareHostname(wantFQDN bool) string {
-	if wantFQDN {
-		return host.FQDN
+	// If we don't want the FQDN, just return the OS-returned hostname.
+	if !wantFQDN {
+		return host.Hostname
 	}
 
-	return host.Hostname
+	// If the FQDN isn't set, fallback to the OS-returned hostname.
+	if host.FQDN == "" {
+		return host.Hostname
+	}
+
+	// Return the FQDN
+	return host.FQDN
 }
