@@ -18,7 +18,6 @@
 package mage
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
 	"github.com/magefile/mage/mg"
+	"github.com/magefile/mage/sh"
 )
 
 const (
@@ -53,8 +53,9 @@ func (Benchmark) Deps() error {
 	return nil
 }
 
-// Run execute the go benchmark tests for this repository, define OUTPUT to write results into a file
-func (Benchmark) Run(ctx context.Context) error {
+// Run execute the go benchmark tests for this repository, by defining the variable OUTPUT you write the results
+// into a file. Optional you can set BENCH_COUNT to how many benchmark iteration you want to execute, default is 8
+func (Benchmark) Run() error {
 	mg.Deps(Benchmark.Deps)
 	log.Println(">> go Test: Benchmark")
 	outputFile := os.Getenv("OUTPUT")
@@ -75,7 +76,7 @@ func (Benchmark) Run(ctx context.Context) error {
 	for _, pkg := range projectPackages {
 		cmdArgs = append(cmdArgs, filepath.Join(pkg, "/..."))
 	}
-	_, err := runCommand(ctx, nil, "go", outputFile, cmdArgs...)
+	_, err := runCommand(nil, "go", outputFile, cmdArgs...)
 
 	var goTestErr *exec.ExitError
 	switch {
@@ -88,8 +89,9 @@ func (Benchmark) Run(ctx context.Context) error {
 	}
 }
 
-// Diff compare 2 benchmark outputs, Required BASE variable for parsing results, define NEXT to compare base with next and optional OUTPUT to write to file
-func (Benchmark) Diff(ctx context.Context) error {
+// Diff parse one or more benchmark outputs, Required environment variables are BASE for parsing results
+// and NEXT to compare the base results with. Optional you can define OUTPUT to write the results into a file
+func (Benchmark) Diff() error {
 	mg.Deps(Benchmark.Deps)
 	log.Println(">> running: benchstat")
 	outputFile := os.Getenv("OUTPUT")
@@ -108,7 +110,7 @@ func (Benchmark) Diff(ctx context.Context) error {
 		args = append(args, nextFile)
 	}
 
-	_, err := runCommand(ctx, nil, "benchstat", outputFile, args...)
+	_, err := runCommand(nil, "benchstat", outputFile, args...)
 
 	var goTestErr *exec.ExitError
 	switch {
@@ -124,18 +126,14 @@ func (Benchmark) Diff(ctx context.Context) error {
 
 // runCommand is executing a command that is represented by cmd.
 // when defining an outputFile it will write the stdErr, stdOut of that command to the output file
-// otherwise it will capture it to stdErr, stdOut of the console used.
-func runCommand(ctx context.Context, env map[string]string, cmd string, outputFile string, args ...string) (*exec.Cmd, error) {
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.Env = os.Environ()
-	for k, v := range env {
-		c.Env = append(c.Env, k+"="+v)
-	}
-
+// otherwise it will capture it to stdErr, stdOut of the console used and return true, nil, if succeed
+func runCommand(env map[string]string, cmd string, outputFile string, args ...string) (bool, error) {
+	var stdOut io.Writer
+	var stdErr io.Writer
 	if outputFile != "" {
 		fileOutput, err := os.Create(createDir(outputFile))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create %s output file: %w", cmd, err)
+			return false, fmt.Errorf("failed to create %s output file: %w", cmd, err)
 		}
 		defer func(fileOutput *os.File) {
 			err := fileOutput.Close()
@@ -143,19 +141,13 @@ func runCommand(ctx context.Context, env map[string]string, cmd string, outputFi
 				log.Fatalf("Failed to close file %s", err)
 			}
 		}(fileOutput)
-		c.Stdout = io.MultiWriter(os.Stdout, fileOutput)
-		c.Stderr = io.MultiWriter(os.Stderr, fileOutput)
-
+		stdOut = io.MultiWriter(os.Stdout, fileOutput)
+		stdErr = io.MultiWriter(os.Stderr, fileOutput)
 	} else {
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
+		stdOut = os.Stdout
+		stdErr = os.Stderr
 	}
-	c.Stdin = os.Stdin
-
-	log.Println("exec:", cmd, strings.Join(args, " "))
-
-	exitCode := c.Run()
-	return c, exitCode
+	return sh.Exec(env, stdOut, stdErr, cmd, args...)
 }
 
 // createDir creates the parent directory for the given file.
