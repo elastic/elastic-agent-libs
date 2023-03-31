@@ -83,8 +83,8 @@ loop:
 		}
 	}
 
-	trySendState(svc.StopPending)
-	defer trySendState(svc.Stopped)
+	trySendState(svc.StopPending, changes)
+	defer trySendState(svc.Stopped, changes)
 
 	log.Info("changed windows service state to svc.StopPending, invoking stopCallback")
 	m.stopCallback()
