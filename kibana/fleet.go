@@ -145,7 +145,9 @@ type ListAgentsResponse struct {
 			Version string `json:"version"`
 		} `json:"agent"`
 		LocalMetadata struct {
-			Hostname string `json:"hostname"`
+			Host struct {
+				Hostname string `json:"hostname"`
+			} `json:"host"`
 		} `json:"local_metadata"`
 	} `json:"items"`
 }
