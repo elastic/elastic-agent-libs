@@ -30,7 +30,7 @@ import (
 
 const (
 	fleetAgentPoliciesAPI     = "/api/fleet/agent_policies"
-	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec
+	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
 	fleetListAgentsAPI        = "/api/fleet/agents"
 )
 
