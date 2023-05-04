@@ -28,6 +28,8 @@ import (
 // Create Policy
 //
 
+const agentPoliciesAPI = "/agent_policies"
+
 type MonitoringEnabledOption string
 
 const (
@@ -61,7 +63,7 @@ func (client *Client) CreatePolicy(request CreatePolicyRequest) (*CreatePolicyRe
 		return nil, fmt.Errorf("unable to marshal create policy request into JSON: %w", err)
 	}
 
-	statusCode, respBody, err := client.Request(http.MethodPost, "/agent_policies", nil, nil, bytes.NewReader(reqBody))
+	statusCode, respBody, err := client.Request(http.MethodPost, agentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
 	if statusCode != 200 {
 		return nil, fmt.Errorf("unable to create policy; API returned status code [%d] and body [%s]", statusCode, string(respBody))
 	}
