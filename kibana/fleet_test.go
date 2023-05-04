@@ -76,7 +76,7 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 		id       = "880c7460-a7e4-43df-8fc3-6a9593c6d555"
 		name     = "test"
 		policyID = "a580c680-ea40-11ed-aae7-4b4fd4906b3d"
-		apiKey   = "YzJoYjVZY0JZb2ZSLUYxbjhPSXk6eXZFemVNM2RRaFdxX3M5VlNBbllQQQ=="
+		apiKey   = "XxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx=="
 	)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
