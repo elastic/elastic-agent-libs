@@ -29,8 +29,8 @@ import (
 //
 
 const (
-	agentPoliciesApi     = "/agent_policies"
-	enrollmentApiKeysApi = "/enrollment_api_keys"
+	agentPoliciesAPI     = "/agent_policies"
+	enrollmentAPIKeysAPI = "/enrollment_api_keys"
 )
 
 type MonitoringEnabledOption string
@@ -64,7 +64,10 @@ func (client *Client) CreatePolicy(request CreatePolicyRequest) (*CreatePolicyRe
 		return nil, fmt.Errorf("unable to marshal create policy request into JSON: %w", err)
 	}
 
-	statusCode, respBody, err := client.Request(http.MethodPost, agentPoliciesApi, nil, nil, bytes.NewReader(reqBody))
+	statusCode, respBody, err := client.Request(http.MethodPost, agentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("error calling create policy API: %w", err)
+	}
 	if statusCode != 200 {
 		return nil, fmt.Errorf("unable to create policy; API returned status code [%d] and body [%s]", statusCode, string(respBody))
 	}
@@ -104,7 +107,10 @@ func (client *Client) CreateEnrollmentAPIKey(request CreateEnrollmentAPIKeyReque
 		return nil, fmt.Errorf("unable to marshal create enrollment API key request into JSON: %w", err)
 	}
 
-	statusCode, respBody, err := client.Request(http.MethodPost, enrollmentApiKeysApi, nil, nil, bytes.NewReader(reqBody))
+	statusCode, respBody, err := client.Request(http.MethodPost, enrollmentAPIKeysAPI, nil, nil, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("error calling create enrollment API key API: %w", err)
+	}
 	if statusCode != 200 {
 		return nil, fmt.Errorf("unable to create enrollment API key; API returned status code [%d] and body [%s]", statusCode, string(respBody))
 	}

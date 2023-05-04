@@ -19,11 +19,13 @@ package kibana
 
 import (
 	"fmt"
-	"github.com/elastic/elastic-agent-libs/config"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/config"
 )
 
 func TestFleetCreatePolicy(t *testing.T) {
@@ -35,7 +37,7 @@ func TestFleetCreatePolicy(t *testing.T) {
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case agentPoliciesApi:
+		case agentPoliciesAPI:
 			respBody := fmt.Sprintf(
 				`{"item":{"id":"%s","name":"%s","description":"%s","namespace":"default","monitoring_enabled":["logs","metrics"],"inactivity_timeout":1209600,"status":"active","is_managed":false,"revision":1,"updated_at":"2023-05-04T05:58:09.389Z","updated_by":"3118418258","schema_version":"1.1.0"}}`,
 				policyID, policyName, policyDescription,
@@ -79,7 +81,7 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case enrollmentApiKeysApi:
+		case enrollmentAPIKeysAPI:
 			respBody := fmt.Sprintf(
 				`{"item":{"id":"%s","active":true,"api_key_id":"c2hb5YcBYofR-F1n8OIy","api_key":"%s","name":"%s (%s)","policy_id":"%s","created_at":"2023-05-04T06:03:41.480Z"},"action":"created"}`,
 				id, apiKey, name, id, policyID,
