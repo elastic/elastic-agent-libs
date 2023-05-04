@@ -136,7 +136,7 @@ func TestFleetListAgents(t *testing.T) {
 }
 
 func TestFleetUnEnrollAgent(t *testing.T) {
-	const agentID = "f512f36f-bf78-4285-aff0-baeafbcdf21e/"
+	const agentID = "f512f36f-bf78-4285-aff0-baeafbcdf21e"
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case fmt.Sprintf(fleetUnEnrollAgentAPI, agentID):
@@ -153,6 +153,28 @@ func TestFleetUnEnrollAgent(t *testing.T) {
 		Revoke: true,
 	}
 	resp, err := client.UnEnrollAgent(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+}
+
+func TestFleetUpgradeAgent(t *testing.T) {
+	const agentID = "f512f36f-bf78-4285-aff0-baeafbcdf21e"
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetUpgradeAgentAPI, agentID):
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := UpgradeAgentRequest{
+		ID:      agentID,
+		Version: "8.8.0",
+	}
+	resp, err := client.UpgradeAgent(req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 }

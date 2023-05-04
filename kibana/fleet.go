@@ -33,6 +33,7 @@ const (
 	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
 	fleetListAgentsAPI        = "/api/fleet/agents"
 	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
+	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
 )
 
 type MonitoringEnabledOption string
@@ -199,6 +200,43 @@ func (client *Client) UnEnrollAgent(request UnEnrollAgentRequest) (*UnEnrollAgen
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("unable to parse unenroll agent API response: %w", err)
+	}
+
+	return &resp, nil
+}
+
+//
+// Upgrade Agent
+//
+
+type UpgradeAgentRequest struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+}
+
+type UpgradeAgentResponse struct {
+	// For future use
+}
+
+func (client *Client) UpgradeAgent(request UpgradeAgentRequest) (*UpgradeAgentResponse, error) {
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal upgrade agent request into JSON: %w", err)
+	}
+
+	apiUrl := fmt.Sprintf(fleetUpgradeAgentAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodPost, apiUrl, nil, nil, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("error calling upgrade agent API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to upgrade agent; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp UpgradeAgentResponse
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse upgrade agent API response: %w", err)
 	}
 
 	return &resp, nil
