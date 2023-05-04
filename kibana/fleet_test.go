@@ -135,6 +135,28 @@ func TestFleetListAgents(t *testing.T) {
 	require.Equal(t, "c75d66b1dac5", item.LocalMetadata.Hostname)
 }
 
+func TestFleetUnEnrollAgent(t *testing.T) {
+	const agentID = "f512f36f-bf78-4285-aff0-baeafbcdf21e/"
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetUnEnrollAgentAPI, agentID):
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := UnEnrollAgentRequest{
+		ID:     agentID,
+		Revoke: true,
+	}
+	resp, err := client.UnEnrollAgent(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+}
+
 func createTestServerAndClient(handler http.HandlerFunc) (*Client, error) {
 	kibanaTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

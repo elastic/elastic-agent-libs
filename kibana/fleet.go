@@ -32,6 +32,7 @@ const (
 	fleetAgentPoliciesAPI     = "/api/fleet/agent_policies"
 	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
 	fleetListAgentsAPI        = "/api/fleet/agents"
+	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
 )
 
 type MonitoringEnabledOption string
@@ -161,6 +162,43 @@ func (client *Client) ListAgents(request ListAgentsRequest) (*ListAgentsResponse
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("unable to parse list agents API response: %w", err)
+	}
+
+	return &resp, nil
+}
+
+//
+// Unenroll Agent
+//
+
+type UnEnrollAgentRequest struct {
+	ID     string `json:"id"`
+	Revoke bool   `json:"revoke"`
+}
+
+type UnEnrollAgentResponse struct {
+	// For future use
+}
+
+func (client *Client) UnEnrollAgent(request UnEnrollAgentRequest) (*UnEnrollAgentResponse, error) {
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal unenroll agent request into JSON: %w", err)
+	}
+
+	apiUrl := fmt.Sprintf(fleetUnEnrollAgentAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodPost, apiUrl, nil, nil, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("error calling unenroll agent API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to unenroll agent; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp UnEnrollAgentResponse
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse unenroll agent API response: %w", err)
 	}
 
 	return &resp, nil
