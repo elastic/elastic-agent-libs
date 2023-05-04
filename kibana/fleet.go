@@ -187,8 +187,8 @@ func (client *Client) UnEnrollAgent(request UnEnrollAgentRequest) (*UnEnrollAgen
 		return nil, fmt.Errorf("unable to marshal unenroll agent request into JSON: %w", err)
 	}
 
-	apiUrl := fmt.Sprintf(fleetUnEnrollAgentAPI, request.ID)
-	statusCode, respBody, err := client.Request(http.MethodPost, apiUrl, nil, nil, bytes.NewReader(reqBody))
+	apiURL := fmt.Sprintf(fleetUnEnrollAgentAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("error calling unenroll agent API: %w", err)
 	}
@@ -224,8 +224,8 @@ func (client *Client) UpgradeAgent(request UpgradeAgentRequest) (*UpgradeAgentRe
 		return nil, fmt.Errorf("unable to marshal upgrade agent request into JSON: %w", err)
 	}
 
-	apiUrl := fmt.Sprintf(fleetUpgradeAgentAPI, request.ID)
-	statusCode, respBody, err := client.Request(http.MethodPost, apiUrl, nil, nil, bytes.NewReader(reqBody))
+	apiURL := fmt.Sprintf(fleetUpgradeAgentAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("error calling upgrade agent API: %w", err)
 	}
