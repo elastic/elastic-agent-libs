@@ -37,7 +37,7 @@ var (
 	fleetCreatePolicyResponse []byte
 
 	//go:embed testdata/fleet_create_enrollment_api_key_response.json
-	fleetCreateEnrollmentApiKeyResponse []byte
+	fleetCreateEnrollmentAPIKeyResponse []byte
 )
 
 func TestFleetCreatePolicy(t *testing.T) {
