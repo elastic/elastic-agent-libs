@@ -88,7 +88,7 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case fleetEnrollmentAPIKeysAPI:
-			_, _ = w.Write(fleetCreateEnrollmentApiKeyResponse)
+			_, _ = w.Write(fleetCreateEnrollmentAPIKeyResponse)
 		}
 	}
 
