@@ -18,6 +18,7 @@
 package kibana
 
 import (
+	_ "embed"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,21 +29,27 @@ import (
 	"github.com/elastic/elastic-agent-libs/config"
 )
 
+var (
+	//go:embed testdata/fleet_list_agents_response.json
+	fleetListAgentsResponse []byte
+
+	//go:embed testdata/fleet_create_policy_response.json
+	fleetCreatePolicyResponse []byte
+
+	//go:embed testdata/fleet_create_enrollment_api_key_response.json
+	fleetCreateEnrollmentApiKeyResponse []byte
+)
+
 func TestFleetCreatePolicy(t *testing.T) {
 	const (
-		policyID          = "a580c680-ea40-11ed-aae7-4b4fd4906b3d"
 		policyName        = "test policy"
 		policyDescription = "a policy used for testing"
 	)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case agentPoliciesAPI:
-			respBody := fmt.Sprintf(
-				`{"item":{"id":"%s","name":"%s","description":"%s","namespace":"default","monitoring_enabled":["logs","metrics"],"inactivity_timeout":1209600,"status":"active","is_managed":false,"revision":1,"updated_at":"2023-05-04T05:58:09.389Z","updated_by":"3118418258","schema_version":"1.1.0"}}`,
-				policyID, policyName, policyDescription,
-			)
-			_, _ = w.Write([]byte(respBody))
+		case fleetAgentPoliciesAPI:
+			_, _ = w.Write(fleetCreatePolicyResponse)
 		}
 	}
 
@@ -62,7 +69,7 @@ func TestFleetCreatePolicy(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	require.Equal(t, resp.ID, policyID)
+	require.Equal(t, resp.ID, "a580c680-ea40-11ed-aae7-4b4fd4906b3d")
 	require.Equal(t, resp.Name, policyName)
 	require.Equal(t, resp.Description, policyDescription)
 	require.Equal(t, resp.Namespace, "default")
@@ -76,17 +83,12 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 		id       = "880c7460-a7e4-43df-8fc3-6a9593c6d555"
 		name     = "test"
 		policyID = "a580c680-ea40-11ed-aae7-4b4fd4906b3d"
-		apiKey   = "XxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx=="
 	)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case enrollmentAPIKeysAPI:
-			respBody := fmt.Sprintf(
-				`{"item":{"id":"%s","active":true,"api_key_id":"c2hb5YcBYofR-F1n8OIy","api_key":"%s","name":"%s (%s)","policy_id":"%s","created_at":"2023-05-04T06:03:41.480Z"},"action":"created"}`,
-				id, apiKey, name, id, policyID,
-			)
-			_, _ = w.Write([]byte(respBody))
+		case fleetEnrollmentAPIKeysAPI:
+			_, _ = w.Write(fleetCreateEnrollmentApiKeyResponse)
 		}
 	}
 
@@ -102,9 +104,35 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	require.Equal(t, resp.APIKey, apiKey)
+	require.Equal(t, resp.ID, id)
+	require.Equal(t, resp.Name, fmt.Sprintf("%s (%s)", name, id))
+	require.Equal(t, resp.APIKey, "XxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx==")
 	require.Equal(t, resp.PolicyID, policyID)
 	require.True(t, resp.Active)
+}
+
+func TestFleetListAgents(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fleetListAgentsAPI:
+			_, _ = w.Write(fleetListAgentsResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := ListAgentsRequest{}
+	resp, err := client.ListAgents(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Len(t, resp.Items, 1)
+	item := resp.Items[0]
+	require.Equal(t, "eba58282-ec1c-4d9e-aac0-2b29f754b437", item.Agent.ID)
+	require.Equal(t, "8.8.0", item.Agent.Version)
+	require.Equal(t, "c75d66b1dac5", item.LocalMetadata.Hostname)
 }
 
 func createTestServerAndClient(handler http.HandlerFunc) (*Client, error) {

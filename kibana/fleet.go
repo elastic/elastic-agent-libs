@@ -29,8 +29,9 @@ import (
 //
 
 const (
-	agentPoliciesAPI     = "/agent_policies"
-	enrollmentAPIKeysAPI = "/enrollment_api_keys"
+	fleetAgentPoliciesAPI     = "/api/fleet/agent_policies"
+	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys"
+	fleetListAgentsAPI        = "/api/fleet/agents"
 )
 
 type MonitoringEnabledOption string
@@ -64,7 +65,7 @@ func (client *Client) CreatePolicy(request CreatePolicyRequest) (*CreatePolicyRe
 		return nil, fmt.Errorf("unable to marshal create policy request into JSON: %w", err)
 	}
 
-	statusCode, respBody, err := client.Request(http.MethodPost, agentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
+	statusCode, respBody, err := client.Request(http.MethodPost, fleetAgentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("error calling create policy API: %w", err)
 	}
@@ -77,7 +78,7 @@ func (client *Client) CreatePolicy(request CreatePolicyRequest) (*CreatePolicyRe
 	}
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("unable to parse create policy API responses: %w", err)
+		return nil, fmt.Errorf("unable to parse create policy API response: %w", err)
 	}
 
 	return &resp.Item, nil
@@ -107,7 +108,7 @@ func (client *Client) CreateEnrollmentAPIKey(request CreateEnrollmentAPIKeyReque
 		return nil, fmt.Errorf("unable to marshal create enrollment API key request into JSON: %w", err)
 	}
 
-	statusCode, respBody, err := client.Request(http.MethodPost, enrollmentAPIKeysAPI, nil, nil, bytes.NewReader(reqBody))
+	statusCode, respBody, err := client.Request(http.MethodPost, fleetEnrollmentAPIKeysAPI, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("error calling create enrollment API key API: %w", err)
 	}
@@ -120,8 +121,47 @@ func (client *Client) CreateEnrollmentAPIKey(request CreateEnrollmentAPIKeyReque
 	}
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("unable to parse create enrollment API key API responses: %w", err)
+		return nil, fmt.Errorf("unable to parse create enrollment API key API response: %w", err)
 	}
 
 	return &resp.Item, nil
+}
+
+//
+// List Agents
+//
+
+type ListAgentsRequest struct {
+	// For future use
+}
+
+type ListAgentsResponse struct {
+	Items []struct {
+		Active bool `json:"active"`
+		Agent  struct {
+			ID      string `json:"id"`
+			Version string `json:"version"`
+		} `json:"agent"`
+		LocalMetadata struct {
+			Hostname string `json:"hostname"`
+		} `json:"local_metadata"`
+	} `json:"items"`
+}
+
+func (client *Client) ListAgents(request ListAgentsRequest) (*ListAgentsResponse, error) {
+	statusCode, respBody, err := client.Request(http.MethodGet, fleetListAgentsAPI, nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error calling list agents API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to list agents; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp ListAgentsResponse
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse list agents API response: %w", err)
+	}
+
+	return &resp, nil
 }
