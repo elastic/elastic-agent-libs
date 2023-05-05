@@ -133,23 +133,26 @@ func (client *Client) CreateEnrollmentAPIKey(request CreateEnrollmentAPIKeyReque
 // List Agents
 //
 
+type Agent struct {
+	Active bool   `json:"active"`
+	Status string `json:"status"`
+	Agent  struct {
+		ID      string `json:"id"`
+		Version string `json:"version"`
+	} `json:"agent"`
+	LocalMetadata struct {
+		Host struct {
+			Hostname string `json:"hostname"`
+		} `json:"host"`
+	} `json:"local_metadata"`
+}
+
 type ListAgentsRequest struct {
 	// For future use
 }
 
 type ListAgentsResponse struct {
-	Items []struct {
-		Active bool `json:"active"`
-		Agent  struct {
-			ID      string `json:"id"`
-			Version string `json:"version"`
-		} `json:"agent"`
-		LocalMetadata struct {
-			Host struct {
-				Hostname string `json:"hostname"`
-			} `json:"host"`
-		} `json:"local_metadata"`
-	} `json:"items"`
+	Items []Agent `json:"items"`
 }
 
 func (client *Client) ListAgents(request ListAgentsRequest) (*ListAgentsResponse, error) {
