@@ -36,6 +36,9 @@ var (
 	//go:embed testdata/fleet_create_policy_response.json
 	fleetCreatePolicyResponse []byte
 
+	//go:embed testdata/fleet_get_policy_response.json
+	fleetGetPolicyResponse []byte
+
 	//go:embed testdata/fleet_create_enrollment_api_key_response.json
 	fleetCreateEnrollmentAPIKeyResponse []byte
 
@@ -84,6 +87,34 @@ func TestFleetCreatePolicy(t *testing.T) {
 	require.Equal(t, resp.MonitoringEnabled, []MonitoringEnabledOption{MonitoringEnabledLogs, MonitoringEnabledMetrics})
 }
 
+func TestFleetGetPolicy(t *testing.T) {
+	const id = "elastic-agent-managed-ep"
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetAgentPolicyAPI, id):
+			_, _ = w.Write(fleetGetPolicyResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := GetPolicyRequest{
+		ID: id,
+	}
+	resp, err := client.GetPolicy(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Equal(t, id, resp.ID)
+	require.Equal(t, "Elastic-Agent (elastic-package)", resp.Name)
+	require.Equal(t, "default", resp.Namespace)
+	require.Equal(t, "", resp.Description)
+	require.Equal(t, "fleet-custom-fleet-server-host", resp.FleetServerHostID)
+	require.Equal(t, []MonitoringEnabledOption{MonitoringEnabledLogs}, resp.MonitoringEnabled)
+}
+
 func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 	const (
 		id       = "880c7460-a7e4-43df-8fc3-6a9593c6d555"
@@ -120,7 +151,7 @@ func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
 func TestFleetListAgents(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case fleetListAgentsAPI:
+		case fleetAgentsAPI:
 			_, _ = w.Write(fleetListAgentsResponse)
 		}
 	}
@@ -185,10 +216,10 @@ func TestFleetUpgradeAgent(t *testing.T) {
 	require.NotNil(t, resp)
 }
 
-func TestListFleetServerHosts(t *testing.T) {
+func TestFleetListFleetServerHosts(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case fmt.Sprintf(fleetListFleetServerHostsAPI):
+		case fmt.Sprintf(fleetFleetServerHostsAPI):
 			_, _ = w.Write(fleetListServerHostsResponse)
 		}
 	}
@@ -211,11 +242,11 @@ func TestListFleetServerHosts(t *testing.T) {
 	require.True(t, item.IsPreconfigured)
 }
 
-func TestGetFleetServerHost(t *testing.T) {
+func TestFleetGetFleetServerHost(t *testing.T) {
 	const id = "fleet-default-fleet-server-host"
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case fmt.Sprintf(fleetGetFleetServerHostAPI, id):
+		case fmt.Sprintf(fleetFleetServerHostAPI, id):
 			_, _ = w.Write(fleetGetFleetServerHostResponse)
 		}
 	}
@@ -231,7 +262,7 @@ func TestGetFleetServerHost(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	require.Equal(t, "fleet-default-fleet-server-host", resp.ID)
+	require.Equal(t, id, resp.ID)
 	require.Equal(t, "Default", resp.Name)
 	require.True(t, resp.IsDefault)
 	require.Equal(t, []string{"https://fleet-server:8220"}, resp.HostURLs)
