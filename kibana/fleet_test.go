@@ -39,7 +39,7 @@ var (
 	//go:embed testdata/fleet_create_enrollment_api_key_response.json
 	fleetCreateEnrollmentAPIKeyResponse []byte
 
-	//go:embed testdata/fleet_list_server_hosts_response.json
+	//go:embed testdata/fleet_list_fleet_server_hosts_response.json
 	fleetListServerHostsResponse []byte
 
 	//go:embed testdata/fleet_get_fleet_server_host_response.json
