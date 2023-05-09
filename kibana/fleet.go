@@ -29,12 +29,13 @@ import (
 //
 
 const (
-	fleetAgentPoliciesAPI     = "/api/fleet/agent_policies"
-	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
-	fleetListAgentsAPI        = "/api/fleet/agents"
-	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
-	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
-	fleetListServerHostsAPI   = "/api/fleet/fleet_server_hosts"
+	fleetAgentPoliciesAPI        = "/api/fleet/agent_policies"
+	fleetEnrollmentAPIKeysAPI    = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
+	fleetListAgentsAPI           = "/api/fleet/agents"
+	fleetUnEnrollAgentAPI        = "/api/fleet/agents/%s/unenroll"
+	fleetUpgradeAgentAPI         = "/api/fleet/agents/%s/upgrade"
+	fleetListFleetServerHostsAPI = "/api/fleet/fleet_server_hosts"
+	fleetGetFleetServerHostAPI   = "/api/fleet/fleet_server_hosts/%s"
 )
 
 type MonitoringEnabledOption string
@@ -252,22 +253,24 @@ func (client *Client) UpgradeAgent(request UpgradeAgentRequest) (*UpgradeAgentRe
 // List Fleet Server Hosts
 //
 
+type FleetServerHost struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	IsDefault       bool     `json:"is_default"`
+	HostURLs        []string `json:"host_urls"`
+	IsPreconfigured bool     `json:"is_preconfigured"`
+}
+
 type ListFleetServerHostsRequest struct {
 	// For future use
 }
 
 type ListFleetServerHostsResponse struct {
-	Items []struct {
-		ID              string   `json:"id"`
-		Name            string   `json:"name"`
-		IsDefault       bool     `json:"is_default"`
-		HostURLs        []string `json:"host_urls"`
-		IsPreconfigured bool     `json:"is_preconfigured"`
-	} `json:"items"`
+	Items []FleetServerHost `json:"items"`
 }
 
 func (client *Client) ListFleetServerHosts(request ListFleetServerHostsRequest) (*ListFleetServerHostsResponse, error) {
-	statusCode, respBody, err := client.Request(http.MethodGet, fleetListServerHostsAPI, nil, nil, nil)
+	statusCode, respBody, err := client.Request(http.MethodGet, fleetListFleetServerHostsAPI, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error calling list fleet server hosts API: %w", err)
 	}
@@ -282,4 +285,35 @@ func (client *Client) ListFleetServerHosts(request ListFleetServerHostsRequest) 
 	}
 
 	return &resp, nil
+}
+
+//
+// Get Fleet Server Host
+//
+
+type GetFleetServerHostRequest struct {
+	ID string
+}
+
+type GetFleetServerHostResponse FleetServerHost
+
+func (client *Client) GetFleetServerHost(request GetFleetServerHostRequest) (*GetFleetServerHostResponse, error) {
+	apiURL := fmt.Sprintf(fleetGetFleetServerHostAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodGet, apiURL, nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error calling get fleet server host API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to get fleet server host; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp struct {
+		Item GetFleetServerHostResponse `json:"item"`
+	}
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse get fleet server host API response: %w", err)
+	}
+
+	return &resp.Item, nil
 }

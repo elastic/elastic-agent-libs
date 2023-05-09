@@ -41,6 +41,9 @@ var (
 
 	//go:embed testdata/fleet_list_server_hosts_response.json
 	fleetListServerHostsResponse []byte
+
+	//go:embed testdata/fleet_get_fleet_server_host_response.json
+	fleetGetFleetServerHostResponse []byte
 )
 
 func TestFleetCreatePolicy(t *testing.T) {
@@ -185,7 +188,7 @@ func TestFleetUpgradeAgent(t *testing.T) {
 func TestListFleetServerHosts(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case fmt.Sprintf(fleetListServerHostsAPI):
+		case fmt.Sprintf(fleetListFleetServerHostsAPI):
 			_, _ = w.Write(fleetListServerHostsResponse)
 		}
 	}
@@ -206,6 +209,33 @@ func TestListFleetServerHosts(t *testing.T) {
 	require.True(t, item.IsDefault)
 	require.Equal(t, []string{"https://fleet-server:8220"}, item.HostURLs)
 	require.True(t, item.IsPreconfigured)
+}
+
+func TestGetFleetServerHost(t *testing.T) {
+	const id = "fleet-default-fleet-server-host"
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetGetFleetServerHostAPI, id):
+			_, _ = w.Write(fleetGetFleetServerHostResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := GetFleetServerHostRequest{
+		ID: id,
+	}
+	resp, err := client.GetFleetServerHost(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Equal(t, "fleet-default-fleet-server-host", resp.ID)
+	require.Equal(t, "Default", resp.Name)
+	require.True(t, resp.IsDefault)
+	require.Equal(t, []string{"https://fleet-server:8220"}, resp.HostURLs)
+	require.True(t, resp.IsPreconfigured)
 }
 
 func createTestServerAndClient(handler http.HandlerFunc) (*Client, error) {
