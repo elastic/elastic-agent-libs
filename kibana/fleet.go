@@ -249,7 +249,7 @@ func (client *Client) UpgradeAgent(request UpgradeAgentRequest) (*UpgradeAgentRe
 }
 
 //
-// Fleet Server Hosts
+// List Fleet Server Hosts
 //
 
 type ListFleetServerHostsRequest struct {
