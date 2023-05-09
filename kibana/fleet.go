@@ -34,6 +34,7 @@ const (
 	fleetListAgentsAPI        = "/api/fleet/agents"
 	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
 	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
+	fleetListServerHostsAPI   = "/api/fleet/fleet_server_hosts"
 )
 
 type MonitoringEnabledOption string
@@ -242,6 +243,42 @@ func (client *Client) UpgradeAgent(request UpgradeAgentRequest) (*UpgradeAgentRe
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("unable to parse upgrade agent API response: %w", err)
+	}
+
+	return &resp, nil
+}
+
+//
+// Fleet Server Hosts
+//
+
+type ListFleetServerHostsRequest struct {
+	// For future use
+}
+
+type ListFleetServerHostsResponse struct {
+	Items []struct {
+		ID              string   `json:"id"`
+		Name            string   `json:"name"`
+		IsDefault       bool     `json:"is_default"`
+		HostURLs        []string `json:"host_urls"`
+		IsPreconfigured bool     `json:"is_preconfigured"`
+	} `json:"items"`
+}
+
+func (client *Client) ListFleetServerHosts(request ListFleetServerHostsRequest) (*ListFleetServerHostsResponse, error) {
+	statusCode, respBody, err := client.Request(http.MethodGet, fleetListServerHostsAPI, nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error calling list fleet server hosts API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to list fleet server hosts; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp ListFleetServerHostsResponse
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse list fleet server hosts API response: %w", err)
 	}
 
 	return &resp, nil

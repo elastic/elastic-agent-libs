@@ -38,6 +38,9 @@ var (
 
 	//go:embed testdata/fleet_create_enrollment_api_key_response.json
 	fleetCreateEnrollmentAPIKeyResponse []byte
+
+	//go:embed testdata/fleet_list_server_hosts_response.json
+	fleetListServerHostsResponse []byte
 )
 
 func TestFleetCreatePolicy(t *testing.T) {
@@ -177,6 +180,32 @@ func TestFleetUpgradeAgent(t *testing.T) {
 	resp, err := client.UpgradeAgent(req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
+}
+
+func TestFleetServerHosts(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetListServerHostsAPI):
+			_, _ = w.Write(fleetListServerHostsResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := ListFleetServerHostsRequest{}
+	resp, err := client.ListFleetServerHosts(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Len(t, resp.Items, 1)
+	item := resp.Items[0]
+	require.Equal(t, "fleet-default-fleet-server-host", item.ID)
+	require.Equal(t, "Default", item.Name)
+	require.True(t, item.IsDefault)
+	require.Equal(t, []string{"https://fleet-server:8220"}, item.HostURLs)
+	require.True(t, item.IsPreconfigured)
 }
 
 func createTestServerAndClient(handler http.HandlerFunc) (*Client, error) {
