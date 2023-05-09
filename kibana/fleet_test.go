@@ -182,7 +182,7 @@ func TestFleetUpgradeAgent(t *testing.T) {
 	require.NotNil(t, resp)
 }
 
-func TestFleetServerHosts(t *testing.T) {
+func TestListFleetServerHosts(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case fmt.Sprintf(fleetListServerHostsAPI):
