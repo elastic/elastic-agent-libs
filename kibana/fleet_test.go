@@ -219,7 +219,7 @@ func TestFleetUpgradeAgent(t *testing.T) {
 func TestFleetListFleetServerHosts(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case fmt.Sprintf(fleetFleetServerHostsAPI):
+		case fleetFleetServerHostsAPI:
 			_, _ = w.Write(fleetListServerHostsResponse)
 		}
 	}
