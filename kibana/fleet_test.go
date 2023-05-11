@@ -39,6 +39,9 @@ var (
 	//go:embed testdata/fleet_get_policy_response.json
 	fleetGetPolicyResponse []byte
 
+	//go:embed testdata/fleet_update_policy_response.json
+	fleetUpdatePolicyResponse []byte
+
 	//go:embed testdata/fleet_create_enrollment_api_key_response.json
 	fleetCreateEnrollmentAPIKeyResponse []byte
 
@@ -113,6 +116,53 @@ func TestFleetGetPolicy(t *testing.T) {
 	require.Equal(t, "", resp.Description)
 	require.Equal(t, "fleet-custom-fleet-server-host", resp.FleetServerHostID)
 	require.Equal(t, []MonitoringEnabledOption{MonitoringEnabledLogs}, resp.MonitoringEnabled)
+}
+
+func TestFleetUpdatePolicy(t *testing.T) {
+	const (
+		id         = "b4cd25b0-f040-11ed-a1b3-373f5d648cd4"
+		policyName = "test-fqdn"
+	)
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetAgentPolicyAPI, id):
+			_, _ = w.Write(fleetUpdatePolicyResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	agentFeatures := []map[string]interface{}{
+		{
+			"name":    "fqdn",
+			"enabled": true,
+		},
+	}
+	req := UpdatePolicyRequest{
+		id,
+		PolicyCommon{
+			Name: policyName,
+			MonitoringEnabled: []MonitoringEnabledOption{
+				MonitoringEnabledLogs,
+				MonitoringEnabledMetrics,
+			},
+			AgentFeatures: agentFeatures,
+		},
+	}
+	resp, err := client.UpdatePolicy(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Equal(t, id, resp.ID)
+	require.Equal(t, policyName, resp.Name)
+	require.Equal(t, "default", resp.Namespace)
+	require.Equal(t, "active", resp.Status)
+	require.Equal(t, false, resp.IsManaged)
+	require.Equal(t, []MonitoringEnabledOption{MonitoringEnabledLogs, MonitoringEnabledMetrics}, resp.MonitoringEnabled)
+	require.Equal(t, agentFeatures, resp.AgentFeatures)
 }
 
 func TestFleetCreateEnrollmentAPIKey(t *testing.T) {
