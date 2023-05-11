@@ -33,6 +33,9 @@ var (
 	//go:embed testdata/fleet_list_agents_response.json
 	fleetListAgentsResponse []byte
 
+	//go:embed testdata/fleet_get_agent_response.json
+	fleetGetAgentResponse []byte
+
 	//go:embed testdata/fleet_create_policy_response.json
 	fleetCreatePolicyResponse []byte
 
@@ -220,6 +223,36 @@ func TestFleetListAgents(t *testing.T) {
 	require.Equal(t, "eba58282-ec1c-4d9e-aac0-2b29f754b437", item.Agent.ID)
 	require.Equal(t, "8.8.0", item.Agent.Version)
 	require.Equal(t, "c75d66b1dac5", item.LocalMetadata.Host.Hostname)
+}
+
+func TestFleetGetAgent(t *testing.T) {
+	const id = "26802301-8996-457a-ab6a-8ea955ef2723"
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf(fleetAgentAPI, id):
+			_, _ = w.Write(fleetGetAgentResponse)
+		}
+	}
+
+	client, err := createTestServerAndClient(handler)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	req := GetAgentRequest{
+		ID: id,
+	}
+	resp, err := client.GetAgent(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	require.Equal(t, id, resp.ID)
+	require.True(t, resp.Active)
+	require.Equal(t, "online", resp.Status)
+	require.Equal(t, id, resp.Agent.ID)
+	require.Equal(t, "8.7.1", resp.Agent.Version)
+	require.Equal(t, "Shaunaks-MBP.attlocal.net", resp.LocalMetadata.Host.Hostname)
+	require.Equal(t, "8196af30-f041-11ed-a1b3-373f5d648cd4", resp.PolicyID)
+	require.Equal(t, 4, resp.PolicyRevision)
 }
 
 func TestFleetUnEnrollAgent(t *testing.T) {

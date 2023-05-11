@@ -29,6 +29,7 @@ const (
 	fleetAgentPolicyAPI       = "/api/fleet/agent_policies/%s"
 	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
 	fleetAgentsAPI            = "/api/fleet/agents"
+	fleetAgentAPI             = "/api/fleet/agents/%s"
 	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
 	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
 	fleetFleetServerHostsAPI  = "/api/fleet/fleet_server_hosts"
@@ -203,7 +204,7 @@ func (client *Client) CreateEnrollmentAPIKey(request CreateEnrollmentAPIKeyReque
 // List Agents
 //
 
-type Agent struct {
+type AgentCommon struct {
 	Active bool   `json:"active"`
 	Status string `json:"status"`
 	Agent  struct {
@@ -215,6 +216,13 @@ type Agent struct {
 			Hostname string `json:"hostname"`
 		} `json:"host"`
 	} `json:"local_metadata"`
+	PolicyID       string `json:"policy_id"`
+	PolicyRevision int    `json:"policy_revision"`
+}
+
+type AgentExisting struct {
+	ID          string `json:"id"`
+	AgentCommon `json:",inline"`
 }
 
 type ListAgentsRequest struct {
@@ -222,7 +230,7 @@ type ListAgentsRequest struct {
 }
 
 type ListAgentsResponse struct {
-	Items []Agent `json:"items"`
+	Items []AgentExisting `json:"items"`
 }
 
 func (client *Client) ListAgents(request ListAgentsRequest) (*ListAgentsResponse, error) {
@@ -241,6 +249,37 @@ func (client *Client) ListAgents(request ListAgentsRequest) (*ListAgentsResponse
 	}
 
 	return &resp, nil
+}
+
+//
+// Get Agent
+//
+
+type GetAgentRequest struct {
+	ID string
+}
+
+type GetAgentResponse AgentExisting
+
+func (client *Client) GetAgent(request GetAgentRequest) (*GetAgentResponse, error) {
+	apiURL := fmt.Sprintf(fleetAgentAPI, request.ID)
+	statusCode, respBody, err := client.Request(http.MethodGet, apiURL, nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error calling get agent API: %w", err)
+	}
+	if statusCode != 200 {
+		return nil, fmt.Errorf("unable to get agent; API returned status code [%d] and body [%s]", statusCode, string(respBody))
+	}
+
+	var resp struct {
+		Item GetAgentResponse `json:"item"`
+	}
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unable to parse get agent API response: %w", err)
+	}
+
+	return &resp.Item, nil
 }
 
 //
