@@ -35,6 +35,14 @@ func WithSelectors(selectors ...string) Option {
 	}
 }
 
+// WithBlockSelectors specifies what debug selectors are disabled. If no selectors
+// are specified, then nothing is blocked
+func WithBlockSelectors(blockList ...string) Option {
+	return func(cfg *Config) {
+		cfg.BlockSelectors = append(cfg.BlockSelectors, blockList...)
+	}
+}
+
 // ToObserverOutput specifies that the output should be collected in memory so
 // that they can be read by an observer by calling ObserverLogs().
 func ToObserverOutput() Option {

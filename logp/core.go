@@ -56,12 +56,13 @@ func init() {
 }
 
 type coreLogger struct {
-	selectors    map[string]struct{}    // Set of enabled debug selectors.
-	rootLogger   *zap.Logger            // Root logger without any options configured.
-	globalLogger *zap.Logger            // Logger used by legacy global functions (e.g. logp.Info).
-	logger       *Logger                // Logger that is the basis for all logp.Loggers.
-	level        zap.AtomicLevel        // The minimum level being printed
-	observedLogs *observer.ObservedLogs // Contains events generated while in observation mode (a testing mode).
+	selectors      map[string]struct{}    // Set of enabled debug selectors.
+	blockSelectors map[string]struct{}    // Set of blocked debug selectors.
+	rootLogger     *zap.Logger            // Root logger without any options configured.
+	globalLogger   *zap.Logger            // Logger used by legacy global functions (e.g. logp.Info).
+	logger         *Logger                // Logger that is the basis for all logp.Loggers.
+	level          zap.AtomicLevel        // The minimum level being printed
+	observedLogs   *observer.ObservedLogs // Contains events generated while in observation mode (a testing mode).
 }
 
 // Configure configures the logp package.
@@ -97,7 +98,12 @@ func ConfigureWithOutputs(cfg Config, outputs ...zapcore.Core) error {
 
 	// Enabled selectors when debug is enabled.
 	selectors := make(map[string]struct{}, len(cfg.Selectors))
-	if cfg.Level.Enabled(DebugLevel) && len(cfg.Selectors) > 0 {
+	blockSelectors := make(map[string]struct{}, len(cfg.BlockSelectors))
+	if cfg.Level.Enabled(DebugLevel) && (len(cfg.Selectors) > 0 || len(cfg.BlockSelectors) > 0) {
+		for _, sel := range cfg.BlockSelectors {
+			blockSelectors[strings.TrimSpace(sel)] = struct{}{}
+		}
+
 		for _, sel := range cfg.Selectors {
 			selectors[strings.TrimSpace(sel)] = struct{}{}
 		}
@@ -115,18 +121,19 @@ func ConfigureWithOutputs(cfg Config, outputs ...zapcore.Core) error {
 			golog.SetOutput(_defaultGoLog)
 		}
 
-		sink = selectiveWrapper(sink, selectors)
+		sink = selectiveWrapper(sink, selectors, blockSelectors)
 	}
 
 	sink = newMultiCore(append(outputs, sink)...)
 	root := zap.New(sink, makeOptions(cfg)...)
 	storeLogger(&coreLogger{
-		selectors:    selectors,
-		rootLogger:   root,
-		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
-		logger:       newLogger(root, ""),
-		level:        level,
-		observedLogs: observedLogs,
+		selectors:      selectors,
+		blockSelectors: blockSelectors,
+		rootLogger:     root,
+		globalLogger:   root.WithOptions(zap.AddCallerSkip(1)),
+		logger:         newLogger(root, ""),
+		level:          level,
+		observedLogs:   observedLogs,
 	})
 	return nil
 }
