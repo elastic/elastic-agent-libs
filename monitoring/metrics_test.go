@@ -25,7 +25,7 @@ import (
 
 func TestSafeVars(t *testing.T) {
 	uintValName := "testUint"
-	testReg := Default.NewRegistry("safe_registry")
+	testReg := Default.MustNewRegistry("safe_registry")
 	testUint := NewUint(testReg, uintValName)
 	testUint.Set(5)
 	// Add the first time
@@ -39,7 +39,7 @@ func TestSafeVars(t *testing.T) {
 }
 
 func TestVarsTypes(t *testing.T) {
-	testReg := Default.NewRegistry("test_type_reg")
+	testReg := Default.MustNewRegistry("test_type_reg")
 
 	expected := map[string]interface{}{
 		"string_key": "string_val",

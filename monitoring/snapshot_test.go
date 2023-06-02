@@ -60,7 +60,7 @@ func TestSnapshot(t *testing.T) {
 			"do not report empty nested exported",
 			map[string]interface{}{"test": int64(0)},
 			func(R *Registry) {
-				metrics := R.NewRegistry("exported", Report)
+				metrics := R.MustNewRegistry("exported", Report)
 				NewInt(metrics, "unexported", DoNotReport)
 				NewInt(R, "test", Report)
 			},
@@ -69,7 +69,7 @@ func TestSnapshot(t *testing.T) {
 			"export namespaced as nested-document from registry instance",
 			map[string]interface{}{"exported": map[string]interface{}{"test": int64(0)}},
 			func(R *Registry) {
-				metrics := R.NewRegistry("exported", Report)
+				metrics := R.MustNewRegistry("exported", Report)
 				NewInt(metrics, "test", Report)
 				NewInt(R, "unexported.test")
 			},
@@ -78,7 +78,7 @@ func TestSnapshot(t *testing.T) {
 			"export unmarked namespaced as nested-document from registry instance",
 			map[string]interface{}{"exported": map[string]interface{}{"test": int64(0)}},
 			func(R *Registry) {
-				metrics := R.NewRegistry("exported", Report)
+				metrics := R.MustNewRegistry("exported", Report)
 				NewInt(metrics, "test")
 				NewInt(R, "unexported.test")
 			},

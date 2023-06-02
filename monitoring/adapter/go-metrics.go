@@ -36,9 +36,9 @@ import (
 // the go-metrics.Registry interface.
 //
 // Note: with the go-metrics using `interface{}`, there is no guarantee
-//       a variable satisfying any of go-metrics interfaces is returned.
-//       It's recommended to not mix go-metrics with other metrics types
-//       in the same namespace.
+// a variable satisfying any of go-metrics interfaces is returned.
+// It's recommended to not mix go-metrics with other metrics types
+// in the same namespace.
 type GoMetricsRegistry struct {
 	mutex sync.Mutex
 
@@ -54,8 +54,8 @@ type GoMetricsRegistry struct {
 // If the monitoring.Registry does not exist yet, a new one will be generated.
 //
 // Note: with users of go-metrics potentially removing any metric at runtime,
-//       it's recommended to have the underlying registry being generated with
-//       `monitoring.IgnorePublishExpvar`.
+// it's recommended to have the underlying registry being generated with
+// `monitoring.IgnorePublishExpvar`.
 func GetGoMetrics(parent *monitoring.Registry, name string, filters ...MetricFilter) *GoMetricsRegistry {
 	v := parent.Get(name)
 	if v == nil {
@@ -65,9 +65,10 @@ func GetGoMetrics(parent *monitoring.Registry, name string, filters ...MetricFil
 }
 
 // NewGoMetrics creates and registers a new GoMetricsRegistry with the parent
-// registry.
+// registry. This method panics if the given name is already registered in the
+// parent.
 func NewGoMetrics(parent *monitoring.Registry, name string, filters ...MetricFilter) *GoMetricsRegistry {
-	return newGoMetrics(parent.NewRegistry(name, monitoring.IgnorePublishExpvar), filters...)
+	return newGoMetrics(parent.MustNewRegistry(name, monitoring.IgnorePublishExpvar), filters...)
 }
 
 func newGoMetrics(reg *monitoring.Registry, filters ...MetricFilter) *GoMetricsRegistry {
@@ -97,9 +98,9 @@ func (r *GoMetricsRegistry) find(name string) interface{} {
 // Get retrieves a registered metric by name. If the name is unknown, Get returns nil.
 //
 // Note: with the return values being `interface{}`, there is no guarantee
-//       a variable satisfying any of go-metrics interfaces is returned.
-//       It's recommended to not mix go-metrics with other metrics types in one
-//       namespace.
+// a variable satisfying any of go-metrics interfaces is returned.
+// It's recommended to not mix go-metrics with other metrics types in one
+// namespace.
 func (r *GoMetricsRegistry) Get(name string) interface{} {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -152,6 +153,8 @@ func (r *GoMetricsRegistry) Register(name string, metric interface{}) error {
 	return nil
 }
 
+// doRegister registers the given metric. If the name is already registered
+// this will panic.
 func (r *GoMetricsRegistry) doRegister(name string, metric interface{}) interface{} {
 	if v := reflect.ValueOf(metric); v.Kind() == reflect.Func {
 		metric = v.Call(nil)[0].Interface()
@@ -165,7 +168,7 @@ func (r *GoMetricsRegistry) doRegister(name string, metric interface{}) interfac
 	if st.action == actAccept {
 		w, ok := goMetricsWrap(st.metric)
 		if ok {
-			r.reg.Add(st.name, w, st.mode)
+			r.reg.MustAdd(st.name, w, st.mode)
 		}
 	}
 

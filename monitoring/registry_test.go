@@ -62,6 +62,17 @@ func TestRegistryEmpty(t *testing.T) {
 	}
 }
 
+func TestNewRegistry(t *testing.T) {
+	parentReg := NewRegistry()
+
+	subReg, err := parentReg.NewRegistry("foo")
+	require.NoError(t, err)
+	require.NotNil(t, subReg)
+
+	_, err = parentReg.NewRegistry("foo")
+	require.Error(t, err, "expected error because foo is already registered")
+}
+
 func TestRegistryGet(t *testing.T) {
 	defer func(t *testing.T) {
 		err := Clear()
@@ -74,8 +85,8 @@ func TestRegistryGet(t *testing.T) {
 
 	// register top-level and recursive metric
 	v1 := NewInt(Default, name1, Report)
-	sub1 := Default.NewRegistry(nameSub1)
-	sub2 := Default.NewRegistry(nameSub2)
+	sub1 := Default.MustNewRegistry(nameSub1)
+	sub2 := Default.MustNewRegistry(nameSub2)
 	v2 := NewString(nil, name2, Report)
 	v3 := NewFloat(sub2, name1, Report)
 
@@ -115,8 +126,8 @@ func TestRegistryRemove(t *testing.T) {
 
 	// register top-level and recursive metric
 	NewInt(Default, name1, Report)
-	sub1 := Default.NewRegistry(nameSub1)
-	sub2 := Default.NewRegistry(nameSub2)
+	sub1 := Default.MustNewRegistry(nameSub1)
+	sub2 := Default.MustNewRegistry(nameSub2)
 	NewInt(Default, name2, Report)
 	NewInt(sub2, name1, Report)
 

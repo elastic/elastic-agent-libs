@@ -84,15 +84,29 @@ func (r *Registry) doVisit(mode Mode, vs Visitor) {
 	}
 }
 
-// NewRegistry creates and register a new registry
-func (r *Registry) NewRegistry(name string, opts ...Option) *Registry {
+// MustNewRegistry creates and registers a new registry. This will panic if
+// the specified name is already registered.
+func (r *Registry) MustNewRegistry(name string, opts ...Option) *Registry {
 	v := &Registry{
 		name:    fullName(r, name),
 		opts:    applyOpts(r.opts, opts),
 		entries: map[string]entry{},
 	}
-	r.Add(name, v, v.opts.mode)
+	r.MustAdd(name, v, v.opts.mode)
 	return v
+}
+
+// NewRegistry creates and registers a new registry.
+func (r *Registry) NewRegistry(name string, opts ...Option) (*Registry, error) {
+	v := &Registry{
+		name:    fullName(r, name),
+		opts:    applyOpts(r.opts, opts),
+		entries: map[string]entry{},
+	}
+	if err := r.Add(name, v, v.opts.mode); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // Get tries to find a registered variable by name.
@@ -142,9 +156,9 @@ func (r *Registry) Clear() error {
 	return nil
 }
 
-// Add adds a new variable to the registry. The method panics if the variables
-// name is already in use.
-func (r *Registry) Add(name string, v Var, m Mode) {
+// MustAdd adds a new variable to the registry. The method panics if the
+// variables name is already in use.
+func (r *Registry) MustAdd(name string, v Var, m Mode) {
 	opts := r.opts
 	if m != opts.mode {
 		tmp := *r.opts
@@ -153,6 +167,18 @@ func (r *Registry) Add(name string, v Var, m Mode) {
 	}
 
 	panicErr(r.addNames(strings.Split(name, "."), v, opts))
+}
+
+// Add adds a new variable to the registry.
+func (r *Registry) Add(name string, v Var, m Mode) error {
+	opts := r.opts
+	if m != opts.mode {
+		tmp := *r.opts
+		tmp.mode = m
+		opts = &tmp
+	}
+
+	return r.addNames(strings.Split(name, "."), v, opts)
 }
 
 func (r *Registry) doAdd(name string, v Var, opts *options) {
