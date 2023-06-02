@@ -313,7 +313,7 @@ type GetAgentRequest struct {
 	ID string
 }
 
-// GetAgentResponse is the JSON repsonse for GetAgent
+// GetAgentResponse is the JSON response for GetAgent
 type GetAgentResponse AgentExisting
 
 // GetAgent fetches data for an agent
