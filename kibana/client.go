@@ -82,7 +82,7 @@ func extractError(result []byte) error {
 		}
 	}
 	if err := json.Unmarshal(result, &kibanaResult); err != nil {
-		return fmt.Errorf("error extacting JSON for error response: %w", err)
+		return fmt.Errorf("error extracting JSON for error response: %w", err)
 	}
 	var errs multierror.Errors
 	if kibanaResult.Message != "" {
