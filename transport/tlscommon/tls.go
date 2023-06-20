@@ -19,6 +19,8 @@ package tlscommon
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -28,6 +30,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/youmark/pkcs8"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 )
@@ -135,6 +139,41 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 			delete(block.Headers, "DEK-Info")
 			block.Bytes = buffer
 		}
+
+		if block.Type == "ENCRYPTED PRIVATE KEY" {
+			var err error
+			var key any
+			if len(pass) == 0 {
+				err = errors.New("no passphrase available")
+			} else {
+				key, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, []byte(pass))
+			}
+
+			if err != nil {
+				log.Errorf("Dropping encrypted pem '%v' block read from %v. %+v",
+					block.Type, r, err)
+				continue
+			}
+
+			switch key.(type) {
+			case *rsa.PrivateKey:
+				block.Type = "RSA PRIVATE KEY"
+			case *ecdsa.PrivateKey:
+				block.Type = "ECDSA PRIVATE KEY"
+			default:
+				log.Errorf("Dropping encrypted pem of unknown type %T", key)
+				continue
+			}
+
+			buffer, err := x509.MarshalPKCS8PrivateKey(key)
+			if err != nil {
+				log.Errorf("Dropping encrypted pem of unknown type %T", key)
+				continue
+			}
+
+			block.Bytes = buffer
+		}
+
 		blocks = append(blocks, block)
 	}
 
