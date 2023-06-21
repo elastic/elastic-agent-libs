@@ -146,7 +146,7 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 			if len(pass) == 0 {
 				err = errors.New("no passphrase available")
 			} else {
-				key, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, []byte(pass))
+				key, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, pass)
 			}
 
 			if err != nil {
