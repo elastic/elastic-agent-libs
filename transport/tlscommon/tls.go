@@ -121,14 +121,14 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 		case x509.IsEncryptedPEMBlock(block): //nolint: staticcheck // deprecated, we have to get rid of it
 			block, err := decryptPKCS1Key(*block, pass)
 			if err != nil {
-				log.Errorf("Dropping encrypted pem with private key '%v': %v", block.Type, err)
+				log.Errorf("Dropping encrypted pem block with private key, block type '%s': %s", block.Type, err)
 				continue
 			}
 			blocks = append(blocks, &block)
 		case block.Type == "ENCRYPTED PRIVATE KEY":
 			block, err := decryptPKCS8Key(*block, pass)
 			if err != nil {
-				log.Errorf("Dropping encrypted private key '%v': %v", block.Type, err)
+				log.Errorf("Dropping encrypted pem block with private key, block type '%s', could not decypt as PKCS8: %s", block.Type, err)
 				continue
 			}
 			blocks = append(blocks, &block)
