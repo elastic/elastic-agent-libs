@@ -2,6 +2,8 @@ module github.com/elastic/elastic-agent-libs
 
 go 1.19
 
+replace google.golang.org/protobuf => google.golang.org/protobuf v1.29.1
+
 require (
 	github.com/Microsoft/go-winio v0.5.2
 	github.com/elastic/go-structform v0.0.9
