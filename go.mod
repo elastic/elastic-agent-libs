@@ -2,8 +2,6 @@ module github.com/elastic/elastic-agent-libs
 
 go 1.19
 
-replace google.golang.org/protobuf => google.golang.org/protobuf v1.29.1
-
 require (
 	github.com/Microsoft/go-winio v0.5.2
 	github.com/elastic/go-structform v0.0.9
@@ -15,7 +13,7 @@ require (
 	github.com/mattn/go-colorable v0.1.12
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
-	github.com/spf13/cobra v1.3.0
+	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.2
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.elastic.co/apm/module/apmhttp/v2 v2.0.0
@@ -38,7 +36,7 @@ require (
 	github.com/gobuffalo/here v0.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20200402202327-879cb1424de0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jcchavezs/porto v0.1.0 // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/markbates/pkger v0.17.0 // indirect
