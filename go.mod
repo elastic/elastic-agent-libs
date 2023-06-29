@@ -22,7 +22,7 @@ require (
 	go.uber.org/zap v1.21.0
 	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.9.0
-	golang.org/x/sys v0.7.0
+	golang.org/x/sys v0.9.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
