@@ -3,7 +3,7 @@ env:
   SETUP_MAGE_VERSION: '1.14.0'
 
 steps:
-  - label: "Lint"
+  - label: ":buildkite: Lint"
     command:
       - ".buildkite/scripts/lint.sh"
     agents:
@@ -11,12 +11,23 @@ steps:
       cpu: "8"
       memory: "4G"
 
-  - label: "Test Linux"
+  - label: ":linux: Test Linux"
+    key: test-lin
     command:
       - ".buildkite/scripts/test.sh"
     agents:
       image: golang:${GO_VERSION}
       cpu: "8"
       memory: "4G"
+    artifact_paths:
+      - "junit-*.xml"
+
+  - label: ":windows: Test Windows"
+    key: test-win
+    command:
+      - ".buildkite/scripts/test.ps1"
+    agents:
+      provider: "gcp"
+      image: "family/ci-windows-2019"
     artifact_paths:
       - "junit-*.xml"
