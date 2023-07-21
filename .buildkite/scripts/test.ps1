@@ -46,6 +46,6 @@ foreach ($line in $contest) {
 
 Get-Content $OUT_FILE | go-junit-report > "uni-junit-win.xml"
 Get-Content "uni-junit-win.xml" -Encoding Unicode | Set-Content -Encoding UTF8 "junit-win.xml"
-Remove-Item "uni-junit-win", "$OUT_FILE"
+Remove-Item "uni-junit-win.xml", "$OUT_FILE"
 
 Exit $EXITCODE
