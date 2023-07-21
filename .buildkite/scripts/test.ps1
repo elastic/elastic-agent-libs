@@ -35,7 +35,14 @@ $OUT_FILE="output-report.out"
 go test "./..." -v > $OUT_FILE
 $EXITCODE=$LASTEXITCODE
 $ErrorActionPreference = "Stop"
-Get-Content $OUT_FILE
+
+# Buildkite collapse logs under --- symbols
+# need to change --- to anything else or switch off collapsing (note: not available at the moment of this commit)
+$contest = Get-Content $OUT_FILE
+foreach ($line in $contest) {
+    $changed = $line -replace '---', '----'
+    Write-Host $changed
+}
 
 Get-Content $OUT_FILE | go-junit-report > "uni-junit-win.xml"
 Get-Content "uni-junit-win.xml" -Encoding Unicode | Set-Content -Encoding UTF8 "junit-win.xml"
