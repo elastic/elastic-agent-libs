@@ -31,3 +31,18 @@ steps:
       image: "family/ci-windows-2019"
     artifact_paths:
       - "junit-*.xml"
+
+  - label: ":junit: Junit annotate"
+    plugins:
+      - junit-annotate#v2.4.1:
+          artifacts: "junit-*.xml"
+          fail-build-on-error: true
+    agents:
+      provider: "gcp" #junit plugin requires docker
+    depends_on:
+      - step: "test-lin"
+        allow_failure: true
+      - step: "test-win"
+        allow_failure: true
+
+# TODO run on `x86_64 && macos11` agent
