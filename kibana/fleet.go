@@ -40,7 +40,7 @@ const (
 	fleetFleetServerHostsAPI  = "/api/fleet/fleet_server_hosts"
 	fleetFleetServerHostAPI   = "/api/fleet/fleet_server_hosts/%s"
 	fleetPackagePoliciesAPI   = "/api/fleet/package_policies"
-	fleetUninstallTokensAPI   = "/api/fleet/uninstall_tokens"
+	fleetUninstallTokensAPI   = "/api/fleet/uninstall_tokens" //nolint:gosec // NOT the "Potential hardcoded credentials"
 )
 
 //
