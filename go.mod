@@ -34,6 +34,7 @@ require (
 	github.com/elastic/go-sysinfo v1.7.1 // indirect
 	github.com/elastic/go-windows v1.0.1 // indirect
 	github.com/gobuffalo/here v0.6.0 // indirect
+	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/google/licenseclassifier v0.0.0-20200402202327-879cb1424de0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

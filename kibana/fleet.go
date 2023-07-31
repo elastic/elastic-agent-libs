@@ -19,9 +19,12 @@ package kibana
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -36,6 +39,8 @@ const (
 	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
 	fleetFleetServerHostsAPI  = "/api/fleet/fleet_server_hosts"
 	fleetFleetServerHostAPI   = "/api/fleet/fleet_server_hosts/%s"
+	fleetPackagePoliciesAPI   = "/api/fleet/package_policies"
+	fleetUninstallTokensAPI   = "/api/fleet/uninstall_tokens"
 )
 
 //
@@ -86,7 +91,7 @@ type PolicyResponse struct {
 
 // AgentPolicyUpdateRequest is the JSON object for requesting an updated policy
 // Unlike the Agent create and response structures, the update request does not contain an ID field.
-// See https://github.com/elastic/kibana/blob/v8.8.0/x-pack/plugins/fleet/common/openapi/components/schemas/agent_policy_update_request.yaml
+// See https://github.com/elastic/kibana/blob/v8.9.0/x-pack/plugins/fleet/common/openapi/components/schemas/agent_policy_update_request.yaml
 type AgentPolicyUpdateRequest struct {
 	// Name of the policy. Required in an update request.
 	Name string `json:"name"`
@@ -101,7 +106,17 @@ type AgentPolicyUpdateRequest struct {
 	UnenrollTimeout    int                       `json:"unenroll_timeout,omitempty"`
 	InactivityTImeout  int                       `json:"inactivity_timeout,omitempty"`
 	AgentFeatures      []map[string]interface{}  `json:"agent_features,omitempty"`
+	IsProtected        *bool                     `json:"is_protected,omitempty"` // Optional bool for compatibility with the older pre 8.9.0 stack
 }
+
+// Constant booleans for convenience for dealing with *bool
+var (
+	bt bool = true
+	bf bool = false
+
+	TRUE  *bool = &bt
+	FALSE *bool = &bf
+)
 
 // CreatePolicy creates a new agent policy with the given config
 func (client *Client) CreatePolicy(request AgentPolicy) (*PolicyResponse, error) {
@@ -492,4 +507,240 @@ func (client *Client) GetFleetServerHost(request GetFleetServerHostRequest) (*Ge
 	}
 
 	return &resp.Item, nil
+}
+
+//
+// Fleet Package Policy
+//
+
+// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#createPackagePolicy
+// request https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy_request
+type PackagePolicyRequest struct {
+	ID        string                      `json:"id,omitempty"`
+	Name      string                      `json:"name"`
+	Namespace string                      `json:"namespace"`
+	PolicyID  string                      `json:"policy_id"`
+	Package   PackagePolicyRequestPackage `json:"package"`
+	Vars      map[string]interface{}      `json:"vars"`
+	Inputs    []map[string]interface{}    `json:"inputs"`
+	Force     bool                        `json:"force"`
+}
+
+type PackagePolicyRequestPackage struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#create_package_policy_200_response
+type PackagePolicyResponse struct {
+	Item PackagePolicy `json:"item"`
+}
+
+// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy
+type PackagePolicy struct {
+	ID          string                      `json:"id,omitempty"`
+	Revision    int                         `json:"revision"`
+	Enabled     bool                        `json:"enabled"`
+	Inputs      []map[string]interface{}    `json:"inputs"`
+	Package     PackagePolicyRequestPackage `json:"package"`
+	Namespace   string                      `json:"namespace"`
+	OutputID    string                      `json:"output_id"`
+	PolicyID    string                      `json:"policy_id"`
+	Name        string                      `json:"name"`
+	Description string                      `json:"description"`
+}
+
+// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#delete_package_policy_200_response
+type DeletePackagePolicyResponse struct {
+	ID string `json:"id"`
+}
+
+// InstallFleetPackage uses the Fleet package policies API install an integration package as specified in the request.
+// Note that the package policy ID and Name must be globally unique across all installed packages.
+func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicyRequest) (*PackagePolicyResponse, error) {
+	reqBytes, err := json.Marshal(&req)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling request json: %w", err)
+	}
+
+	resp, err := client.Connection.SendWithContext(ctx,
+		http.MethodPost,
+		fleetPackagePoliciesAPI,
+		nil,
+		nil,
+		bytes.NewReader(reqBytes),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("posting %s: %w", fleetPackagePoliciesAPI, err)
+	}
+	defer resp.Body.Close()
+
+	pkgRespBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, extractError(pkgRespBytes)
+	}
+
+	pkgPolicyResp := PackagePolicyResponse{}
+	err = json.Unmarshal(pkgRespBytes, &pkgPolicyResp)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling response json: %w", err)
+	}
+
+	return &pkgPolicyResp, nil
+}
+
+// DeleteFleetPackage deletes integration with packagePolicyID from the policy ID
+func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID string) (*DeletePackagePolicyResponse, error) {
+	u, err := url.JoinPath(fleetPackagePoliciesAPI, packagePolicyID)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Connection.SendWithContext(ctx,
+		http.MethodDelete,
+		u,
+		nil,
+		nil,
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("DELETE %s: %w", u, err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, extractError(respBytes)
+	}
+
+	var pkgPolicyResp DeletePackagePolicyResponse
+	err = json.Unmarshal(respBytes, &pkgPolicyResp)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling response json: %w", err)
+	}
+
+	return &pkgPolicyResp, nil
+}
+
+type getUninstallTokenItem struct {
+	ID        string `json:"id"`
+	PolicyID  string `json:"policy_id"`
+	CreatedAt string `json:"created_at"`
+}
+
+type getUninstallTokensResponse struct {
+	Items   []getUninstallTokenItem `json:"items"`
+	Total   int                     `json:"total"`
+	Page    int                     `json:"page"`
+	PerPage int                     `json:"per_page"`
+}
+
+// GetPolicyUninstallTokens Retrieves the the policy uninstall tokens
+func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID string) ([]UninstallTokenResponse, error) {
+	u, err := url.Parse(fleetUninstallTokensAPI)
+	if err != nil {
+		return nil, err
+	}
+	// Compose URL with params
+	// /api/fleet/uninstall_tokens?policyId={policyId}&page=1&perPage=1000
+	q := u.Query()
+	q.Add("policyId", policyID)
+	q.Add("page", "1")
+	q.Add("perPage", "1000")
+
+	resp, err := client.Connection.SendWithContext(ctx,
+		http.MethodGet,
+		u.String(),
+		q,
+		nil,
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("getting %s: %w", u.String(), err)
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, extractError(b)
+	}
+
+	var itResp getUninstallTokensResponse
+	err = json.Unmarshal(b, &itResp)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling response json: %w", err)
+	}
+
+	sz := len(itResp.Items)
+
+	tokenResps := make([]UninstallTokenResponse, 0, sz)
+
+	for _, e := range itResp.Items {
+		tokenResp, err := client.GetUninstallToken(ctx, e.ID)
+		if err != nil {
+			return nil, err
+		}
+		tokenResps = append(tokenResps, tokenResp)
+	}
+
+	return tokenResps, nil
+}
+
+type UninstallTokenItem struct {
+	ID        string `json:"id"`
+	PolicyID  string `json:"policy_id"`
+	Token     string `json:"token"`
+	CreatedAt string `json:"created_at"`
+}
+
+type UninstallTokenResponse struct {
+	Item UninstallTokenItem `json:"item"`
+}
+
+// GetUninstallToken return uninstall token value for the given token ID
+func (client *Client) GetUninstallToken(ctx context.Context, tokenID string) (r UninstallTokenResponse, err error) {
+	u, err := url.JoinPath(fleetUninstallTokensAPI, tokenID)
+	if err != nil {
+		return r, err
+	}
+
+	resp, err := client.Connection.SendWithContext(ctx,
+		http.MethodGet,
+		u,
+		nil,
+		nil,
+		nil,
+	)
+
+	if err != nil {
+		return r, fmt.Errorf("getting %s: %w", u, err)
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return r, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return r, extractError(b)
+	}
+
+	err = json.Unmarshal(b, &r)
+	if err != nil {
+		return r, fmt.Errorf("unmarshalling response json: %w", err)
+	}
+	return r, nil
 }
