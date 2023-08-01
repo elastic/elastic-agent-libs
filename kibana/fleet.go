@@ -577,7 +577,7 @@ func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicy
 
 	err = readJSONResponse(resp, &r)
 
-	return r, nil
+	return r, err
 }
 
 // DeleteFleetPackage deletes integration with packagePolicyID from the policy ID
