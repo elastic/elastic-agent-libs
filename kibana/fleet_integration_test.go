@@ -146,10 +146,10 @@ func TestUpdatePolicyKibana(t *testing.T) {
 	require.Equal(t, *updatePolicyTamperProtection.IsProtected, updateResp.IsProtected)
 
 	// Get uninstall tokens, should be one
-	uninstallTokenResps, err := client.GetPolicyUninstallTokens(context.Background(), respPolicy.ID)
+	uninstallTokenResp, err := client.GetPolicyUninstallTokens(context.Background(), respPolicy.ID)
 	require.NoError(t, err)
-	require.Greater(t, len(uninstallTokenResps), 0, "Expected non-zero number of tokens")
-	require.Greater(t, len(uninstallTokenResps[0].Item.Token), 0, "expected non-empty token")
+	require.Greater(t, len(uninstallTokenResp.Items), 0, "Expected non-zero number of tokens")
+	require.Greater(t, len(uninstallTokenResp.Items[0].Token), 0, "expected non-empty token")
 
 	// Disable tamper protection
 	updatePolicyTamperProtection = AgentPolicyUpdateRequest{
@@ -216,7 +216,7 @@ func TestFleetPackage(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func installElasticDefendPackage(t *testing.T, client *Client, policyID, packagePolicyID string) (*PackagePolicyResponse, error) {
+func installElasticDefendPackage(t *testing.T, client *Client, policyID, packagePolicyID string) (r PackagePolicyResponse, err error) {
 	t.Helper()
 
 	ctx, cn := context.WithCancel(context.Background())
@@ -225,7 +225,7 @@ func installElasticDefendPackage(t *testing.T, client *Client, policyID, package
 	t.Log("Templating endpoint package policy request")
 	tmpl, err := template.New("pkgpolicy").Parse(endpointPackagePolicyTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("error creating new template: %w", err)
+		return r, fmt.Errorf("error creating new template: %w", err)
 	}
 
 	var pkgPolicyBuf bytes.Buffer
@@ -239,7 +239,7 @@ func installElasticDefendPackage(t *testing.T, client *Client, policyID, package
 		Version:  endpointPackageVersion,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error executing template: %w", err)
+		return r, fmt.Errorf("error executing template: %w", err)
 	}
 
 	// Make sure the templated value is actually valid JSON before making the API request.
@@ -247,13 +247,13 @@ func installElasticDefendPackage(t *testing.T, client *Client, policyID, package
 	var packagePolicyReq PackagePolicyRequest
 	err = json.Unmarshal(pkgPolicyBuf.Bytes(), &packagePolicyReq)
 	if err != nil {
-		return nil, fmt.Errorf("templated package policy is not valid JSON: %s, %w", pkgPolicyBuf.String(), err)
+		return r, fmt.Errorf("templated package policy is not valid JSON: %s, %w", pkgPolicyBuf.String(), err)
 	}
 
 	pkgResp, err := client.InstallFleetPackage(ctx, packagePolicyReq)
 	if err != nil {
 		t.Logf("Error installing fleet package: %v", err)
-		return nil, fmt.Errorf("error installing fleet package: %w", err)
+		return r, fmt.Errorf("error installing fleet package: %w", err)
 	}
 	t.Logf("Endpoint package Policy Response:\n%+v", pkgResp)
 	return pkgResp, err

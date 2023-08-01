@@ -557,10 +557,10 @@ type DeletePackagePolicyResponse struct {
 
 // InstallFleetPackage uses the Fleet package policies API install an integration package as specified in the request.
 // Note that the package policy ID and Name must be globally unique across all installed packages.
-func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicyRequest) (*PackagePolicyResponse, error) {
+func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicyRequest) (r PackagePolicyResponse, err error) {
 	reqBytes, err := json.Marshal(&req)
 	if err != nil {
-		return nil, fmt.Errorf("marshalling request json: %w", err)
+		return r, fmt.Errorf("marshalling request json: %w", err)
 	}
 
 	resp, err := client.Connection.SendWithContext(ctx,
@@ -571,33 +571,20 @@ func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicy
 		bytes.NewReader(reqBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("posting %s: %w", fleetPackagePoliciesAPI, err)
+		return r, fmt.Errorf("posting %s: %w", fleetPackagePoliciesAPI, err)
 	}
 	defer resp.Body.Close()
 
-	pkgRespBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
+	err = readJSONResponse(resp, &r)
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, extractError(pkgRespBytes)
-	}
-
-	pkgPolicyResp := PackagePolicyResponse{}
-	err = json.Unmarshal(pkgRespBytes, &pkgPolicyResp)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshalling response json: %w", err)
-	}
-
-	return &pkgPolicyResp, nil
+	return r, nil
 }
 
 // DeleteFleetPackage deletes integration with packagePolicyID from the policy ID
-func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID string) (*DeletePackagePolicyResponse, error) {
+func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID string) (r DeletePackagePolicyResponse, err error) {
 	u, err := url.JoinPath(fleetPackagePoliciesAPI, packagePolicyID)
 	if err != nil {
-		return nil, err
+		return r, err
 	}
 
 	resp, err := client.Connection.SendWithContext(ctx,
@@ -607,95 +594,23 @@ func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID st
 		nil,
 		nil,
 	)
+
 	if err != nil {
-		return nil, fmt.Errorf("DELETE %s: %w", u, err)
+		return r, fmt.Errorf("DELETE %s: %w", u, err)
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
+	err = readJSONResponse(resp, &r)
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, extractError(respBytes)
-	}
-
-	var pkgPolicyResp DeletePackagePolicyResponse
-	err = json.Unmarshal(respBytes, &pkgPolicyResp)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshalling response json: %w", err)
-	}
-
-	return &pkgPolicyResp, nil
+	return r, err
 }
 
-type getUninstallTokenItem struct {
-	ID        string `json:"id"`
-	PolicyID  string `json:"policy_id"`
-	CreatedAt string `json:"created_at"`
-}
-
-type getUninstallTokensResponse struct {
-	Items   []getUninstallTokenItem `json:"items"`
-	Total   int                     `json:"total"`
-	Page    int                     `json:"page"`
-	PerPage int                     `json:"per_page"`
-}
-
-// GetPolicyUninstallTokens Retrieves the the policy uninstall tokens
-func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID string) ([]UninstallTokenResponse, error) {
-	u, err := url.Parse(fleetUninstallTokensAPI)
-	if err != nil {
-		return nil, err
-	}
-	// Compose URL with params
-	// /api/fleet/uninstall_tokens?policyId={policyId}&page=1&perPage=1000
-	q := u.Query()
-	q.Add("policyId", policyID)
-	q.Add("page", "1")
-	q.Add("perPage", "1000")
-
-	resp, err := client.Connection.SendWithContext(ctx,
-		http.MethodGet,
-		u.String(),
-		q,
-		nil,
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("getting %s: %w", u.String(), err)
-	}
-	defer resp.Body.Close()
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, extractError(b)
-	}
-
-	var itResp getUninstallTokensResponse
-	err = json.Unmarshal(b, &itResp)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshalling response json: %w", err)
-	}
-
-	sz := len(itResp.Items)
-
-	tokenResps := make([]UninstallTokenResponse, 0, sz)
-
-	for _, e := range itResp.Items {
-		tokenResp, err := client.GetUninstallToken(ctx, e.ID)
-		if err != nil {
-			return nil, err
-		}
-		tokenResps = append(tokenResps, tokenResp)
-	}
-
-	return tokenResps, nil
+// UninstallTokenResponse uninstall tokens response with resolved token values
+type UninstallTokenResponse struct {
+	Items   []UninstallTokenItem `json:"items"`
+	Total   int                  `json:"total"`
+	Page    int                  `json:"page"`
+	PerPage int                  `json:"perPage"`
 }
 
 type UninstallTokenItem struct {
@@ -705,12 +620,55 @@ type UninstallTokenItem struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type UninstallTokenResponse struct {
+type uninstallTokenValueResponse struct {
 	Item UninstallTokenItem `json:"item"`
 }
 
+// GetPolicyUninstallTokens Retrieves the the policy uninstall tokens
+func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID string) (r UninstallTokenResponse, err error) {
+	u, err := url.Parse(fleetUninstallTokensAPI)
+	if err != nil {
+		return r, err
+	}
+
+	// Fetch uninstall token for the policy
+	// /api/fleet/uninstall_tokens?policyId={policyId}&page=1&perPage=1000
+	q := make(url.Values)
+	q.Add("policyId", policyID)
+	q.Add("page", "1")
+	q.Add("perPage", "1000")
+
+	resp, err := client.Connection.SendWithContext(ctx,
+		http.MethodGet,
+		fleetUninstallTokensAPI,
+		q,
+		nil,
+		nil,
+	)
+	if err != nil {
+		return r, fmt.Errorf("getting %s: %w", u.String(), err)
+	}
+	defer resp.Body.Close()
+
+	err = readJSONResponse(resp, &r)
+	if err != nil {
+		return r, err
+	}
+
+	// Resolve token values for token ID
+	for i := 0; i < len(r.Items); i++ {
+		tokRes, err := client.GetUninstallToken(ctx, r.Items[i].ID)
+		if err != nil {
+			return r, err
+		}
+		r.Items[i] = tokRes
+	}
+
+	return r, nil
+}
+
 // GetUninstallToken return uninstall token value for the given token ID
-func (client *Client) GetUninstallToken(ctx context.Context, tokenID string) (r UninstallTokenResponse, err error) {
+func (client *Client) GetUninstallToken(ctx context.Context, tokenID string) (r UninstallTokenItem, err error) {
 	u, err := url.JoinPath(fleetUninstallTokensAPI, tokenID)
 	if err != nil {
 		return r, err
@@ -729,18 +687,28 @@ func (client *Client) GetUninstallToken(ctx context.Context, tokenID string) (r 
 	}
 	defer resp.Body.Close()
 
-	b, err := io.ReadAll(resp.Body)
+	var res uninstallTokenValueResponse
+	err = readJSONResponse(resp, &res)
 	if err != nil {
-		return r, fmt.Errorf("reading response body: %w", err)
+		return r, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return r, extractError(b)
+	return res.Item, nil
+}
+
+func readJSONResponse(r *http.Response, v any) error {
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	err = json.Unmarshal(b, &r)
-	if err != nil {
-		return r, fmt.Errorf("unmarshalling response json: %w", err)
+	if r.StatusCode != http.StatusOK {
+		return extractError(b)
 	}
-	return r, nil
+
+	err = json.Unmarshal(b, v)
+	if err != nil {
+		return fmt.Errorf("unmarshalling response json: %w", err)
+	}
+	return nil
 }
