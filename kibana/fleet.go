@@ -626,11 +626,6 @@ type uninstallTokenValueResponse struct {
 
 // GetPolicyUninstallTokens Retrieves the the policy uninstall tokens
 func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID string) (r UninstallTokenResponse, err error) {
-	u, err := url.Parse(fleetUninstallTokensAPI)
-	if err != nil {
-		return r, err
-	}
-
 	// Fetch uninstall token for the policy
 	// /api/fleet/uninstall_tokens?policyId={policyId}&page=1&perPage=1000
 	q := make(url.Values)
@@ -646,7 +641,7 @@ func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID str
 		nil,
 	)
 	if err != nil {
-		return r, fmt.Errorf("getting %s: %w", u.String(), err)
+		return r, fmt.Errorf("getting %s, policyID %s: %w", fleetUninstallTokensAPI, policyID, err)
 	}
 	defer resp.Body.Close()
 
