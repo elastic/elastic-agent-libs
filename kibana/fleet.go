@@ -192,7 +192,7 @@ func (client *Client) DeletePolicy(ctx context.Context, id string) error {
 	if resp.StatusCode != http.StatusOK {
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("unable to delete policy; API returned status code [%d] and err reading the response: %v", resp.StatusCode, err)
+			return fmt.Errorf("unable to delete policy; API returned status code [%d] and error reading response: %w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("unable to delete policy; API returned status code [%d] and body [%s]", resp.StatusCode, string(respBody))
 	}
