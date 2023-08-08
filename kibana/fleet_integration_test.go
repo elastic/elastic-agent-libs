@@ -314,3 +314,123 @@ func installElasticDefendPackage(t *testing.T, client *Client, policyID, package
 	t.Logf("Endpoint package Policy Response:\n%+v", pkgResp)
 	return pkgResp, err
 }
+
+func TestCreateEnrollmentAPIKey(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	testPolicy := AgentPolicy{
+		Name:        fmt.Sprintf("TestCreateEnrollmentAPIKey-%s", uuid.Must(uuid.NewV4()).String()),
+		Namespace:   "defaultttest",
+		Description: "original policy",
+	}
+
+	policyResp, err := client.CreatePolicy(ctx, testPolicy)
+	require.NoError(t, err)
+	defer func() {
+		err = client.DeletePolicy(ctx, policyResp.ID)
+		require.NoError(t, err)
+	}()
+
+	enrollKeyResp, err := client.CreateEnrollmentAPIKey(ctx, CreateEnrollmentAPIKeyRequest{
+		Name:     "TestEnrollmentKey",
+		PolicyID: policyResp.ID,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, enrollKeyResp.APIKey)
+}
+
+func TestListAgents(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	listResp, err := client.ListAgents(ctx, ListAgentsRequest{})
+	require.NoError(t, err)
+	require.Greater(t, len(listResp.Items), 0)
+}
+
+func TestGetAgent(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	// Test get non-existent Agent
+	nonExistentAgentID := uuid.Must(uuid.NewV4()).String()
+	agentResp, err := client.GetAgent(ctx, GetAgentRequest{ID: nonExistentAgentID})
+
+	require.NotNil(t, err)
+	require.Equal(t, fmt.Sprintf("Agent %s not found", nonExistentAgentID), err.Error())
+	require.Empty(t, agentResp.ID)
+
+	// Get the list of Agent and then get the Agent by ID from that list
+	listResp, err := client.ListAgents(ctx, ListAgentsRequest{})
+	require.NoError(t, err)
+	require.Greater(t, len(listResp.Items), 0)
+
+	agentResp, err = client.GetAgent(ctx, GetAgentRequest{ID: listResp.Items[0].ID})
+	require.NoError(t, err)
+	require.NotEmpty(t, agentResp.ID)
+}
+
+func TestUnenrollAgent(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	// Test unenroll non-existent Agent
+	nonExistentAgentID := uuid.Must(uuid.NewV4()).String()
+	_, err = client.UnEnrollAgent(ctx, UnEnrollAgentRequest{ID: nonExistentAgentID})
+
+	require.NotNil(t, err)
+	require.Equal(t, fmt.Sprintf("Agent %s not found", nonExistentAgentID), err.Error())
+}
+
+func TestListFleetServerHosts(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	resp, err := client.ListFleetServerHosts(ctx, ListFleetServerHostsRequest{})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Items)
+}
+
+func TestGetFleetServerHost(t *testing.T) {
+	cfg := mustGetEnv(t)
+
+	ctx, cn := context.WithCancel(context.Background())
+	defer cn()
+
+	client, err := NewClientWithConfig(&cfg, "", "", "", "")
+	require.NoError(t, err)
+
+	listResp, err := client.ListFleetServerHosts(ctx, ListFleetServerHostsRequest{})
+	require.NoError(t, err)
+	require.NotEmpty(t, listResp.Items)
+
+	resp, err := client.GetFleetServerHost(ctx, GetFleetServerHostRequest{listResp.Items[0].ID})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.ID)
+}
