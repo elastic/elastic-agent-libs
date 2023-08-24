@@ -23,10 +23,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 )
@@ -239,7 +240,7 @@ func makeVerifyConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
 	case VerifyCertificate:
 		// Cert is trusted by CA
 		// Does NOT validate hostname or IP addresses
-		// tls.Config.InsecureSkipVerify  is set to true
+		// tls.Config.InsecureSkipVerify is set to true
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates); err != nil {
@@ -347,7 +348,7 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 }
 
 // verifyHostname verifies if the provided hostnmae matches
-// cert.DNSNames, cert.OPAddress (SNA)
+// cert.DNSNames, cert.IPAddress (SNA)
 // For hostnames, if SNA is empty, validate the hostname against cert.Subject.CommonName
 func verifyHostname(cert *x509.Certificate, hostname string) error {
 	if hostname == "" {
@@ -365,6 +366,14 @@ func verifyHostname(cert *x509.Certificate, hostname string) error {
 				return nil
 			}
 		}
+
+		parsedCNIP := net.ParseIP(cert.Subject.CommonName)
+		if parsedCNIP != nil {
+			if parsedIP.Equal(parsedCNIP) {
+				return nil
+			}
+		}
+
 		return x509.HostnameError{Certificate: cert, Host: hostname}
 	}
 
