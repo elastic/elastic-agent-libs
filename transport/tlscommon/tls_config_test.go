@@ -25,6 +25,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -562,7 +563,11 @@ func TestVerificationMode(t *testing.T) {
 				},
 			}
 
-			resp, err := client.Get(serverURL.String())
+			resp, err := client.Get(serverURL.String()) //nolint:noctx // It is a test
+			if err == nil {
+				resp.Body.Close()
+			}
+
 			if test.expectingError {
 				if err != nil {
 					// We got the expected error, no need to check the status code
@@ -592,6 +597,9 @@ func TestVerificationMode(t *testing.T) {
 func startTestServer(t *testing.T, address string, emptySNA, legacyCN bool) (url.URL, *x509.Certificate) {
 	// Creates a listener on a random port selected by the OS
 	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("could call net.Listen: %s", err)
+	}
 	t.Cleanup(func() { l.Close() })
 
 	// l.Addr().String() will return something like: 127.0.0.1:12345,
@@ -604,16 +612,24 @@ func startTestServer(t *testing.T, address string, emptySNA, legacyCN bool) (url
 	// Generate server ceritficates for the given address
 	// and start the server
 	caCert, serverCert := genVerifyCerts(t, address, emptySNA, legacyCN)
-	server := http.Server{
+	server := http.Server{ //nolint:gosec // This server is used only for tests.
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("SSL test server"))
+			if _, err := w.Write([]byte("SSL test server")); err != nil {
+				t.Errorf("coluld not write to client: %s", err)
+			}
 		}),
-		TLSConfig: &tls.Config{
+		TLSConfig: &tls.Config{ //nolint:gosec // This TLS config is used only for testing.
 			Certificates: []tls.Certificate{serverCert},
 		},
 	}
 	t.Cleanup(func() { server.Close() })
-	go server.ServeTLS(l, "", "")
+	go func() {
+		if err := server.ServeTLS(l, "", ""); err != nil {
+			if !errors.Is(err, http.ErrServerClosed) {
+				t.Errorf("HTTPS server exited unexpectedly: %s", err)
+			}
+		}
+	}()
 
 	return *serverURL, caCert
 }
@@ -656,7 +672,7 @@ func genVerifyCerts(t *testing.T, hostnameOrIP string, emptySNA, legacyCN bool) 
 	}
 
 	// ========================== Generate RootCA private Key
-	caPrivKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	caPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		log.Panicf("generating RSA key for CA cert: %v", err)
 	}
@@ -668,10 +684,13 @@ func genVerifyCerts(t *testing.T, hostnameOrIP string, emptySNA, legacyCN bool) 
 	}
 
 	caPEM := new(bytes.Buffer)
-	pem.Encode(caPEM, &pem.Block{
+	pemBlock := pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: caBytes,
-	})
+	}
+	if err := pem.Encode(caPEM, &pemBlock); err != nil {
+		t.Fatalf("could not encode Root CA as PEM: %s", err)
+	}
 
 	// ========================== Generate Server Certificate (leaf)
 	cert := &x509.Certificate{
@@ -707,7 +726,7 @@ func genVerifyCerts(t *testing.T, hostnameOrIP string, emptySNA, legacyCN bool) 
 		}
 	}
 
-	certPrivKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	certPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		log.Panicf("generating certificate private key: %v", err)
 	}
@@ -724,16 +743,22 @@ func genVerifyCerts(t *testing.T, hostnameOrIP string, emptySNA, legacyCN bool) 
 	}
 
 	certPEM := new(bytes.Buffer)
-	pem.Encode(certPEM, &pem.Block{
+	certPemBlock := pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
-	})
+	}
+	if err := pem.Encode(certPEM, &certPemBlock); err != nil {
+		t.Fatalf("could not encode certificate as PEM: %s", err)
+	}
 
 	certPrivKeyPEM := new(bytes.Buffer)
-	pem.Encode(certPrivKeyPEM, &pem.Block{
+	certPrivKeyPEMBlock := pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey),
-	})
+	}
+	if err := pem.Encode(certPrivKeyPEM, &certPrivKeyPEMBlock); err != nil {
+		t.Fatalf("could not encode certificate private key as PEM: %s", err)
+	}
 
 	serverCert, err := tls.X509KeyPair(certPEM.Bytes(), certPrivKeyPEM.Bytes())
 	if err != nil {
