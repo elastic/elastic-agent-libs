@@ -191,7 +191,14 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryNam
 		binaryName = "Libbeat"
 	}
 	userAgent := useragent.UserAgent(binaryName, version, commit, buildtime)
-	rt, err := config.Transport.Client(httpcommon.WithHeaderRoundTripper(map[string]string{"User-Agent": userAgent}))
+
+	const elasticAPIVersionHeaderKey = "Elastic-Api-Version"
+	const elasticAPIDefaultVersion = "2023-10-31"
+	rt, err := config.Transport.Client(
+		httpcommon.WithHeaderRoundTripper(
+			map[string]string{"User-Agent": userAgent, elasticAPIVersionHeaderKey: elasticAPIDefaultVersion},
+		),
+	)
 	if err != nil {
 		return nil, err
 	}
