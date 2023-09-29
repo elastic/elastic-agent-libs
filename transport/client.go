@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"sync"
 	"time"
 
@@ -215,9 +216,25 @@ func (c *Client) handleError(err error) error {
 
 func (c *Client) Test(d testing.Driver) {
 	d.Run("logstash: "+c.host, func(d testing.Driver) {
+		if c.config.Proxy.URL != "" {
+			d.Run("proxy", func(d testing.Driver) {
+				url, err1 := url.Parse(c.config.Proxy.URL)
+				d.Fatal("parse url", err1)
+				dialer := TestNetDialer(d, c.config.Timeout)
+				_, err2 := dialer.Dial("tcp", url.Host)
+				d.Fatal("dial up", err2)
+			})
+		}
+
 		d.Run("connection", func(d testing.Driver) {
-			netDialer := TestNetDialer(d, c.config.Timeout)
-			_, err := netDialer.Dial("tcp", c.host)
+			var dialer Dialer
+			if c.config.Proxy.URL == "" {
+				dialer = TestNetDialer(d, c.config.Timeout)
+			} else {
+				dialer = NetDialer(c.config.Timeout)
+				dialer = TestProxyDialer(d, dialer, c.config.Proxy, c.config.Timeout)
+			}
+			_, err := dialer.Dial("tcp", c.host)
 			d.Fatal("dial up", err)
 		})
 
@@ -225,9 +242,12 @@ func (c *Client) Test(d testing.Driver) {
 			d.Warn("TLS", "secure connection disabled")
 		} else {
 			d.Run("TLS", func(d testing.Driver) {
-				netDialer := NetDialer(c.config.Timeout)
-				tlsDialer := TestTLSDialer(d, netDialer, c.config.TLS, c.config.Timeout)
-				_, err := tlsDialer.Dial("tcp", c.host)
+				dialer := NetDialer(c.config.Timeout)
+				if c.config.Proxy.URL != "" {
+					dialer = TestProxyDialer(d, dialer, c.config.Proxy, c.config.Timeout)
+				}
+				dialer = TestTLSDialer(d, dialer, c.config.TLS, c.config.Timeout)
+				_, err := dialer.Dial("tcp", c.host)
 				d.Fatal("dial up", err)
 			})
 		}
