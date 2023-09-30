@@ -232,7 +232,7 @@ func (c *Client) Test(d testing.Driver) {
 				dialer = TestNetDialer(d, c.config.Timeout)
 			} else {
 				dialer = NetDialer(c.config.Timeout)
-				dialer = TestProxyDialer(d, dialer, c.config.Proxy, c.config.Timeout)
+				dialer = TestProxyDialer(d, dialer, c.config.Proxy)
 			}
 			_, err := dialer.Dial("tcp", c.host)
 			d.Fatal("dial up", err)
@@ -244,7 +244,7 @@ func (c *Client) Test(d testing.Driver) {
 			d.Run("TLS", func(d testing.Driver) {
 				dialer := NetDialer(c.config.Timeout)
 				if c.config.Proxy.URL != "" {
-					dialer = TestProxyDialer(d, dialer, c.config.Proxy, c.config.Timeout)
+					dialer = TestProxyDialer(d, dialer, c.config.Proxy)
 				}
 				dialer = TestTLSDialer(d, dialer, c.config.TLS, c.config.Timeout)
 				_, err := dialer.Dial("tcp", c.host)

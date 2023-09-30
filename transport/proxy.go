@@ -20,7 +20,6 @@ package transport
 import (
 	"net"
 	"net/url"
-	"time"
 
 	"golang.org/x/net/proxy"
 
@@ -104,7 +103,6 @@ func TestProxyDialer(
 	d testing.Driver,
 	forward Dialer,
 	config *ProxyConfig,
-	timeout time.Duration,
 ) Dialer {
 	dialer, err := ProxyDialer(logp.L(), config, forward)
 	d.Fatal("proxy", err)
