@@ -18,10 +18,16 @@
 package httpcommon
 
 import (
+	"bufio"
+	"encoding/base64"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 
 	"github.com/elastic/elastic-agent-libs/config"
+	"github.com/elastic/elastic-agent-libs/transport"
+	"golang.org/x/net/proxy"
 )
 
 // HTTPClientProxySettings provides common HTTP proxy setup support.
@@ -103,4 +109,55 @@ func (settings *HTTPClientProxySettings) ProxyFunc() func(*http.Request) (*url.U
 	}
 
 	return http.ProxyURL(settings.URL.URI())
+}
+
+// ProxyDialer is a dialer that can be registered to golang.org/x/net/proxy
+func (settings *HTTPClientProxySettings) ProxyDialer(_ *url.URL, forward proxy.Dialer) (proxy.Dialer, error) {
+	return transport.DialerFunc(func(_, address string) (net.Conn, error) {
+
+		// Headers given to the CONNECT request
+		hdr := settings.Headers.Headers()
+		if settings.URL.User != nil {
+			username := settings.URL.User.Username()
+			password, _ := settings.URL.User.Password()
+			if len(hdr) == 0 {
+				hdr = http.Header{}
+			}
+			hdr.Add("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
+		}
+
+		req := &http.Request{
+			Method: "CONNECT",
+			URL:    &url.URL{Opaque: address},
+			Host:   address,
+			Header: hdr,
+		}
+
+		// Dial the proxy host
+		c, err := forward.Dial("tcp", settings.URL.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		// Write the CONNECT request
+		err = req.Write(c)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+
+		res, err := http.ReadResponse(bufio.NewReader(c), req)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			c.Close()
+			return nil, fmt.Errorf("proxy server returned status code %d", res.StatusCode)
+		}
+
+		return c, nil
+	}), nil
 }
