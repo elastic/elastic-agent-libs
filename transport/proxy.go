@@ -99,7 +99,7 @@ func ProxyDialer(log *logp.Logger, config *ProxyConfig, forward Dialer) (Dialer,
 	}), nil
 }
 
-func TestProxyDialer(
+func testProxyDialer(
 	d testing.Driver,
 	forward Dialer,
 	config *ProxyConfig,
