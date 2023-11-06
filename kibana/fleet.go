@@ -169,7 +169,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 	if resp.StatusCode != http.StatusOK {
 		var respBody string
 		if bs, err := io.ReadAll(resp.Body); err != nil {
-			respBody = "could not read reponse body"
+			respBody = "could not read repose body"
 		} else {
 			respBody = string(bs)
 		}
@@ -177,8 +177,8 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 		client.log.Errorw(
 			"could not create download source, kibana returned "+resp.Status,
 			"http.response.body.content", respBody)
-		return fmt.Errorf("could not create download source, kibana returned %s: %w",
-			resp.Status, err)
+		return fmt.Errorf("could not create download source, kibana returned %s. reponse body: %s: %w",
+			resp.Status, respBody, err)
 	}
 
 	return nil
