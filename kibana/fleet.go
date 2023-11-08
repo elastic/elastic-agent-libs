@@ -258,6 +258,18 @@ type AgentCommon struct {
 	} `json:"local_metadata"`
 	PolicyID       string `json:"policy_id"`
 	PolicyRevision int    `json:"policy_revision"`
+	UpgradeDetails struct {
+		TargetVersion string `json:"target_version"`
+		State         string `json:"state"`
+		ActionID      string `json:"action_id"`
+		Metadata      struct {
+			ScheduledAt     *time.Time   `json:"scheduled_at"`
+			DownloadPercent float64      `json:"download_percent"`
+			DownloadRate    downloadRate `json:"download_rate"`
+			FailedState     State        `json:"failed_state"`
+			ErrorMsg        string       `json:"error_msg"`
+		} `json:"metadata"`
+	} `json:"upgrade_details"`
 }
 
 // AgentExisting is the data structure for an existing agent
