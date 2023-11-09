@@ -29,19 +29,19 @@ import (
 )
 
 const (
-	fleetAgentAPI             = "/api/fleet/agents/%s"
-	fleetAgentPoliciesAPI     = "/api/fleet/agent_policies"
-	fleetAgentPolicyAPI       = "/api/fleet/agent_policies/%s"
-	fleetAgentsAPI            = "/api/fleet/agents"
-	fleetAgentsDeleteAPI      = "/api/fleet/agent_policies/delete"
-	fleetEnrollmentAPIKeysAPI = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
-	fleetFleetServerHostAPI   = "/api/fleet/fleet_server_hosts/%s"
-	fleetFleetServerHostsAPI  = "/api/fleet/fleet_server_hosts"
-	fleetPackagePoliciesAPI   = "/api/fleet/package_policies"
-	fleetUnEnrollAgentAPI     = "/api/fleet/agents/%s/unenroll"
-	fleetUninstallTokensAPI   = "/api/fleet/uninstall_tokens" //nolint:gosec // NOT the "Potential hardcoded credentials"
-	fleetUpgradeAgentAPI      = "/api/fleet/agents/%s/upgrade"
-	fleetAgentDownloadSources = "/api/fleet/agent_download_sources"
+	fleetAgentAPI                = "/api/fleet/agents/%s"
+	fleetAgentPoliciesAPI        = "/api/fleet/agent_policies"
+	fleetAgentPolicyAPI          = "/api/fleet/agent_policies/%s"
+	fleetAgentsAPI               = "/api/fleet/agents"
+	fleetAgentsDeleteAPI         = "/api/fleet/agent_policies/delete"
+	fleetEnrollmentAPIKeysAPI    = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
+	fleetFleetServerHostAPI      = "/api/fleet/fleet_server_hosts/%s"
+	fleetFleetServerHostsAPI     = "/api/fleet/fleet_server_hosts"
+	fleetPackagePoliciesAPI      = "/api/fleet/package_policies"
+	fleetUnEnrollAgentAPI        = "/api/fleet/agents/%s/unenroll"
+	fleetUninstallTokensAPI      = "/api/fleet/uninstall_tokens" //nolint:gosec // NOT the "Potential hardcoded credentials"
+	fleetUpgradeAgentAPI         = "/api/fleet/agents/%s/upgrade"
+	fleetAgentDownloadSourcesAPI = "/api/fleet/agent_download_sources"
 )
 
 //
@@ -145,7 +145,7 @@ type DownloadSource struct {
 	Name      string      `json:"name"`
 	Host      string      `json:"host"`
 	IsDefault bool        `json:"is_default"`
-	ProxyId   interface{} `json:"proxy_id"`
+	ProxyID   interface{} `json:"proxy_id"`
 }
 
 func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadSource) error {
@@ -157,7 +157,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 	resp, err := client.Connection.SendWithContext(
 		ctx,
 		http.MethodPost,
-		fleetAgentDownloadSources,
+		fleetAgentDownloadSourcesAPI,
 		nil,
 		nil,
 		bytes.NewReader(reqBody))
