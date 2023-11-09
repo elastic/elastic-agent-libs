@@ -177,7 +177,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 		client.log.Errorw(
 			"could not create download source, kibana returned "+resp.Status,
 			"http.response.body.content", respBody)
-		return fmt.Errorf("could not create download source, kibana returned %s. reponse body: %s: %w",
+		return fmt.Errorf("could not create download source, kibana returned %s. response body: %s: %w",
 			resp.Status, respBody, err)
 	}
 
