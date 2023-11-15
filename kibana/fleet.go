@@ -150,11 +150,11 @@ type DownloadSource struct {
 
 type DownloadSourceResponse struct {
 	Item struct {
-		ID        string      `json:"id"`
-		Name      string      `json:"name"`
-		Host      string      `json:"host"`
-		IsDefault bool        `json:"is_default"`
-		ProxyID   interface{} `json:"proxy_id"`
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Host      string `json:"host"`
+		IsDefault bool   `json:"is_default"`
+		ProxyID   string `json:"proxy_id"`
 	} `json:"item"`
 }
 
