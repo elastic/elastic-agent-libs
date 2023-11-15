@@ -154,7 +154,7 @@ type DownloadSourceResponse struct {
 		Name      string      `json:"name"`
 		Host      string      `json:"host"`
 		IsDefault bool        `json:"is_default"`
-		ProxyId   interface{} `json:"proxy_id"`
+		ProxyID   interface{} `json:"proxy_id"`
 	} `json:"item"`
 }
 
@@ -197,7 +197,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 	body := DownloadSourceResponse{}
 	if err = json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return DownloadSourceResponse{},
-			fmt.Errorf("failed parsing download source reponse: %w", err)
+			fmt.Errorf("failed parsing download source response: %w", err)
 	}
 
 	return body, nil
