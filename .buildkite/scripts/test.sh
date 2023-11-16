@@ -5,6 +5,7 @@ set -euo pipefail
 
 echo "--- Pre install"
 source .buildkite/scripts/pre-install-command.sh
+go version
 add_bin_path
 with_go_junit_report
 
