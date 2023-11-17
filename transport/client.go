@@ -18,6 +18,7 @@
 package transport
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -96,7 +97,7 @@ func (c *Client) Connect() error {
 		c.conn = nil
 	}
 
-	conn, err := c.dialer.Dial(c.network, c.host)
+	conn, err := c.dialer.DialContext(context.Background(), c.network, c.host)
 	if err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func (c *Client) Test(d testing.Driver) {
 	d.Run("logstash: "+c.host, func(d testing.Driver) {
 		d.Run("connection", func(d testing.Driver) {
 			netDialer := TestNetDialer(d, c.config.Timeout)
-			_, err := netDialer.Dial("tcp", c.host)
+			_, err := netDialer.DialContext(context.Background(), "tcp", c.host)
 			d.Fatal("dial up", err)
 		})
 
@@ -227,7 +228,7 @@ func (c *Client) Test(d testing.Driver) {
 			d.Run("TLS", func(d testing.Driver) {
 				netDialer := NetDialer(c.config.Timeout)
 				tlsDialer := TestTLSDialer(d, netDialer, c.config.TLS, c.config.Timeout)
-				_, err := tlsDialer.Dial("tcp", c.host)
+				_, err := tlsDialer.DialContext(context.Background(), "tcp", c.host)
 				d.Fatal("dial up", err)
 			})
 		}
