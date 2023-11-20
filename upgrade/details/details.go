@@ -37,7 +37,7 @@ func (dr *DownloadRate) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(
-		fmt.Sprintf("%sps", units.HumanSizeWithPrecision(downloadRateBytesPerSecond, 2)),
+		fmt.Sprintf("%sps", units.HumanSizeWithPrecision(downloadRateBytesPerSecond, 10)),
 	)
 }
 
