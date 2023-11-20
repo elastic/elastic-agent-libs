@@ -39,7 +39,7 @@ steps:
       - ".buildkite/scripts/test.sh junit-report-macos.xml"
     agents:
       provider: "orka"
-      imagePrefix: generic-13-ventura-arm
+      imagePrefix: generic-13-ventura-x64
     artifact_paths:
       - "junit-*.xml"
 
