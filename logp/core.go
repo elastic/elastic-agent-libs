@@ -236,6 +236,22 @@ func makeEventLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, er
 	return wrappedCore(core), nil
 }
 
+// WithFileOutput creates a new file output based on cfg and
+// replaces the previous one.
+func WithFileOutput(cfg Config) func(zapcore.Core) zapcore.Core {
+	out, err := makeFileOutput(cfg, zap.DebugLevel)
+	if err != nil {
+		L().Errorf("could not create file output: %s", err)
+		out = zapcore.NewNopCore()
+	}
+
+	f := func(zapcore.Core) zapcore.Core {
+		return out
+	}
+
+	return f
+}
+
 func makeFileOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error) {
 	filename := paths.Resolve(paths.Logs, filepath.Join(cfg.Files.Path, cfg.LogFilename()))
 

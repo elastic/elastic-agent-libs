@@ -45,6 +45,10 @@ func init() {
 	flag.Var((*environmentVar)(&environment), "environment", "set environment being ran in")
 }
 
+func GetEnvironment() logp.Environment {
+	return environment
+}
+
 // Logging builds a logp.Config based on the given common.Config and the specified
 // CLI flags.
 func Logging(beatName string, cfg *config.C) error {
