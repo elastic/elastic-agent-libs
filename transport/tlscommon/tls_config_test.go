@@ -18,14 +18,21 @@
 package tlscommon
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -131,10 +138,10 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			verificationMode: VerifyFull,
 			clientAuth:       tls.RequireAndVerifyClientCert,
 			certAuthorities:  certPool,
-			peerCerts:        []*x509.Certificate{testCerts["unknown authority"]},
+			peerCerts:        []*x509.Certificate{testCerts["unknown_authority"]},
 			serverName:       "",
 			expectedCallback: true,
-			expectedError:    x509.UnknownAuthorityError{Cert: testCerts["unknown authority"]},
+			expectedError:    x509.UnknownAuthorityError{Cert: testCerts["unknown_authority"]},
 		},
 		"default verification without certificates not required": {
 			verificationMode: VerifyFull,
@@ -189,7 +196,7 @@ func TestTrustRootCA(t *testing.T) {
 
 	nonEmptyCertPool := x509.NewCertPool()
 	nonEmptyCertPool.AddCert(certs["wildcard"])
-	nonEmptyCertPool.AddCert(certs["unknown authority"])
+	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
 	fingerprint := getFingerprint(certs["ca"])
 
@@ -718,7 +725,7 @@ func genTestCerts(t *testing.T) map[string]*x509.Certificate {
 			// IPV4 and IPV6
 			ips: []net.IP{{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
 		},
-		"unknown authority": {
+		"unknown_authority": {
 			ca:       unknownCA,
 			keyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 			isCA:     false,
@@ -737,6 +744,7 @@ func genTestCerts(t *testing.T) map[string]*x509.Certificate {
 		},
 	}
 
+	tmpDir := t.TempDir()
 	for certName, data := range certData {
 		cert, err := genSignedCert(
 			data.ca,
@@ -748,39 +756,48 @@ func genTestCerts(t *testing.T) map[string]*x509.Certificate {
 			data.expired,
 		)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("could not generate certificate '%s': %s", certName, err)
 		}
 		certs[certName] = cert.Leaf
+
+		// We write the certificate to disk, so if the test fails the certs can
+		// be inspected/reused
+		certPEM := new(bytes.Buffer)
+		pem.Encode(certPEM, &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Leaf.Raw,
+		})
+
+		serverCertFile, err := os.Create(filepath.Join(tmpDir, certName+".crt"))
+		if err != nil {
+			t.Fatalf("creating file to write server certificate: %v", err)
+		}
+		if _, err := serverCertFile.Write(certPEM.Bytes()); err != nil {
+			t.Fatalf("writing server certificate: %v", err)
+		}
+
+		if err := serverCertFile.Close(); err != nil {
+			t.Fatalf("could not close certificate file: %s", err)
+		}
 	}
 
-	// If for any reason there is a need to debug
-	// or inspect those certificates, just uncomment the
-	// following block. It will write all generated
-	// certificates to testdata/debug
+	t.Cleanup(func() {
+		if t.Failed() {
+			finalDir := filepath.Join(os.TempDir(), cleanStr(t.Name())+strconv.Itoa(rand.Int()))
+			if err := os.Rename(tmpDir, finalDir); err != nil {
+				t.Fatalf("could not rename directory with certificates: %s", err)
+			}
 
-	// mapName := map[string]string{
-	// 	"ca":                "ca.crt",
-	// 	"correct":           "client1.crt",
-	// 	"expired":           "tls.crt",
-	// 	"unknown authority": "unsigned_tls.crt",
-	// 	"wildcard":          "server.crt",
-	// }
-
-	// for certName, cert := range certs {
-	// 	certPEM := new(bytes.Buffer)
-	// 	pem.Encode(certPEM, &pem.Block{
-	// 		Type:  "CERTIFICATE",
-	// 		Bytes: cert.Raw,
-	// 	})
-
-	// 	serverCertFile, err := os.Create(filepath.Join("testdata", "debug", mapName[certName]))
-	// 	if err != nil {
-	// 		t.Fatalf("creating file to write server certificate: %v", err)
-	// 	}
-	// 	if _, err := serverCertFile.Write(certPEM.Bytes()); err != nil {
-	// 		t.Fatalf("writing server certificate: %v", err)
-	// 	}
-	// }
+			t.Logf("certificates persisted on: '%s'", finalDir)
+		}
+	})
 
 	return certs
+}
+
+var cleanRegExp = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
+// cleanStr replaces all characters that do not match 'a-zA-Z0-9' by '_'
+func cleanStr(path string) string {
+	return cleanRegExp.ReplaceAllString(path, "_")
 }

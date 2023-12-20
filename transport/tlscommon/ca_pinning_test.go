@@ -367,7 +367,7 @@ func genSignedCert(
 	}
 
 	notBefore := time.Now()
-	notAfter := notBefore.Add(time.Hour)
+	notAfter := notBefore.Add(5 * time.Hour)
 
 	if expired {
 		notBefore = notBefore.Add(-42 * time.Hour)
