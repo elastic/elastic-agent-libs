@@ -27,14 +27,14 @@ import (
 
 // ServerConfig defines the user configurable tls options for any TCP based service.
 type ServerConfig struct {
-	Enabled          *bool               `config:"enabled"`
-	VerificationMode TLSVerificationMode `config:"verification_mode"` // one of 'none', 'full', 'strict', 'certificate'
-	Versions         []TLSVersion        `config:"supported_protocols"`
-	CipherSuites     []CipherSuite       `config:"cipher_suites"`
-	CAs              []string            `config:"certificate_authorities"`
-	Certificate      CertificateConfig   `config:",inline"`
-	CurveTypes       []tlsCurveType      `config:"curve_types"`
-	ClientAuth       tlsClientAuth       `config:"client_authentication"` //`none`, `optional` or `required`
+	Enabled          *bool               `config:"enabled" yaml:"enabled,omitempty"`
+	VerificationMode TLSVerificationMode `config:"verification_mode" yaml:"verification_mode,omitempty"` // one of 'none', 'full', 'strict', 'certificate'
+	Versions         []TLSVersion        `config:"supported_protocols" yaml:"supported_protocols,omitempty"`
+	CipherSuites     []CipherSuite       `config:"cipher_suites" yaml:"cipher_suites,omitempty"`
+	CAs              []string            `config:"certificate_authorities" yaml:"certificate_authorities,omitempty"`
+	Certificate      CertificateConfig   `config:",inline" yaml:",inline"`
+	CurveTypes       []tlsCurveType      `config:"curve_types" yaml:"curve_types,omitempty"`
+	ClientAuth       TLSClientAuth       `config:"client_authentication" yaml:"client_authentication,omitempty"` //`none`, `optional` or `required`
 	CASha256         []string            `config:"ca_sha256" yaml:"ca_sha256,omitempty"`
 }
 
