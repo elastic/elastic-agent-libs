@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/proxy"
 
 	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/elastic-agent-libs/testing"
 )
 
 // ProxyConfig holds the configuration information required to proxy
@@ -96,4 +97,14 @@ func ProxyDialer(log *logp.Logger, config *ProxyConfig, forward Dialer) (Dialer,
 		}
 		return DialWith(dialer, network, host, addresses, port)
 	}), nil
+}
+
+func testProxyDialer(
+	d testing.Driver,
+	forward Dialer,
+	config *ProxyConfig,
+) Dialer {
+	dialer, err := ProxyDialer(logp.L(), config, forward)
+	d.Fatal("proxy", err)
+	return dialer
 }
