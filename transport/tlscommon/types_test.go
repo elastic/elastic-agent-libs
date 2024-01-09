@@ -18,8 +18,10 @@
 package tlscommon
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -65,4 +67,148 @@ func TestLoadWithEmptyVerificationMode(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, cfg.VerificationMode, VerifyFull)
+}
+
+func TestTLSClientAuthUnpack(t *testing.T) {
+	tests := []struct {
+		val    string
+		expect TLSClientAuth
+		err    error
+	}{{
+		val:    "",
+		expect: TLSClientAuthNone,
+		err:    nil,
+	}, {
+		val:    "none",
+		expect: TLSClientAuthNone,
+		err:    nil,
+	}, {
+		val:    "optional",
+		expect: TLSClientAuthOptional,
+		err:    nil,
+	}, {
+		val:    "required",
+		expect: TLSClientAuthRequired,
+		err:    nil,
+	}, {
+		val: "invalid",
+		err: fmt.Errorf("unknown client authentication mode 'invalid'"),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.val, func(t *testing.T) {
+			var auth TLSClientAuth
+			err := auth.Unpack(tc.val)
+			assert.Equal(t, tc.expect, auth)
+			if tc.err != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTLSClientAuthMarshalText(t *testing.T) {
+	tests := []struct {
+		name   string
+		val    TLSClientAuth
+		expect []byte
+	}{{
+		name:   "no value",
+		expect: []byte("none"),
+	}, {
+		name:   "none",
+		val:    TLSClientAuthNone,
+		expect: []byte("none"),
+	}, {
+		name:   "optional",
+		val:    TLSClientAuthOptional,
+		expect: []byte("optional"),
+	}, {
+		name:   "required",
+		val:    TLSClientAuthRequired,
+		expect: []byte("required"),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := tc.val.MarshalText()
+			assert.Equal(t, tc.expect, p)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestLoadTLSClientAuth(t *testing.T) {
+	tests := []struct {
+		name   string
+		yaml   string
+		expect TLSClientAuth
+	}{{
+		name: "no client auth value",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key`,
+		expect: TLSClientAuthNone,
+	}, {
+		name: "client auth empty",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key
+    client_authentication: `,
+		expect: TLSClientAuthNone,
+	}, {
+		name: "client auth none",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key
+    client_authentication: none`,
+		expect: TLSClientAuthNone,
+	}, {
+		name: "client auth optional",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key
+    client_authentication: optional`,
+		expect: TLSClientAuthOptional,
+	}, {
+		name: "client auth required",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key
+    client_authentication: required`,
+		expect: TLSClientAuthRequired,
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := mustLoadServerConfig(t, tc.yaml)
+			assert.Equal(t, tc.expect, cfg.ClientAuth)
+		})
+	}
+
+	t.Run("invalid", func(t *testing.T) {
+		_, err := loadServerConfig(`client_authentication: invalid`)
+		assert.Error(t, err)
+	})
+}
+
+func loadServerConfig(yamlStr string) (*ServerConfig, error) {
+	var cfg ServerConfig
+	config, err := config.NewConfigWithYAML([]byte(yamlStr), "")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := config.Unpack(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func mustLoadServerConfig(t *testing.T, yamlStr string) *ServerConfig {
+	t.Helper()
+	cfg, err := loadServerConfig(yamlStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }

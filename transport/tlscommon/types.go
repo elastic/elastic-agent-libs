@@ -74,7 +74,7 @@ var tlsCipherSuites = map[string]CipherSuite{
 var tlsCipherSuitesInverse = make(map[CipherSuite]string, len(tlsCipherSuites))
 var tlsRenegotiationSupportTypesInverse = make(map[TLSRenegotiationSupport]string, len(tlsRenegotiationSupportTypes))
 var tlsVerificationModesInverse = make(map[TLSVerificationMode]string, len(tlsVerificationModes))
-var tlsClientAuthInverse = make(map[TLSClientAuth]string, len(tlsClientAuthTypes))
+var tlsClientAuthTypesInverse = make(map[TLSClientAuth]string, len(tlsClientAuthTypes))
 
 // Init creates a inverse representation of the values mapping.
 func init() {
@@ -91,7 +91,7 @@ func init() {
 	}
 
 	for name, t := range tlsClientAuthTypes {
-		tlsClientAuthInverse[t] = name
+		tlsClientAuthTypesInverse[t] = name
 	}
 }
 
@@ -185,14 +185,14 @@ func (m *TLSVerificationMode) Unpack(in interface{}) error {
 }
 
 func (m TLSClientAuth) String() string {
-	if s, ok := tlsClientAuthInverse[m]; ok {
+	if s, ok := tlsClientAuthTypesInverse[m]; ok {
 		return s
 	}
 	return unknownType
 }
 
 func (m TLSClientAuth) MarshalText() ([]byte, error) {
-	if s, ok := tlsClientAuthInverse[m]; ok {
+	if s, ok := tlsClientAuthTypesInverse[m]; ok {
 		return []byte(s), nil
 	}
 	return nil, fmt.Errorf("could not marshal '%+v' to text", m)
@@ -205,7 +205,7 @@ func (m *TLSClientAuth) Unpack(s string) error {
 	}
 	mode, found := tlsClientAuthTypes[s]
 	if !found {
-		return fmt.Errorf("unknown client authentication mode'%v'", s)
+		return fmt.Errorf("unknown client authentication mode '%v'", s)
 	}
 
 	*m = mode
