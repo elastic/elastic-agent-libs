@@ -183,7 +183,15 @@ func TestLoadTLSClientAuth(t *testing.T) {
     certificate: mycert.pem
     key: mycert.key
     certificate_authorities: [ca.crt]`,
-		expect: TLSClientAuthNone, // FIXME this test fails, it serialized to Required in CAs are present
+		expect: TLSClientAuthRequired, // NOTE Unpack will insert required if cas are present and no client_authentication is passed
+	}, {
+		name: "certificate_authorities is not null, client_authentication is none",
+		yaml: `
+    certificate: mycert.pem
+    key: mycert.key
+    client_authentication: none
+    certificate_authorities: [ca.crt]`,
+		expect: TLSClientAuthNone,
 	}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
