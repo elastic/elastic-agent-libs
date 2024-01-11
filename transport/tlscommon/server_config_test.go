@@ -58,7 +58,7 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 			CAs:        []string{"/path/to/ca.crt"},
 			ClientAuth: TLSClientAuthNone,
 		},
-		clientAuth: TLSClientAuthNone, // FIXME test fails, it serializes to required
+		clientAuth: TLSClientAuthNone,
 	}, {
 		name: "no ca and client auth none",
 		cfg: ServerConfig{
@@ -71,6 +71,7 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 		clientAuth: TLSClientAuthNone,
 	}}
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			p, err := yaml.Marshal(&tc.cfg)
 			require.NoError(t, err)
