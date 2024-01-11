@@ -142,48 +142,48 @@ func TestLoadTLSClientAuth(t *testing.T) {
 	tests := []struct {
 		name   string
 		yaml   string
-		expect TLSClientAuth
+		expect *TLSClientAuth
 	}{{
 		name: "no client auth value",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key`,
-		expect: TLSClientAuthNone,
+		expect: nil,
 	}, {
 		name: "client auth empty",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key
     client_authentication: `,
-		expect: TLSClientAuthNone,
+		expect: nil,
 	}, {
 		name: "client auth none",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key
     client_authentication: none`,
-		expect: TLSClientAuthNone,
+		expect: &none,
 	}, {
 		name: "client auth optional",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key
     client_authentication: optional`,
-		expect: TLSClientAuthOptional,
+		expect: &optional,
 	}, {
 		name: "client auth required",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key
     client_authentication: required`,
-		expect: TLSClientAuthRequired,
+		expect: &required,
 	}, {
 		name: "certificate_authorities is not null, no client_authentication",
 		yaml: `
     certificate: mycert.pem
     key: mycert.key
     certificate_authorities: [ca.crt]`,
-		expect: TLSClientAuthRequired, // NOTE Unpack will insert required if cas are present and no client_authentication is passed
+		expect: &required, // NOTE Unpack will insert required if cas are present and no client_authentication is passed
 	}, {
 		name: "certificate_authorities is not null, client_authentication is none",
 		yaml: `
@@ -191,12 +191,16 @@ func TestLoadTLSClientAuth(t *testing.T) {
     key: mycert.key
     client_authentication: none
     certificate_authorities: [ca.crt]`,
-		expect: TLSClientAuthNone,
+		expect: &none,
 	}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := mustLoadServerConfig(t, tc.yaml)
-			assert.Equal(t, tc.expect, cfg.ClientAuth)
+			if tc.expect == nil {
+				assert.Nil(t, cfg.ClientAuth)
+			} else {
+				assert.Equal(t, *tc.expect, *cfg.ClientAuth)
+			}
 		})
 	}
 

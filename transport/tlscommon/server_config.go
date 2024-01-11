@@ -34,7 +34,7 @@ type ServerConfig struct {
 	CAs              []string            `config:"certificate_authorities" yaml:"certificate_authorities,omitempty"`
 	Certificate      CertificateConfig   `config:",inline" yaml:",inline"`
 	CurveTypes       []tlsCurveType      `config:"curve_types" yaml:"curve_types,omitempty"`
-	ClientAuth       TLSClientAuth       `config:"client_authentication" yaml:"client_authentication"` //`none`, `optional` or `required`
+	ClientAuth       *TLSClientAuth      `config:"client_authentication" yaml:"client_authentication,omitempty"` //`none`, `optional` or `required`
 	CASha256         []string            `config:"ca_sha256" yaml:"ca_sha256,omitempty"`
 }
 
@@ -80,6 +80,11 @@ func LoadTLSServerConfig(config *ServerConfig) (*TLSConfig, error) {
 		certs = []tls.Certificate{*cert}
 	}
 
+	clientAuth := TLSClientAuthNone
+	if config.ClientAuth != nil {
+		clientAuth = *config.ClientAuth
+	}
+
 	// return config if no error occurred
 	return &TLSConfig{
 		Versions:         config.Versions,
@@ -88,7 +93,7 @@ func LoadTLSServerConfig(config *ServerConfig) (*TLSConfig, error) {
 		ClientCAs:        cas,
 		CipherSuites:     config.CipherSuites,
 		CurvePreferences: curves,
-		ClientAuth:       tls.ClientAuthType(config.ClientAuth),
+		ClientAuth:       tls.ClientAuthType(clientAuth),
 		CASha256:         config.CASha256,
 	}, nil
 }

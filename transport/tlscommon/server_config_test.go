@@ -24,11 +24,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// variables so we can use pointers in tests
+var (
+	required = TLSClientAuthRequired
+	optional = TLSClientAuthOptional
+	none     = TLSClientAuthNone
+)
+
 func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 	tests := []struct {
 		name       string
 		cfg        ServerConfig
-		clientAuth TLSClientAuth
+		clientAuth *TLSClientAuth
 	}{{
 		name: "with ca",
 		cfg: ServerConfig{
@@ -38,7 +45,7 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 			},
 			CAs: []string{"/path/to/ca.crt"},
 		},
-		clientAuth: TLSClientAuthNone, // NOTE the above config will be serialized with client_authentication: none
+		clientAuth: &required,
 	}, {
 		name: "no ca",
 		cfg: ServerConfig{
@@ -47,7 +54,7 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 				Key:         "/path/to/cert.key",
 			},
 		},
-		clientAuth: TLSClientAuthNone,
+		clientAuth: nil,
 	}, {
 		name: "with ca and client auth none",
 		cfg: ServerConfig{
@@ -56,9 +63,9 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 				Key:         "/path/to/cert.key",
 			},
 			CAs:        []string{"/path/to/ca.crt"},
-			ClientAuth: TLSClientAuthNone,
+			ClientAuth: &none,
 		},
-		clientAuth: TLSClientAuthNone,
+		clientAuth: &none,
 	}, {
 		name: "no ca and client auth none",
 		cfg: ServerConfig{
@@ -66,17 +73,22 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 				Certificate: "/path/to/cert.crt",
 				Key:         "/path/to/cert.key",
 			},
-			ClientAuth: TLSClientAuthNone,
+			ClientAuth: &none,
 		},
-		clientAuth: TLSClientAuthNone,
+		clientAuth: &none,
 	}}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			p, err := yaml.Marshal(&tc.cfg)
 			require.NoError(t, err)
+			t.Logf("YAML Config:\n%s", string(p))
 			scfg := mustLoadServerConfig(t, string(p))
-			require.Equal(t, tc.clientAuth, scfg.ClientAuth)
+			if tc.clientAuth == nil {
+				require.Nil(t, scfg.ClientAuth)
+			} else {
+				require.Equal(t, *tc.clientAuth, *scfg.ClientAuth)
+			}
 		})
 	}
 }
