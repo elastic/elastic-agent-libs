@@ -38,7 +38,7 @@ func Test_ServerConfig_Serialization_ClientAuth(t *testing.T) {
 			},
 			CAs: []string{"/path/to/ca.crt"},
 		},
-		clientAuth: TLSClientAuthRequired,
+		clientAuth: TLSClientAuthNone, // NOTE the above config will be serialized with client_authentication: none
 	}, {
 		name: "no ca",
 		cfg: ServerConfig{
