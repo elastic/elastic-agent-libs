@@ -1,15 +1,14 @@
 module github.com/elastic/elastic-agent-libs
 
-go 1.20
+go 1.21
 
 require (
 	github.com/Microsoft/go-winio v0.5.2
+	github.com/docker/go-units v0.5.0
 	github.com/elastic/go-structform v0.0.9
 	github.com/elastic/go-ucfg v0.8.5
 	github.com/fatih/color v1.13.0
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/hashicorp/go-multierror v1.1.1
-	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901
 	github.com/magefile/mage v1.13.0
 	github.com/mattn/go-colorable v0.1.12
 	github.com/mitchellh/hashstructure v1.1.0
@@ -21,9 +20,9 @@ require (
 	go.elastic.co/ecszap v1.0.1
 	go.elastic.co/go-licence-detector v0.5.0
 	go.uber.org/zap v1.21.0
-	golang.org/x/crypto v0.14.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/net v0.17.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/sys v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -36,9 +35,9 @@ require (
 	github.com/elastic/go-windows v1.0.1 // indirect
 	github.com/gobuffalo/here v0.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20200402202327-879cb1424de0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jcchavezs/porto v0.1.0 // indirect
+	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/markbates/pkger v0.17.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -55,7 +54,7 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	howett.net/plist v1.0.0 // indirect
