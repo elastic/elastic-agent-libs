@@ -89,6 +89,10 @@ func NewClientWithDialer(d Dialer, c Config, network, host string, defaultPort i
 }
 
 func (c *Client) Connect() error {
+	return c.ConnectContext(context.Background())
+}
+
+func (c *Client) ConnectContext(ctx context.Context) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -97,7 +101,7 @@ func (c *Client) Connect() error {
 		c.conn = nil
 	}
 
-	conn, err := c.dialer.DialContext(context.Background(), c.network, c.host)
+	conn, err := c.dialer.DialContext(ctx, c.network, c.host)
 	if err != nil {
 		return err
 	}
