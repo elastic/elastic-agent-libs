@@ -97,6 +97,9 @@ func ProxyDialer(log *logp.Logger, config *ProxyConfig, forward Dialer) (Dialer,
 		}
 
 		contextDialer, ok := dialer.(Dialer)
+		// This will never be executed because the proxy package always returns
+		// a ContextDialer but they didn't break the interface for backward compatibiliy.
+		// See golang/go#58376
 		if !ok {
 			contextDialer = DialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 				return dialer.Dial(network, address)
