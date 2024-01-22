@@ -236,13 +236,25 @@ func makeEventLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, er
 	return wrappedCore(core), nil
 }
 
-// WithFileOutput creates a new file output based on cfg and
-// replaces the previous one.
-func WithFileOutput(cfg Config) func(zapcore.Core) zapcore.Core {
-	out, err := makeFileOutput(cfg, cfg.Level.ZapLevel())
-	if err != nil {
-		L().Errorf("could not create file output: %s", err)
+// WithFileOrStderrOutput configures the logger with an output based on cfg.
+// If neither `cfg.ToFiles` nor `cfg.ToSdterr` are true, then a noop output
+// is created. If both are true, the file output has preference.
+func WithFileOrStderrOutput(cfg Config) func(zapcore.Core) zapcore.Core {
+	var out zapcore.Core
+	var err error
+
+	switch {
+	case cfg.ToFiles:
+		out, err = makeFileOutput(cfg, cfg.Level.ZapLevel())
+	case cfg.ToStderr:
+		out, err = makeStderrOutput(cfg, cfg.Level.ZapLevel())
+	default:
 		out = zapcore.NewNopCore()
+		err = errors.New("unexpected output type, only allowed outputs are 'file' and 'stderr'")
+	}
+
+	if err != nil {
+		L().Errorf("could not create log output: %s", err)
 	}
 
 	f := func(zapcore.Core) zapcore.Core {

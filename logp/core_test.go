@@ -281,7 +281,7 @@ func TestWithFileOutput(t *testing.T) {
 	// We do not call Configure here as we do not want to affect
 	// the global logger configuration
 	secondLogger := NewLogger(t.Name() + "-second")
-	secondLogger = secondLogger.WithOptions(zap.WrapCore(WithFileOutput(secondCfg)))
+	secondLogger = secondLogger.WithOptions(zap.WrapCore(WithFileOrStderrOutput(secondCfg)))
 	secondLogger.Info(expectedLogMessage)
 	if err := secondLogger.Sync(); err != nil {
 		t.Fatalf("could not sync log file from second logger: %s", err)
