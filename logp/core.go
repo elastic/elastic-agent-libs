@@ -141,7 +141,7 @@ func createLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error
 	case cfg.ToEventLog:
 		return makeEventLogOutput(cfg, enab)
 	case cfg.ToFiles:
-		return makeFileOutput(cfg, enab)
+		return MakeFileOutput(cfg, enab)
 	}
 
 	switch cfg.environment {
@@ -150,7 +150,7 @@ func createLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error
 	case MacOSServiceEnvironment, WindowsServiceEnvironment:
 		fallthrough
 	default:
-		return makeFileOutput(cfg, enab)
+		return MakeFileOutput(cfg, enab)
 	}
 }
 
@@ -245,7 +245,7 @@ func WithFileOrStderrOutput(cfg Config) func(zapcore.Core) zapcore.Core {
 
 	switch {
 	case cfg.ToFiles:
-		out, err = makeFileOutput(cfg, cfg.Level.ZapLevel())
+		out, err = MakeFileOutput(cfg, cfg.Level.ZapLevel())
 	case cfg.ToStderr:
 		out, err = makeStderrOutput(cfg, cfg.Level.ZapLevel())
 	default:
@@ -264,7 +264,7 @@ func WithFileOrStderrOutput(cfg Config) func(zapcore.Core) zapcore.Core {
 	return f
 }
 
-func makeFileOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error) {
+func MakeFileOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error) {
 	filename := paths.Resolve(paths.Logs, filepath.Join(cfg.Files.Path, cfg.LogFilename()))
 
 	rotator, err := file.NewFileRotator(filename,
