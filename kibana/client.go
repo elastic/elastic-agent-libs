@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -32,8 +33,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-
-	"github.com/joeshaw/multierror"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -82,14 +81,18 @@ func extractError(result []byte) error {
 		}
 	}
 	if err := json.Unmarshal(result, &kibanaResult); err != nil {
-		return err
+		return fmt.Errorf("error extracting JSON for error response: %w", err)
 	}
-	var errs multierror.Errors
+	var errs []error
 	if kibanaResult.Message != "" {
 		for _, err := range kibanaResult.Attributes.Objects {
 			errs = append(errs, fmt.Errorf("id: %s, message: %s", err.ID, err.Error.Message))
 		}
-		return fmt.Errorf("%s: %w", kibanaResult.Message, errs.Err())
+		if len(errs) == 0 {
+			return fmt.Errorf("%s", kibanaResult.Message)
+		}
+		return fmt.Errorf("%s: %w", kibanaResult.Message, errors.Join(errs...))
+
 	}
 	return nil
 }
@@ -114,11 +117,11 @@ func extractMessage(result []byte) error {
 	}
 
 	if !kibanaResult.Success {
-		var errs multierror.Errors
+		var errs []error
 		for _, err := range kibanaResult.Errors {
 			errs = append(errs, fmt.Errorf("error: %s, asset ID=%s; asset type=%s; references=%+v", err.Error.Type, err.ID, err.Type, err.Error.References))
 		}
-		return errs.Err()
+		return errors.Join(errs...)
 	}
 
 	return nil
@@ -139,7 +142,7 @@ func NewClientWithConfig(config *ClientConfig, binaryName, version, commit, buil
 	return NewClientWithConfigDefault(config, 5601, binaryName, version, commit, buildtime)
 }
 
-// NewClientWithConfig creates and returns a kibana client using the given config
+// NewClientWithConfigDefault creates and returns a kibana client using the given config
 func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryName, version, commit, buildtime string) (*Client, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -237,7 +240,7 @@ func (conn *Connection) Request(method, extraPath string,
 	return resp.StatusCode, result, retError
 }
 
-// Sends an application/json request to Kibana with appropriate kbn headers
+// Send an application/json request to Kibana with appropriate kbn headers
 func (conn *Connection) Send(method, extraPath string,
 	params url.Values, headers http.Header, body io.Reader) (*http.Response, error) {
 
@@ -342,6 +345,19 @@ func (client *Client) readVersion() error {
 // IgnoreVersion was set when creating the client.
 func (client *Client) GetVersion() version.V { return client.Version }
 
+// KibanaIsServerless returns true if we're talking to a serverless instance.
+// Right now we don't have an API to tell us if we're running against serverless or not, so this actual implementation is something of a hack.
+// see https://github.com/elastic/kibana/pull/164850
+func (client *Client) KibanaIsServerless() (bool, error) {
+	ret, _, err := client.Connection.Request("GET", "/api/saved_objects/_find", nil, nil, nil)
+	if ret > 300 && strings.Contains(err.Error(), "not available with the current configuration") {
+		return true, nil
+	} else if err != nil {
+		return false, fmt.Errorf("error checking serverless status: %w", err)
+	}
+	return false, nil
+}
+
 func (client *Client) ImportMultiPartFormFile(url string, params url.Values, filename string, contents string) error {
 	buf := &bytes.Buffer{}
 	w := multipart.NewWriter(buf)
@@ -360,9 +376,13 @@ func (client *Client) ImportMultiPartFormFile(url string, params url.Values, fil
 	}
 	w.Close()
 
-	headers := http.Header{}
-	headers.Add("Content-Type", w.FormDataContentType())
-	statusCode, response, err := client.Connection.Request("POST", url, params, headers, buf)
+	// On serverless, special header is required to talk to this endpoint
+	sendHeaders := http.Header{}
+	sendHeaders.Add("Content-Type", w.FormDataContentType())
+	if serverless, _ := client.KibanaIsServerless(); serverless {
+		sendHeaders.Add("x-elastic-internal-origin", "elastic-agent-libs")
+	}
+	statusCode, response, err := client.Connection.Request("POST", url, params, sendHeaders, buf)
 	if err != nil {
 		return fmt.Errorf("returned %d to import file: %w. Response: %s", statusCode, err, response)
 	}

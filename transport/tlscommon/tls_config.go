@@ -80,6 +80,9 @@ type TLSConfig struct {
 	// this certificate will be added to the list of trusted CAs (RootCAs) during the handshake.
 	CATrustedFingerprint string
 
+	// ServerName is the remote server we're connecting to. It can be a hostname or IP address.
+	ServerName string
+
 	// time returns the current time as the number of seconds since the epoch.
 	// If time is nil, TLS uses time.Now.
 	time func() time.Time
@@ -129,12 +132,25 @@ func (c *TLSConfig) BuildModuleClientConfig(host string) *tls.Config {
 			InsecureSkipVerify: true, //nolint: gosec // we are using our own verification for now
 			VerifyConnection: makeVerifyConnection(&TLSConfig{
 				Verification: VerifyFull,
+				ServerName:   host,
 			}),
 		}
 	}
 
-	config := c.ToConfig()
+	// Make a copy of c, because we're gonna mutate it after
+	// calling ToConfig. ToConfig calls a function that creates
+	// a closure that needs to access cc. A shallow copy is enough
+	// because all slice/pointer fields won't be modified.
+	cc := *c
+
+	// Keep a copy of the host (wheather an IP or hostname)
+	// for later validation. It is used by makeVerifyConnection
+	cc.ServerName = host
+	config := cc.ToConfig()
+
+	// config.ServerName does not verify IP addresses
 	config.ServerName = host
+
 	return config
 }
 
@@ -147,6 +163,7 @@ func (c *TLSConfig) BuildServerConfig(host string) *tls.Config {
 			InsecureSkipVerify: true, //nolint: gosec // we are using our own verification for now
 			VerifyConnection: makeVerifyServerConnection(&TLSConfig{
 				Verification: VerifyFull,
+				ServerName:   host,
 			}),
 		}
 	}
@@ -169,18 +186,23 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate) error {
 		// Compute digest for each certificate.
 		digest := sha256.Sum256(cert.Raw)
 
-		if bytes.Equal(digest[0:], fingerprint) {
-			logger.Info("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
-			// Make sure the fingerprint matches a CA certificate
-			if cert.IsCA {
-				if cfg.RootCAs == nil {
-					cfg.RootCAs = x509.NewCertPool()
-				}
-
-				cfg.RootCAs.AddCert(cert)
-				return nil
-			}
+		if !bytes.Equal(digest[0:], fingerprint) {
+			continue
 		}
+
+		// Make sure the fingerprint matches a CA certificate
+		if !cert.IsCA {
+			logger.Info("Certificate matching 'ca_trusted_fingerprint' found, but is not a CA certificate")
+			continue
+		}
+
+		logger.Info("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
+		if cfg.RootCAs == nil {
+			cfg.RootCAs = x509.NewCertPool()
+		}
+
+		cfg.RootCAs.AddCert(cert)
+		return nil
 	}
 
 	logger.Warn("no CA certificate matching the fingerprint")
@@ -188,8 +210,13 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate) error {
 }
 
 func makeVerifyConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
+	serverName := cfg.ServerName
+
 	switch cfg.Verification {
 	case VerifyFull:
+		// Cert is trusted by CA
+		// Hostname or IP matches the certificate
+		// tls.Config.InsecureSkipVerify  is set to true
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates); err != nil {
@@ -209,9 +236,13 @@ func makeVerifyConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
 			if err != nil {
 				return err
 			}
-			return verifyHostname(cs.PeerCertificates[0], cs.ServerName)
+
+			return verifyHostname(cs.PeerCertificates[0], serverName)
 		}
 	case VerifyCertificate:
+		// Cert is trusted by CA
+		// Does NOT validate hostname or IP addresses
+		// tls.Config.InsecureSkipVerify is set to true
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates); err != nil {
@@ -230,6 +261,12 @@ func makeVerifyConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
 			return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
 		}
 	case VerifyStrict:
+		// Cert is trusted by CA
+		// Hostname or IP matches the certificate
+		// Returns error if SNA is empty
+		// The whole validation is done by Go's standard library default
+		// SSL/TLS verification (tls.Config.InsecureSkipVerify is set to false)
+		// so we only need to check the pin
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -312,6 +349,9 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 	return nil
 }
 
+// verifyHostname verifies if the provided hostnmae matches
+// cert.DNSNames, cert.IPAddress (SNA)
+// For hostnames, if SNA is empty, validate the hostname against cert.Subject.CommonName
 func verifyHostname(cert *x509.Certificate, hostname string) error {
 	if hostname == "" {
 		return nil
@@ -328,6 +368,14 @@ func verifyHostname(cert *x509.Certificate, hostname string) error {
 				return nil
 			}
 		}
+
+		parsedCNIP := net.ParseIP(cert.Subject.CommonName)
+		if parsedCNIP != nil {
+			if parsedIP.Equal(parsedCNIP) {
+				return nil
+			}
+		}
+
 		return x509.HostnameError{Certificate: cert, Host: hostname}
 	}
 

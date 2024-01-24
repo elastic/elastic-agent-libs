@@ -19,23 +19,22 @@ package tlscommon
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
-
-	"github.com/joeshaw/multierror"
 
 	"github.com/elastic/elastic-agent-libs/config"
 )
 
 // ServerConfig defines the user configurable tls options for any TCP based service.
 type ServerConfig struct {
-	Enabled          *bool               `config:"enabled"`
-	VerificationMode TLSVerificationMode `config:"verification_mode"` // one of 'none', 'full', 'strict', 'certificate'
-	Versions         []TLSVersion        `config:"supported_protocols"`
-	CipherSuites     []CipherSuite       `config:"cipher_suites"`
-	CAs              []string            `config:"certificate_authorities"`
-	Certificate      CertificateConfig   `config:",inline"`
-	CurveTypes       []tlsCurveType      `config:"curve_types"`
-	ClientAuth       tlsClientAuth       `config:"client_authentication"` //`none`, `optional` or `required`
+	Enabled          *bool               `config:"enabled" yaml:"enabled,omitempty"`
+	VerificationMode TLSVerificationMode `config:"verification_mode" yaml:"verification_mode,omitempty"` // one of 'none', 'full', 'strict', 'certificate'
+	Versions         []TLSVersion        `config:"supported_protocols" yaml:"supported_protocols,omitempty"`
+	CipherSuites     []CipherSuite       `config:"cipher_suites" yaml:"cipher_suites,omitempty"`
+	CAs              []string            `config:"certificate_authorities" yaml:"certificate_authorities,omitempty"`
+	Certificate      CertificateConfig   `config:",inline" yaml:",inline"`
+	CurveTypes       []tlsCurveType      `config:"curve_types" yaml:"curve_types,omitempty"`
+	ClientAuth       *TLSClientAuth      `config:"client_authentication" yaml:"client_authentication,omitempty"` //`none`, `optional` or `required`
 	CASha256         []string            `config:"ca_sha256" yaml:"ca_sha256,omitempty"`
 }
 
@@ -46,7 +45,7 @@ func LoadTLSServerConfig(config *ServerConfig) (*TLSConfig, error) {
 		return nil, nil
 	}
 
-	fail := multierror.Errors{}
+	var fail []error
 	logFail := func(es ...error) {
 		for _, e := range es {
 			if e != nil {
@@ -72,13 +71,18 @@ func LoadTLSServerConfig(config *ServerConfig) (*TLSConfig, error) {
 	logFail(errs...)
 
 	// fail, if any error occurred when loading certificate files
-	if err = fail.Err(); err != nil {
-		return nil, err
+	if len(fail) != 0 {
+		return nil, errors.Join(fail...)
 	}
 
 	certs := make([]tls.Certificate, 0)
 	if cert != nil {
 		certs = []tls.Certificate{*cert}
+	}
+
+	clientAuth := TLSClientAuthNone
+	if config.ClientAuth != nil {
+		clientAuth = *config.ClientAuth
 	}
 
 	// return config if no error occurred
@@ -89,7 +93,7 @@ func LoadTLSServerConfig(config *ServerConfig) (*TLSConfig, error) {
 		ClientCAs:        cas,
 		CipherSuites:     config.CipherSuites,
 		CurvePreferences: curves,
-		ClientAuth:       tls.ClientAuthType(config.ClientAuth),
+		ClientAuth:       tls.ClientAuthType(clientAuth),
 		CASha256:         config.CASha256,
 	}, nil
 }
