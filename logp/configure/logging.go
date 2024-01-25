@@ -66,7 +66,7 @@ func Logging(beatName string, cfg *config.C) error {
 
 // LoggingWithOutputs builds a logp.Config based on the given common.Config and the specified
 // CLI flags along with the given outputs.
-func LoggingWithOutputs(beatName string, cfg *config.C, outputs ...zapcore.Core) error {
+func LoggingWithOutputs(beatName string, cfg, sensitiveCfg *config.C, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
 	if cfg != nil {
@@ -77,6 +77,28 @@ func LoggingWithOutputs(beatName string, cfg *config.C, outputs ...zapcore.Core)
 
 	applyFlags(&config)
 	return logp.ConfigureWithOutputs(config, outputs...)
+}
+
+func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
+	config := logp.DefaultConfig(environment)
+	config.Beat = beatName
+	if cfg != nil {
+		if err := cfg.Unpack(&config); err != nil {
+			return err
+		}
+	}
+
+	applyFlags(&config)
+	// HERE logp is called and creates a new output
+	// it needs to receive the sensitive core and the other cores all at once.
+	// the sensitive core needs to be its own thing
+
+	sensitiveLogpConfig := logp.Config{}
+	if err := sensitiveCfg.Unpack(&sensitiveLogpConfig); err != nil {
+		return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
+	}
+
+	return logp.ConfigureWithTypedOutputs(config, sensitiveLogpConfig, "log.type", "sensitive", outputs...)
 }
 
 func applyFlags(cfg *logp.Config) {

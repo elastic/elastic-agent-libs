@@ -21,7 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	golog "log"
 	"os"
 	"path/filepath"
@@ -65,13 +65,6 @@ type coreLogger struct {
 
 // Configure configures the logp package.
 func Configure(cfg Config) error {
-	return ConfigureWithOutputs(cfg)
-}
-
-// ConfigureWithOutputs XXX: is used by elastic-agent only (See file: x-pack/elastic-agent/pkg/core/logger/logger.go).
-// The agent requires that the output specified in the config object is configured and merged with the
-// logging outputs given.
-func ConfigureWithOutputs(cfg Config, outputs ...zapcore.Core) error {
 	var (
 		sink         zapcore.Core
 		observedLogs *observer.ObservedLogs
@@ -92,7 +85,7 @@ func ConfigureWithOutputs(cfg Config, outputs ...zapcore.Core) error {
 
 	// Default logger is always discard, debug level below will
 	// possibly re-enable it.
-	golog.SetOutput(ioutil.Discard)
+	golog.SetOutput(io.Discard)
 
 	// Enabled selectors when debug is enabled.
 	selectors := make(map[string]struct{}, len(cfg.Selectors))
@@ -117,8 +110,145 @@ func ConfigureWithOutputs(cfg Config, outputs ...zapcore.Core) error {
 		sink = selectiveWrapper(sink, selectors)
 	}
 
-	sink = newMultiCore(append(outputs, sink)...)
 	root := zap.New(sink, makeOptions(cfg)...)
+	storeLogger(&coreLogger{
+		selectors:    selectors,
+		rootLogger:   root,
+		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
+		logger:       newLogger(root, ""),
+		level:        level,
+		observedLogs: observedLogs,
+	})
+	return nil
+}
+
+// ConfigureWithOutputs XXX: is used by elastic-agent only (See file: x-pack/elastic-agent/pkg/core/logger/logger.go). //FIXME
+// The agent requires that the output specified in the config object is configured and merged with the
+// logging outputs given.
+// TODO: Rename to ConfigureWithTypedOutptus
+func ConfigureWithOutputs(defaultLoggerCfg Config, outputs ...zapcore.Core) error {
+	var (
+		sink         zapcore.Core
+		observedLogs *observer.ObservedLogs
+		err          error
+		level        zap.AtomicLevel
+	)
+
+	level = zap.NewAtomicLevelAt(defaultLoggerCfg.Level.ZapLevel())
+	// Build a single output (stderr has priority if more than one are enabled).
+	if defaultLoggerCfg.toObserver {
+		sink, observedLogs = observer.New(level)
+	} else {
+		sink, err = createLogOutput(defaultLoggerCfg, level)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to build log output: %w", err)
+	}
+
+	// Default logger is always discard, debug level below will
+	// possibly re-enable it.
+	golog.SetOutput(io.Discard)
+
+	// Enabled selectors when debug is enabled.
+	selectors := make(map[string]struct{}, len(defaultLoggerCfg.Selectors))
+	if defaultLoggerCfg.Level.Enabled(DebugLevel) && len(defaultLoggerCfg.Selectors) > 0 {
+		for _, sel := range defaultLoggerCfg.Selectors {
+			selectors[strings.TrimSpace(sel)] = struct{}{}
+		}
+
+		// Default to all enabled if no selectors are specified.
+		if len(selectors) == 0 {
+			selectors["*"] = struct{}{}
+		}
+
+		// Re-enable the default go logger output when either stdlog
+		// or all selector is enabled.
+		_, stdlogEnabled := selectors["stdlog"]
+		_, allEnabled := selectors["*"]
+		if stdlogEnabled || allEnabled {
+			golog.SetOutput(_defaultGoLog)
+		}
+
+		sink = selectiveWrapper(sink, selectors)
+	}
+
+	outputs = append(outputs, sink)
+	sink = newMultiCore(outputs...)
+
+	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
+	storeLogger(&coreLogger{
+		selectors:    selectors,
+		rootLogger:   root,
+		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
+		logger:       newLogger(root, ""),
+		level:        level,
+		observedLogs: observedLogs,
+	})
+	return nil
+}
+
+func ConfigureWithTypedOutputs(defaultLoggerCfg, sensitiveLoggerCfg Config, logKey, kind string, outputs ...zapcore.Core) error {
+	var (
+		sink         zapcore.Core
+		observedLogs *observer.ObservedLogs
+		err          error
+		level        zap.AtomicLevel
+	)
+
+	level = zap.NewAtomicLevelAt(defaultLoggerCfg.Level.ZapLevel())
+	// Build a single output (stderr has priority if more than one are enabled).
+	if defaultLoggerCfg.toObserver {
+		sink, observedLogs = observer.New(level)
+	} else {
+		sink, err = createLogOutput(defaultLoggerCfg, level)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to build log output: %w", err)
+	}
+
+	// Default logger is always discard, debug level below will
+	// possibly re-enable it.
+	golog.SetOutput(io.Discard)
+
+	// Enabled selectors when debug is enabled.
+	selectors := make(map[string]struct{}, len(defaultLoggerCfg.Selectors))
+	if defaultLoggerCfg.Level.Enabled(DebugLevel) && len(defaultLoggerCfg.Selectors) > 0 {
+		for _, sel := range defaultLoggerCfg.Selectors {
+			selectors[strings.TrimSpace(sel)] = struct{}{}
+		}
+
+		// Default to all enabled if no selectors are specified.
+		if len(selectors) == 0 {
+			selectors["*"] = struct{}{}
+		}
+
+		// Re-enable the default go logger output when either stdlog
+		// or all selector is enabled.
+		_, stdlogEnabled := selectors["stdlog"]
+		_, allEnabled := selectors["*"]
+		if stdlogEnabled || allEnabled {
+			golog.SetOutput(_defaultGoLog)
+		}
+
+		sink = selectiveWrapper(sink, selectors)
+	}
+
+	outputs = append(outputs, sink)
+	sink = newMultiCore(outputs...)
+
+	sensitiveCore, err := MakeFileOutput(sensitiveLoggerCfg, sensitiveLoggerCfg.Level.ZapLevel())
+	if err != nil {
+		return fmt.Errorf("could not create sensitive file output: %w", err)
+	}
+
+	sink = typedLoggerCore{
+		defaultCore:   sink,
+		sensitiveCore: sensitiveCore,
+		logKey:        logKey,
+		kind:          kind,
+	}
+
+	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
 	storeLogger(&coreLogger{
 		selectors:    selectors,
 		rootLogger:   root,
@@ -215,7 +345,7 @@ func makeStderrOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, erro
 }
 
 func makeDiscardOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error) {
-	discard := zapcore.AddSync(ioutil.Discard)
+	discard := zapcore.AddSync(io.Discard)
 	return newCore(buildEncoder(cfg), discard, enab), nil
 }
 
@@ -370,4 +500,59 @@ func (m multiCore) Sync() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// typedLoggerCore warps a zapcore.Core and only logs if the field `log.type`
+// matches `kind`.
+//
+// All other method calls are passed directly to the wrapped core.
+type typedLoggerCore struct {
+	sensitiveCore zapcore.Core
+	defaultCore   zapcore.Core
+	kind          string
+	logKey        string
+}
+
+func (s typedLoggerCore) Enabled(l zapcore.Level) bool {
+	return s.defaultCore.Enabled(l) || s.sensitiveCore.Enabled(l)
+}
+
+func (s typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
+	s.defaultCore = s.defaultCore.With(fields)
+	s.sensitiveCore = s.sensitiveCore.With(fields)
+	return s
+}
+
+func (s typedLoggerCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if s.defaultCore.Check(e, ce) != nil {
+		ce = ce.AddCore(e, s.defaultCore)
+	}
+	if s.sensitiveCore.Check(e, ce) != nil {
+		ce = ce.AddCore(e, s.sensitiveCore)
+	}
+
+	return ce
+}
+
+func (s typedLoggerCore) Sync() error {
+	defaultErr := s.defaultCore.Sync()
+	sensitiveErr := s.sensitiveCore.Sync()
+
+	if defaultErr != nil || sensitiveErr != nil {
+		return fmt.Errorf("error syncing loggers. DefaultCore: %s, sensitiveCore: %s", defaultErr, sensitiveErr)
+	}
+
+	return nil
+}
+
+func (s typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
+	for _, f := range fields {
+		if f.Key == s.logKey {
+			if f.String == s.kind {
+				return s.sensitiveCore.Write(e, fields)
+			}
+		}
+	}
+
+	return s.defaultCore.Write(e, fields)
 }
