@@ -79,6 +79,7 @@ func LoggingWithOutputs(beatName string, cfg, sensitiveCfg *config.C, outputs ..
 	return logp.ConfigureWithOutputs(config, outputs...)
 }
 
+// LoggingWithTypedOutputs applies some defaults then calls ConfigureWithTypedOutputs
 func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
@@ -89,9 +90,6 @@ func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKe
 	}
 
 	applyFlags(&config)
-	// HERE logp is called and creates a new output
-	// it needs to receive the sensitive core and the other cores all at once.
-	// the sensitive core needs to be its own thing
 
 	sensitiveLogpConfig := logp.Config{}
 	if err := sensitiveCfg.Unpack(&sensitiveLogpConfig); err != nil {
