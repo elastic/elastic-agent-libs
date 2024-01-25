@@ -91,7 +91,9 @@ func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKe
 
 	applyFlags(&config)
 
-	sensitiveLogpConfig := logp.Config{}
+	sensitiveLogpConfig := logp.DefaultConfig(environment)
+	sensitiveLogpConfig.ToFiles = true
+	sensitiveLogpConfig.ToStderr = false
 	if err := sensitiveCfg.Unpack(&sensitiveLogpConfig); err != nil {
 		return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
 	}
