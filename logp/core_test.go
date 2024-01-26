@@ -19,7 +19,7 @@ package logp
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	golog "log"
 	"os"
 	"path/filepath"
@@ -172,25 +172,25 @@ func TestDebugAllStdoutEnablesDefaultGoLogger(t *testing.T) {
 
 	err = DevelopmentSetup(WithSelectors("other"))
 	require.NoError(t, err)
-	assert.Equal(t, ioutil.Discard, golog.Writer())
+	assert.Equal(t, io.Discard, golog.Writer())
 }
 
 func TestNotDebugAllStdoutDisablesDefaultGoLogger(t *testing.T) {
 	err := DevelopmentSetup(WithSelectors("*"), WithLevel(InfoLevel))
 	require.NoError(t, err)
-	assert.Equal(t, ioutil.Discard, golog.Writer())
+	assert.Equal(t, io.Discard, golog.Writer())
 
 	err = DevelopmentSetup(WithSelectors("stdlog"), WithLevel(InfoLevel))
 	require.NoError(t, err)
-	assert.Equal(t, ioutil.Discard, golog.Writer())
+	assert.Equal(t, io.Discard, golog.Writer())
 
 	err = DevelopmentSetup(WithSelectors("*", "stdlog"), WithLevel(InfoLevel))
 	require.NoError(t, err)
-	assert.Equal(t, ioutil.Discard, golog.Writer())
+	assert.Equal(t, io.Discard, golog.Writer())
 
 	err = DevelopmentSetup(WithSelectors("other"), WithLevel(InfoLevel))
 	require.NoError(t, err)
-	assert.Equal(t, ioutil.Discard, golog.Writer())
+	assert.Equal(t, io.Discard, golog.Writer())
 }
 
 func TestLoggingECSFields(t *testing.T) {
