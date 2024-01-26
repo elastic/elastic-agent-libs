@@ -463,7 +463,7 @@ func (t typedLoggerCore) Sync() error {
 	typedErr := t.typedCore.Sync()
 
 	if defaultErr != nil || typedErr != nil {
-		return fmt.Errorf("error syncing loggert. DefaultCore: %s, typedCore: %s", defaultErr, typedErr)
+		return fmt.Errorf("error syncing loggert. DefaultCore: %w, typedCore: %w", defaultErr, typedErr)
 	}
 
 	return nil
