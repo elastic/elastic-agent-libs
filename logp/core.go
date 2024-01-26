@@ -448,11 +448,11 @@ func (t typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
 }
 
 func (t typedLoggerCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
-	if t.defaultCore.Check(e, ce) != nil {
-		ce = ce.AddCore(e, t.defaultCore)
-	}
-	if t.typedCore.Check(e, ce) != nil {
-		ce = ce.AddCore(e, t.typedCore)
+	// If either core can write an entry on this level, add the typedLoggerCore
+	// itself and let the write method decide which core to use and whether to
+	// write the entry.
+	if t.defaultCore.Enabled(e.Level) || t.typedCore.Enabled(e.Level) {
+		return ce.AddCore(e, t)
 	}
 
 	return ce
@@ -473,10 +473,21 @@ func (t typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 	for _, f := range fields {
 		if f.Key == t.key {
 			if f.String == t.value {
-				return t.typedCore.Write(e, fields)
+				if t.typedCore.Enabled(e.Level) {
+					return t.typedCore.Write(e, fields)
+				}
+
+				// We cannot write an entry of this log level, so we return nil
+				// because it is still a success
+				return nil
 			}
 		}
 	}
 
-	return t.defaultCore.Write(e, fields)
+	if t.defaultCore.Enabled(e.Level) {
+		t.defaultCore.Write(e, fields)
+	}
+
+	// No-Op is still a success
+	return nil
 }
