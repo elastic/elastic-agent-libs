@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestLogger(t *testing.T) {
@@ -217,7 +218,7 @@ func TestLoggingECSFields(t *testing.T) {
 	}
 }
 
-func TestWithFileOutput(t *testing.T) {
+func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 	var tempDir1, tempDir2 string
 	// Because of the way logp and zap work, when the test finishes, the log
 	// file is still open, this creates a problem on Windows because the
@@ -330,5 +331,51 @@ func TestWithFileOutput(t *testing.T) {
 	}
 	if logEntry["message"] != expectedLogMessage {
 		t.Fatalf("expecting 'message' to be '%s, got '%s' instead", expectedLogMessage, logEntry["message"])
+	}
+}
+
+func TestWithFileOrStderrOutput(t *testing.T) {
+	testCases := []struct {
+		name     string
+		toStderr bool
+		toFile   bool
+	}{
+		{
+			name:     "stderr output",
+			toStderr: true,
+			toFile:   false,
+		},
+		{
+			name:     "file output",
+			toStderr: false,
+			toFile:   true,
+		},
+	}
+
+	notEnabledLevels := []zapcore.Level{zapcore.InfoLevel, zapcore.DebugLevel}
+	enabledLevels := []zapcore.Level{zapcore.ErrorLevel, zapcore.PanicLevel}
+
+	for _, tc := range testCases {
+		cfg := DefaultConfig(DefaultEnvironment)
+		cfg.ToStderr = tc.toStderr
+		cfg.ToFiles = tc.toFile
+		cfg.Level = ErrorLevel
+
+		f := WithFileOrStderrOutput(cfg)
+		core := f(zapcore.NewNopCore())
+
+		t.Run(tc.name, func(t *testing.T) {
+			for _, l := range notEnabledLevels {
+				if core.Enabled(l) {
+					t.Errorf("level %s must not be enabled", l.String())
+				}
+			}
+
+			for _, l := range enabledLevels {
+				if !core.Enabled(l) {
+					t.Errorf("level %s must Vbe enabled", l.String())
+				}
+			}
+		})
 	}
 }
