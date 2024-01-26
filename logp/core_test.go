@@ -223,6 +223,8 @@ func TestWithFileOutput(t *testing.T) {
 	// file is still open, this creates a problem on Windows because the
 	// temporary directory cannot be removed if a file inside it is still
 	// open.
+	// See https://github.com/elastic/elastic-agent-libs/issues/179
+	// for more details
 	//
 	// To circumvent this problem on Windows we use os.MkdirTemp
 	// leaving it behind and delegating to the OS the responsibility
