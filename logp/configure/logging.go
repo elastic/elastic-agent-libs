@@ -66,7 +66,7 @@ func Logging(beatName string, cfg *config.C) error {
 
 // LoggingWithOutputs builds a logp.Config based on the given common.Config and the specified
 // CLI flags along with the given outputs.
-func LoggingWithOutputs(beatName string, cfg, sensitiveCfg *config.C, outputs ...zapcore.Core) error {
+func LoggingWithOutputs(beatName string, cfg, typedCfg *config.C, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
 	if cfg != nil {
@@ -80,7 +80,10 @@ func LoggingWithOutputs(beatName string, cfg, sensitiveCfg *config.C, outputs ..
 }
 
 // LoggingWithTypedOutputs applies some defaults then calls ConfigureWithTypedOutputs
-func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
+//
+// At the moment only the sensitive output is supported. It will log any entry that sets
+// `log.type: sensitive` to a different file.
+func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
 	if cfg != nil {
@@ -91,14 +94,14 @@ func LoggingWithTypedOutputs(beatName string, cfg, sensitiveCfg *config.C, logKe
 
 	applyFlags(&config)
 
-	sensitiveLogpConfig := logp.DefaultConfig(environment)
-	sensitiveLogpConfig.ToFiles = true
-	sensitiveLogpConfig.ToStderr = false
-	if err := sensitiveCfg.Unpack(&sensitiveLogpConfig); err != nil {
+	typedLogpConfig := logp.DefaultConfig(environment)
+	typedLogpConfig.ToFiles = true
+	typedLogpConfig.ToStderr = false
+	if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
 		return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
 	}
 
-	return logp.ConfigureWithTypedOutputs(config, sensitiveLogpConfig, "log.type", "sensitive", outputs...)
+	return logp.ConfigureWithTypedOutputs(config, typedLogpConfig, "log.type", "sensitive", outputs...)
 }
 
 func applyFlags(cfg *logp.Config) {
