@@ -19,11 +19,13 @@ package logp
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	golog "log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -378,4 +380,199 @@ func TestWithFileOrStderrOutput(t *testing.T) {
 			}
 		})
 	}
+}
+
+type writeSyncer struct {
+	strings.Builder
+}
+
+// Sync is a no-op
+func (w writeSyncer) Sync() error {
+	return nil
+}
+
+func TestTypedLoggerCore(t *testing.T) {
+	testCases := []struct {
+		name               string
+		entry              zapcore.Entry
+		field              zapcore.Field
+		expectedDefaultLog string
+		expectedTypedLog   string
+	}{
+		{
+			name:               "info level default logger",
+			entry:              zapcore.Entry{Level: zapcore.InfoLevel, Message: "msg"},
+			field:              skipField(),
+			expectedDefaultLog: `{"level":"info","msg":"msg"}`,
+		},
+		{
+			name:             "info level typed logger",
+			entry:            zapcore.Entry{Level: zapcore.InfoLevel, Message: "msg"},
+			field:            strField("log.type", "sensitive"),
+			expectedTypedLog: `{"level":"info","msg":"msg","log.type":"sensitive"}`,
+		},
+
+		{
+			name:  "debug level typed logger",
+			entry: zapcore.Entry{Level: zapcore.DebugLevel, Message: "msg"},
+			field: skipField(),
+		},
+		{
+			name:  "debug level typed logger",
+			entry: zapcore.Entry{Level: zapcore.DebugLevel, Message: "msg"},
+			field: strField("log.type", "sensitive"),
+		},
+	}
+
+	defaultWriter := writeSyncer{}
+	typedWriter := writeSyncer{}
+
+	cfg := zap.NewProductionEncoderConfig()
+	cfg.TimeKey = "" // remove the time to make the log entry consistent
+
+	defaultCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(cfg),
+		&defaultWriter,
+		zapcore.InfoLevel,
+	)
+
+	typedCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(cfg),
+		&typedWriter,
+		zapcore.InfoLevel,
+	)
+
+	core := typedLoggerCore{
+		defaultCore: defaultCore,
+		typedCore:   typedCore,
+		key:         "log.type",
+		value:       "sensitive",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name+" Check method", func(t *testing.T) {
+			defaultWriter.Reset()
+			typedWriter.Reset()
+
+			if ce := core.Check(tc.entry, nil); ce != nil {
+				ce.Write(tc.field)
+			}
+			defaultLog := strings.TrimSpace(defaultWriter.String())
+			typedLog := strings.TrimSpace(typedWriter.String())
+
+			if tc.expectedDefaultLog != defaultLog {
+				t.Errorf("expecting default log to be %q, got %q", tc.expectedDefaultLog, defaultLog)
+			}
+			if tc.expectedTypedLog != typedLog {
+				t.Errorf("expecting typed log to be %q, got %q", tc.expectedTypedLog, typedLog)
+			}
+		})
+
+		// The write method does not check the level, so we skip
+		// this test if the test case is a lower level
+		if tc.entry.Level < zapcore.InfoLevel {
+			continue
+		}
+
+		t.Run(tc.name+" Write method", func(t *testing.T) {
+			defaultWriter.Reset()
+			typedWriter.Reset()
+
+			core.Write(tc.entry, []zapcore.Field{tc.field})
+
+			defaultLog := strings.TrimSpace(defaultWriter.String())
+			typedLog := strings.TrimSpace(typedWriter.String())
+
+			if tc.expectedDefaultLog != defaultLog {
+				t.Errorf("expecting default log to be %q, got %q", tc.expectedDefaultLog, defaultLog)
+			}
+			if tc.expectedTypedLog != typedLog {
+				t.Errorf("expecting typed log to be %q, got %q", tc.expectedTypedLog, typedLog)
+			}
+
+		})
+	}
+
+	t.Run("method Enabled", func(t *testing.T) {
+		if !core.Enabled(zapcore.InfoLevel) {
+			t.Error("core.Enable must return true for level info")
+		}
+
+		if core.Enabled(zapcore.DebugLevel) {
+			t.Error("core.Enable must return true for level debug")
+		}
+	})
+}
+
+func TestTypedLoggerCoreSync(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		core := typedLoggerCore{
+			defaultCore: &ZapCoreMock{
+				SyncFunc: func() error { return nil },
+			},
+			typedCore: &ZapCoreMock{
+				SyncFunc: func() error { return nil },
+			},
+		}
+
+		if err := core.Sync(); err != nil {
+			t.Fatalf("Sync must not return an error: %s", err)
+		}
+	})
+
+	t.Run("both cores return error", func(t *testing.T) {
+		errMsg1 := "some error from defaultCore"
+		errMsg2 := "some error from typedCore"
+		core := typedLoggerCore{
+			defaultCore: &ZapCoreMock{
+				SyncFunc: func() error { return errors.New(errMsg1) },
+			},
+			typedCore: &ZapCoreMock{
+				SyncFunc: func() error { return errors.New(errMsg2) },
+			},
+		}
+
+		err := core.Sync()
+		if err == nil {
+			t.Fatal("Sync must return an error")
+		}
+
+		gotMsg := err.Error()
+		if !strings.Contains(gotMsg, errMsg1) {
+			t.Errorf("expecting %q in the error string: %q", errMsg1, gotMsg)
+		}
+		if !strings.Contains(gotMsg, errMsg2) {
+			t.Errorf("expecting %q in the error string: %q", errMsg2, gotMsg)
+		}
+	})
+}
+
+func TestTypedLoggerCoreWith(t *testing.T) {
+	defaultCoreMock := &ZapCoreMock{}
+	typedCoreMock := &ZapCoreMock{}
+
+	defaultCoreMock.WithFunc = func(fields []zapcore.Field) zapcore.Core { return defaultCoreMock }
+	typedCoreMock.WithFunc = func(fields []zapcore.Field) zapcore.Core { return typedCoreMock }
+	core := typedLoggerCore{
+		defaultCore: defaultCoreMock,
+		typedCore:   typedCoreMock,
+	}
+
+	field := strField("foo", "bar")
+	core.With([]zapcore.Field{field})
+
+	if core.defaultCore != defaultCoreMock {
+		t.Error("defaultCore must not change after call to With")
+	}
+	if core.typedCore != typedCoreMock {
+		t.Error("typedCore must not change after call to With")
+	}
+}
+
+func strField(key, val string) zapcore.Field {
+	return zapcore.Field{Type: zapcore.StringType, Key: key, String: val}
+}
+
+func skipField() zapcore.Field {
+	return zapcore.Field{Type: zapcore.SkipType}
 }

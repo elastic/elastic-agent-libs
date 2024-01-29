@@ -159,12 +159,12 @@ func ConfigureWithTypedOutputs(defaultLoggerCfg, typedLoggerCfg Config, key, val
 		return err
 	}
 
-	typedCore, err := makeFileOutput(typedLoggerCfg, typedLoggerCfg.Level.ZapLevel())
+	typedCore, err := makeFileOutput(typedLoggerCfg, level)
 	if err != nil {
 		return fmt.Errorf("could not create sensitive file output: %w", err)
 	}
 
-	sink = typedLoggerCore{
+	sink = &typedLoggerCore{
 		defaultCore: sink,
 		typedCore:   typedCore,
 		key:         key,
@@ -430,6 +430,9 @@ func (m multiCore) Sync() error {
 //
 // If `entry[key] == value` the typedCore is used, otherwise the
 // defaultCore  is used.
+// WARNING: The level of both cores must always be the same!
+// typedLoggerCore will only use the defaultCore level to decide
+// whether to log an entry or not
 type typedLoggerCore struct {
 	typedCore   zapcore.Core
 	defaultCore zapcore.Core
@@ -437,57 +440,43 @@ type typedLoggerCore struct {
 	key         string
 }
 
-func (t typedLoggerCore) Enabled(l zapcore.Level) bool {
-	return t.defaultCore.Enabled(l) || t.typedCore.Enabled(l)
+func (t *typedLoggerCore) Enabled(l zapcore.Level) bool {
+	return t.defaultCore.Enabled(l)
 }
 
-func (t typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
+func (t *typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
 	t.defaultCore = t.defaultCore.With(fields)
 	t.typedCore = t.typedCore.With(fields)
 	return t
 }
 
-func (t typedLoggerCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
-	// If either core can write an entry on this level, add the typedLoggerCore
-	// itself and let the write method decide which core to use and whether to
-	// write the entry.
-	if t.defaultCore.Enabled(e.Level) || t.typedCore.Enabled(e.Level) {
+func (t *typedLoggerCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if t.defaultCore.Enabled(e.Level) {
 		return ce.AddCore(e, t)
 	}
 
 	return ce
 }
 
-func (t typedLoggerCore) Sync() error {
+func (t *typedLoggerCore) Sync() error {
 	defaultErr := t.defaultCore.Sync()
 	typedErr := t.typedCore.Sync()
 
 	if defaultErr != nil || typedErr != nil {
-		return fmt.Errorf("error syncing loggert. DefaultCore: %w, typedCore: %w", defaultErr, typedErr)
+		return fmt.Errorf("error syncing logger. DefaultCore: '%w', typedCore: '%w'", defaultErr, typedErr)
 	}
 
 	return nil
 }
 
-func (t typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
+func (t *typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 	for _, f := range fields {
 		if f.Key == t.key {
 			if f.String == t.value {
-				if t.typedCore.Enabled(e.Level) {
-					return t.typedCore.Write(e, fields)
-				}
-
-				// We cannot write an entry of this log level, so we return nil
-				// because it is still a success
-				return nil
+				return t.typedCore.Write(e, fields)
 			}
 		}
 	}
 
-	if t.defaultCore.Enabled(e.Level) {
-		t.defaultCore.Write(e, fields)
-	}
-
-	// No-Op is still a success
-	return nil
+	return t.defaultCore.Write(e, fields)
 }
