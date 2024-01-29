@@ -478,6 +478,7 @@ func TestTypedLoggerCore(t *testing.T) {
 			defaultWriter.Reset()
 			typedWriter.Reset()
 
+			//nolint:errcheck // It's a test and the underlying writer never fails.
 			core.Write(tc.entry, []zapcore.Field{tc.field})
 
 			defaultLog := strings.TrimSpace(defaultWriter.String())
