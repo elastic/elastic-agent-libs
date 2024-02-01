@@ -18,9 +18,9 @@ steps:
     command:
       - ".buildkite/scripts/test.sh"
     agents:
-      image: golang:${GO_VERSION}
-      cpu: "8"
-      memory: "4G"
+      provider: gcp
+      imageProject: elastic-images-qa
+      image: family/platform-ingest-eng-prod-base-ubuntu-2204
     artifact_paths:
       - "junit-*.xml"
 
