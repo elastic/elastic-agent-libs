@@ -3,6 +3,11 @@ set -euo pipefail
 
 # addtional preparation for macos step
 if [[ "$BUILDKITE_PIPELINE_SLUG" == "elastic-agent-libs" && "$BUILDKITE_STEP_KEY" == "test-mac" ]]; then
+    echo "Golang version:"
+    version=$(cat .go-version)
+    export GO_VERSION="${version}"
+    echo "${GO_VERSION}"
+
     echo "--- prepare env"
     source .buildkite/scripts/pre-install-command.sh
     with_go ${GO_VERSION} ${SETUP_GVM_VERSION}
