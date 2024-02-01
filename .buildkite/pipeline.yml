@@ -36,8 +36,11 @@ steps:
 
   - label: ":mac: Test MacOS"
     key: test-mac
-    command:
-      - ".buildkite/scripts/test.sh junit-report-macos.xml"
+    command: |
+      echo "--- Pre install"
+      source .buildkite/scripts/pre-install-command.sh
+      with_go_junit_report
+      .buildkite/scripts/test.sh junit-report-macos.xml
     agents:
       provider: "orka"
       imagePrefix: generic-13-ventura-x64
