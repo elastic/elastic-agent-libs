@@ -10,7 +10,6 @@ steps:
       - ".buildkite/scripts/lint.sh"
     agents:
       provider: gcp
-      imageProject: elastic-images-qa
       image: family/platform-ingest-eng-prod-base-ubuntu-2204
     notify:
       - github_commit_status:
@@ -22,7 +21,6 @@ steps:
       - ".buildkite/scripts/test.sh"
     agents:
       provider: gcp
-      imageProject: elastic-images-qa
       image: family/platform-ingest-eng-prod-base-ubuntu-2204
     artifact_paths:
       - "junit-*.xml"
