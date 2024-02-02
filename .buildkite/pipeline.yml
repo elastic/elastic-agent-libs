@@ -12,6 +12,9 @@ steps:
       provider: gcp
       imageProject: elastic-images-qa
       image: family/platform-ingest-eng-prod-base-ubuntu-2204
+    notify:
+      - github_commit_status:
+          context: "Lint"
 
   - label: ":linux: Test Linux"
     key: test-lin
@@ -23,6 +26,9 @@ steps:
       image: family/platform-ingest-eng-prod-base-ubuntu-2204
     artifact_paths:
       - "junit-*.xml"
+    notify:
+      - github_commit_status:
+          context: "Test linux"
 
   - label: ":windows: Test Windows"
     key: test-win
@@ -33,6 +39,9 @@ steps:
       image: "family/ci-windows-2019"
     artifact_paths:
       - "junit-*.xml"
+    notify:
+      - github_commit_status:
+          context: "Test windows 2019"
 
   - label: ":mac: Test MacOS"
     key: test-mac
@@ -46,6 +55,9 @@ steps:
       imagePrefix: generic-13-ventura-x64
     artifact_paths:
       - "junit-*.xml"
+    notify:
+      - github_commit_status:
+          context: "Test MacOS"
 
   - label: ":junit: Junit annotate"
     plugins:
