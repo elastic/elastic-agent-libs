@@ -24,6 +24,7 @@ import (
 type selectiveCore struct {
 	allSelectors bool
 	selectors    map[string]struct{}
+	blockList    map[string]struct{}
 	core         zapcore.Core
 }
 
@@ -33,12 +34,24 @@ func HasSelector(selector string) bool {
 	return found
 }
 
-func selectiveWrapper(core zapcore.Core, selectors map[string]struct{}) zapcore.Core {
+// IsBlocked returns true if the given selector was explicitly set.
+func IsBlocked(selector string) bool {
+	l := loadLogger()
+	_, found := l.blockSelectors[selector]
+	return found
+}
+
+func selectiveWrapper(core zapcore.Core, selectors, blockList map[string]struct{}) zapcore.Core {
 	if len(selectors) == 0 {
 		return core
 	}
 	_, allSelectors := selectors["*"]
-	return &selectiveCore{selectors: selectors, core: core, allSelectors: allSelectors}
+	return &selectiveCore{
+		selectors:    selectors,
+		core:         core,
+		allSelectors: allSelectors,
+		blockList:    blockList,
+	}
 }
 
 // Enabled returns whether a given logging level is enabled when logging a
@@ -49,7 +62,7 @@ func (c *selectiveCore) Enabled(level zapcore.Level) bool {
 
 // With adds structured context to the Core.
 func (c *selectiveCore) With(fields []zapcore.Field) zapcore.Core {
-	return selectiveWrapper(c.core.With(fields), c.selectors)
+	return selectiveWrapper(c.core.With(fields), c.selectors, c.blockList)
 }
 
 // Check determines whether the supplied Entry should be logged (using the
@@ -61,6 +74,9 @@ func (c *selectiveCore) With(fields []zapcore.Field) zapcore.Core {
 func (c *selectiveCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	if c.Enabled(ent.Level) {
 		if ent.Level == zapcore.DebugLevel {
+			if _, blocked := c.blockList[ent.LoggerName]; blocked {
+				return ce
+			}
 			if c.allSelectors {
 				return ce.AddCore(ent, c)
 			} else if _, enabled := c.selectors[ent.LoggerName]; enabled {

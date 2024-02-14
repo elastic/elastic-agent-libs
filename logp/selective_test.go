@@ -54,3 +54,33 @@ func TestLoggerSelectors(t *testing.T) {
 	logs = ObserverLogs().TakeAll()
 	assert.Len(t, logs, 1)
 }
+
+func TestLoggerBlockList(t *testing.T) {
+	if err := DevelopmentSetup(WithBlockSelectors("tooVerbose", " sensitiveInformation "), ToObserverOutput()); err != nil {
+		t.Fatal(err)
+	}
+
+	require.True(t, IsBlocked("tooVerbose"))
+	require.True(t, IsBlocked("sensitiveInformation"))
+
+	doesNotLog := NewLogger("tooVerbose")
+	doesNotLog2 := NewLogger("sensitiveInformation")
+	willLog := NewLogger("notVerbose")
+
+	doesNotLog.Debug("is not logged")
+	logs := ObserverLogs().TakeAll()
+	assert.Len(t, logs, 0)
+
+	doesNotLog2.Debug("is not logged")
+	logs = ObserverLogs().TakeAll()
+	assert.Len(t, logs, 0)
+
+	// Selectors only apply to debug level logs.
+	willLog.Debug("is logged")
+	logs = ObserverLogs().TakeAll()
+	assert.Len(t, logs, 1)
+
+	willLog.Info("is also logged")
+	logs = ObserverLogs().TakeAll()
+	assert.Len(t, logs, 1)
+}
