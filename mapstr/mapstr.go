@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"strings"
 
@@ -152,13 +153,11 @@ func (m M) CopyFieldsTo(to M, key string) error {
 // Clone returns a copy of the M. It recursively makes copies of inner
 // maps.
 func (m M) Clone() M {
-	result := make(M, len(m))
+	result := maps.Clone(m)
 
 	for k := range m {
 		if innerMap, ok := tryToMapStr(m[k]); ok {
 			result[k] = innerMap.Clone()
-		} else {
-			result[k] = m[k]
 		}
 	}
 
