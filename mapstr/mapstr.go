@@ -153,6 +153,12 @@ func (m M) CopyFieldsTo(to M, key string) error {
 // Clone returns a copy of the M. It recursively makes copies of inner
 // maps.
 func (m M) Clone() M {
+	// clone to nil value should return a non nil pointer.
+	// as beats repo might be expecting non nil pointer for clone.
+	if m == nil {
+		return M{}
+	}
+
 	result := maps.Clone(m)
 
 	for k := range m {
