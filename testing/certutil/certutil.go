@@ -29,6 +29,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"time"
 )
 
@@ -55,6 +56,7 @@ func NewRootCA() (*ecdsa.PrivateKey, *x509.Certificate, Pair, error) {
 
 	rootTemplate := x509.Certificate{
 		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
 		SerialNumber: big.NewInt(1653),
 		Subject: pkix.Name{
 			Organization: []string{"Gallifrey"},
@@ -123,14 +125,14 @@ func NewRootCA() (*ecdsa.PrivateKey, *x509.Certificate, Pair, error) {
 // - the certificate and private key as a tls.Certificate
 //
 // If any error occurs during the generation process, a non-nil error is returned.
-func GenerateChildCert(name string, caPrivKey crypto.PrivateKey, caCert *x509.Certificate) (
-	[]byte, []byte, *tls.Certificate, error) {
+func GenerateChildCert(name string, ips []net.IP, caPrivKey crypto.PrivateKey, caCert *x509.Certificate) (*tls.Certificate, Pair, error) {
 
 	notBefore := time.Now()
 	notAfter := notBefore.Add(3 * time.Hour)
 
 	certTemplate := &x509.Certificate{
 		DNSNames:     []string{name},
+		IPAddresses:  ips,
 		SerialNumber: big.NewInt(1658),
 		Subject: pkix.Name{
 			Organization: []string{"Gallifrey"},
@@ -145,18 +147,18 @@ func GenerateChildCert(name string, caPrivKey crypto.PrivateKey, caCert *x509.Ce
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not create private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create private key: %w", err)
 	}
 
 	certRawBytes, err := x509.CreateCertificate(
 		rand.Reader, certTemplate, caCert, &privateKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not create CA: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create CA: %w", err)
 	}
 
 	privateKeyDER, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not marshal private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not marshal private key: %w", err)
 	}
 
 	// PEM private key
@@ -165,7 +167,7 @@ func GenerateChildCert(name string, caPrivKey crypto.PrivateKey, caCert *x509.Ce
 	err = pem.Encode(privateKeyBuff, &pem.Block{
 		Type: "EC PRIVATE KEY", Bytes: privateKeyDER})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not pem.Encode private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not pem.Encode private key: %w", err)
 	}
 	privateKeyPemBytes := privateKeyBuff.Bytes()
 
@@ -175,15 +177,40 @@ func GenerateChildCert(name string, caPrivKey crypto.PrivateKey, caCert *x509.Ce
 	err = pem.Encode(certBuff, &pem.Block{
 		Type: "CERTIFICATE", Bytes: certRawBytes})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not pem.Encode certificate: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not pem.Encode certificate: %w", err)
 	}
 	certPemBytes := certBuff.Bytes()
 
 	// TLS Certificate
 	tlsCert, err := tls.X509KeyPair(certPemBytes, privateKeyPemBytes)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not create key pair: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create key pair: %w", err)
 	}
 
-	return privateKeyPemBytes, certPemBytes, &tlsCert, nil
+	return &tlsCert, Pair{
+		Cert: certPemBytes,
+		Key:  privateKeyPemBytes,
+	}, nil
+}
+
+// NewRootAndChildCerts returns a root CA and a child certificate and their keys
+// for "localhost" and "127.0.0.1".
+func NewRootAndChildCerts() (Pair, Pair, error) {
+	rootKey, rootCACert, rootPair, err := NewRootCA()
+	if err != nil {
+		return Pair{}, Pair{}, fmt.Errorf("could not generate root CA: %w", err)
+	}
+
+	_, childPair, err :=
+		GenerateChildCert(
+			"localhost",
+			[]net.IP{net.ParseIP("127.0.0.1")},
+			rootKey,
+			rootCACert)
+	if err != nil {
+		return Pair{}, Pair{}, fmt.Errorf(
+			"could not generate child TLS certificate CA: %w", err)
+	}
+
+	return rootPair, childPair, nil
 }

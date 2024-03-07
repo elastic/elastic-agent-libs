@@ -23,18 +23,26 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/elastic/elastic-agent-libs/testing/certutil"
 )
 
 func main() {
-	var caPath, caKeyPath, dest, name string
-	flag.StringVar(&caPath, "ca", "", "File path for CA in PEM format")
-	flag.StringVar(&caKeyPath, "ca-key", "", "File path for the CA key in PEM format")
-	flag.StringVar(&caKeyPath, "dest", "", "Directory to save the generated files")
-	flag.StringVar(&name, "name", "", "used as \"distinguished name\" and \"Subject Alternate Name values\" for the child certificate")
+	var caPath, caKeyPath, dest, name, ipList string
+	flag.StringVar(&caPath, "ca", "",
+		"File path for CA in PEM format")
+	flag.StringVar(&caKeyPath, "ca-key", "",
+		"File path for the CA key in PEM format")
+	flag.StringVar(&caKeyPath, "dest", "",
+		"Directory to save the generated files")
+	flag.StringVar(&name, "name", "localhost",
+		"used as \"distinguished name\" and \"Subject Alternate Name values\" for the child certificate")
+	flag.StringVar(&ipList, "ips", "127.0.0.1",
+		"a comma separated list of IP addresses for the child certificate")
 	flag.Parse()
 
 	if caPath == "" && caKeyPath != "" || caPath != "" && caKeyPath == "" {
@@ -45,11 +53,10 @@ func main() {
 
 	}
 
-	if name == "" {
-		flag.Usage()
-		fmt.Fprintf(flag.CommandLine.Output(),
-			"name cannot be empty: %s\n",
-			name)
+	ips := strings.Split(ipList, ",")
+	var netIPs []net.IP
+	for _, ip := range ips {
+		netIPs = append(netIPs, net.ParseIP(ip))
 	}
 
 	var rootCert *x509.Certificate
@@ -67,16 +74,12 @@ func main() {
 		rootKey, rootCert = loadCA(caPath, caKeyPath)
 	}
 
-	childCertPem, childKeyPem, _, err := certutil.GenerateChildCert(
-		name, rootKey, rootCert)
+	_, childPair, err := certutil.GenerateChildCert(name, netIPs, rootKey, rootCert)
 	if err != nil {
 		panic(fmt.Errorf("error generating child certificate: %w", err))
 	}
 
-	savePair(dest, name, certutil.Pair{
-		Cert: childCertPem,
-		Key:  childKeyPem,
-	})
+	savePair(dest, name, childPair)
 }
 
 func loadCA(caPath string, keyPath string) (crypto.PrivateKey, *x509.Certificate) {
