@@ -93,7 +93,6 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 // and decrypt it with the provided password and  return the raw content.
 func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 	pass := []byte(passphrase)
-	var blocks []*pem.Block
 
 	r, err := NewPEMReader(s)
 	if err != nil {
@@ -106,49 +105,49 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 		return nil, err
 	}
 
+	// decrypted, PEM encoded blocks
+	buffer := bytes.NewBuffer(nil)
+
 	for len(content) > 0 {
 		var block *pem.Block
 
 		block, content = pem.Decode(content)
-		if block == nil {
-			if len(blocks) == 0 {
-				return nil, errors.New("no pem file")
-			}
-			break
-		}
 
 		switch {
-		case x509.IsEncryptedPEMBlock(block): //nolint: staticcheck // deprecated, we have to get rid of it
+		case x509.IsEncryptedPEMBlock(block): // nolint: staticcheck // deprecated, we have to get rid of it
 			block, err := decryptPKCS1Key(*block, pass)
 			if err != nil {
 				log.Errorf("Dropping encrypted pem block with private key, block type '%s': %s", block.Type, err)
 				continue
 			}
-			blocks = append(blocks, &block)
+			// it's already a PEM block.
+			buffer.Write(block.Bytes)
 		case block.Type == "ENCRYPTED PRIVATE KEY":
 			block, err := decryptPKCS8Key(*block, pass)
 			if err != nil {
 				log.Errorf("Dropping encrypted pem block with private key, block type '%s', could not decypt as PKCS8: %s", block.Type, err)
 				continue
 			}
-			blocks = append(blocks, &block)
+			// not in PEM format, encode it.
+			err = pem.Encode(buffer, &block)
+			if err != nil {
+				log.Errorf("Dropping encrypted pem block with private key, block type '%s' could not PEM encode it: %s", block.Type, err)
+				continue
+			}
 		default:
-			blocks = append(blocks, block)
+			// not encrypted and not in PEM format, encode it.
+			err = pem.Encode(buffer, block)
+			if err != nil {
+				log.Errorf("Dropping plain pem block with private key, block type '%s' could not PEM encode it: %s", block.Type, err)
+				continue
+			}
 		}
 	}
 
-	if len(blocks) == 0 {
+	if buffer.Len() == 0 {
 		return nil, errors.New("no PEM blocks")
 	}
 
-	// re-encode available, decrypted blocks
-	buffer := bytes.NewBuffer(nil)
-	for _, block := range blocks {
-		err := pem.Encode(buffer, block)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return buffer.Bytes(), nil
 }
 
@@ -159,13 +158,14 @@ func decryptPKCS1Key(block pem.Block, passphrase []byte) (pem.Block, error) {
 
 	// Note, decrypting pem might succeed even with wrong password, but
 	// only noise will be stored in buffer in this case.
-	buffer, err := x509.DecryptPEMBlock(&block, passphrase) //nolint: staticcheck // deprecated, we have to get rid of it
+	buffer, err := x509.DecryptPEMBlock(&block, passphrase) // nolint: staticcheck // deprecated, we have to get rid of it
 	if err != nil {
 		return block, fmt.Errorf("failed to decrypt pem: %w", err)
 	}
 
-	// DEK-Info contains encryption info. Remove header to mark block as
-	// unencrypted.
+	// Proc-Type and DEK-Info contain encryption information.
+	// Remove header to mark block as unencrypted.
+	delete(block.Headers, "Proc-Type")
 	delete(block.Headers, "DEK-Info")
 	block.Bytes = buffer
 
