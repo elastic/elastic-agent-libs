@@ -62,11 +62,9 @@ func NewRootCA() (*ecdsa.PrivateKey, *x509.Certificate, Pair, error) {
 			Organization: []string{"Gallifrey"},
 			CommonName:   "localhost",
 		},
-		NotBefore: notBefore,
-		NotAfter:  notAfter,
-		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
