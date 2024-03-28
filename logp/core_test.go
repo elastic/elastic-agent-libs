@@ -250,7 +250,7 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 	}
 
 	expectedLogMessage := "this is a log message"
-	expectedLogLogger := t.Name() + "-second"
+	expectedLogLoggerName := t.Name() + "-second"
 
 	// We follow the same approach as on a Beat, first the logger
 	// (always global) is configured and used, then we instantiate
@@ -283,16 +283,26 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 	secondCfg.Files.Name = "test-log-file"
 	secondCfg.Files.Path = tempDir2
 
+	// Create a new output for the second logger using the same level
+	// as the global logger
+	out, err := createLogOutput(secondCfg, loggerCfg.Level.ZapLevel())
+	if err != nil {
+		t.Fatalf("could not create output for second config")
+	}
+	outCore := func(zapcore.Core) zapcore.Core { return out }
+
 	// We do not call Configure here as we do not want to affect
 	// the global logger configuration
 	secondLogger := NewLogger(t.Name() + "-second")
-	secondLogger = secondLogger.WithOptions(zap.WrapCore(WithFileOrStderrOutput(secondCfg)))
+	secondLogger = secondLogger.WithOptions(zap.WrapCore(outCore))
 	secondLogger.Info(expectedLogMessage)
 	if err := secondLogger.Sync(); err != nil {
 		t.Fatalf("could not sync log file from second logger: %s", err)
 	}
 
-	// Writes again with the first logger to ensure it has not been affected
+	// TODO: Refactor it into a function and use to assert both loggers worked as expected
+
+	// Write again with the first logger to ensure it has not been affected
 	// by the new configuration on the second logger.
 	logger.Info("not the message we want")
 	if err := logger.Sync(); err != nil {
@@ -328,57 +338,11 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 	}
 
 	// Ensure a couple of fields exist
-	if logEntry["log.logger"] != expectedLogLogger {
-		t.Fatalf("expecting 'log.logger' to be '%s', got '%s' instead", expectedLogLogger, logEntry["log.logger"])
+	if logEntry["log.logger"] != expectedLogLoggerName {
+		t.Fatalf("expecting 'log.logger' to be '%s', got '%s' instead", expectedLogLoggerName, logEntry["log.logger"])
 	}
 	if logEntry["message"] != expectedLogMessage {
 		t.Fatalf("expecting 'message' to be '%s, got '%s' instead", expectedLogMessage, logEntry["message"])
-	}
-}
-
-func TestWithFileOrStderrOutput(t *testing.T) {
-	testCases := []struct {
-		name     string
-		toStderr bool
-		toFile   bool
-	}{
-		{
-			name:     "stderr output",
-			toStderr: true,
-			toFile:   false,
-		},
-		{
-			name:     "file output",
-			toStderr: false,
-			toFile:   true,
-		},
-	}
-
-	notEnabledLevels := []zapcore.Level{zapcore.InfoLevel, zapcore.DebugLevel}
-	enabledLevels := []zapcore.Level{zapcore.ErrorLevel, zapcore.PanicLevel}
-
-	for _, tc := range testCases {
-		cfg := DefaultConfig(DefaultEnvironment)
-		cfg.ToStderr = tc.toStderr
-		cfg.ToFiles = tc.toFile
-		cfg.Level = ErrorLevel
-
-		f := WithFileOrStderrOutput(cfg)
-		core := f(zapcore.NewNopCore())
-
-		t.Run(tc.name, func(t *testing.T) {
-			for _, l := range notEnabledLevels {
-				if core.Enabled(l) {
-					t.Errorf("level %s must not be enabled", l.String())
-				}
-			}
-
-			for _, l := range enabledLevels {
-				if !core.Enabled(l) {
-					t.Errorf("level %s must Vbe enabled", l.String())
-				}
-			}
-		})
 	}
 }
 

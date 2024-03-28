@@ -81,8 +81,7 @@ func LoggingWithOutputs(beatName string, cfg, typedCfg *config.C, outputs ...zap
 
 // LoggingWithTypedOutputs applies some defaults then calls ConfigureWithTypedOutputs
 //
-// At the moment only the sensitive output is supported. It will log any entry that sets
-// `log.type: sensitive` to a different file.
+// TODO (Tiago): Do we even need this?
 func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
@@ -101,7 +100,7 @@ func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, k
 		return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
 	}
 
-	return logp.ConfigureWithTypedOutputs(config, typedLogpConfig, "log.type", "sensitive", outputs...)
+	return logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
 }
 
 func applyFlags(cfg *logp.Config) {
