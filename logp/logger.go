@@ -52,8 +52,10 @@ func NewLogger(selector string, options ...LogOption) *Logger {
 	return newLogger(loadLogger().rootLogger, selector, options...)
 }
 
-// NewInMemory returns a new in-memory logger along with the buffer to which i
-// logs.
+// NewInMemory returns a new in-memory logger along with the buffer to which it
+// logs. It's goroutine safe, but operating directly on the returned buffer is not.
+// This logger is primary intended for short and simple use-cases such as printing
+// the full logs only when an operation fails.
 // encCfg configures the log format, use logp.ConsoleEncoderConfig for console
 // format, logp.JSONEncoderConfig for JSON or any other valid zapcore.EncoderConfig.
 func NewInMemory(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes.Buffer) {
@@ -65,7 +67,7 @@ func NewInMemory(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes
 
 	core := zapcore.NewCore(
 		encoder,
-		zapcore.AddSync(&buff),
+		zapcore.Lock(zapcore.AddSync(&buff)),
 		zap.NewAtomicLevelAt(zap.DebugLevel))
 	ecszap.ECSCompatibleEncoderConfig(ConsoleEncoderConfig())
 
