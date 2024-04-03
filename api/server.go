@@ -65,6 +65,17 @@ func New(log *logp.Logger, mux *http.ServeMux, c *config.C) (*Server, error) {
 	return &Server{mux: mux, srv: srv, l: l, config: cfg, log: log.Named("api")}, nil
 }
 
+// NewFromConfig creates a new API server from the given Config object
+func NewFromConfig(log *logp.Logger, mux *http.ServeMux, cfg Config) (*Server, error) {
+	srv := &http.Server{ReadHeaderTimeout: cfg.Timeout}
+	l, err := makeListener(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Server{mux: mux, srv: srv, l: l, config: cfg, log: log.Named("api")}, nil
+}
+
 // AddRoute adds a route to the server mux
 func (s *Server) AddRoute(path string, handler HandlerFunc) {
 	s.mux.HandleFunc(path, handler)
