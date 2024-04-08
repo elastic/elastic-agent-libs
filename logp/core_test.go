@@ -18,6 +18,7 @@
 package logp
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"io"
@@ -249,8 +250,8 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 		tempDir2 = t.TempDir()
 	}
 
-	expectedLogMessage := "this is a log message"
-	expectedLogLoggerName := t.Name() + "-second"
+	secondLoggerMessage := "this is a log message"
+	secondLoggerName := t.Name() + "-second"
 
 	// We follow the same approach as on a Beat, first the logger
 	// (always global) is configured and used, then we instantiate
@@ -268,10 +269,13 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 	if err := Configure(loggerCfg); err != nil {
 		t.Errorf("could not initialise logger: %s", err)
 	}
-	logger := L()
 
 	// Create a log entry just to "test" the logger
-	logger.Info("not the message we want")
+	firstLoggerName := "default-beat-logger"
+	firstLoggerMessage := "not the message we want"
+
+	logger := L().Named(firstLoggerName)
+	logger.Info(firstLoggerMessage)
 	if err := logger.Sync(); err != nil {
 		t.Fatalf("could not sync log file from fist logger: %s", err)
 	}
@@ -293,56 +297,76 @@ func TestCreatingNewLoggerWithDifferentOutput(t *testing.T) {
 
 	// We do not call Configure here as we do not want to affect
 	// the global logger configuration
-	secondLogger := NewLogger(t.Name() + "-second")
+	secondLogger := NewLogger(secondLoggerName)
 	secondLogger = secondLogger.WithOptions(zap.WrapCore(outCore))
-	secondLogger.Info(expectedLogMessage)
+	secondLogger.Info(secondLoggerMessage)
 	if err := secondLogger.Sync(); err != nil {
 		t.Fatalf("could not sync log file from second logger: %s", err)
 	}
 
-	// TODO: Refactor it into a function and use to assert both loggers worked as expected
-
 	// Write again with the first logger to ensure it has not been affected
 	// by the new configuration on the second logger.
-	logger.Info("not the message we want")
+	logger.Info(firstLoggerMessage)
 	if err := logger.Sync(); err != nil {
 		t.Fatalf("could not sync log file from fist logger: %s", err)
 	}
 
+	// Ensure the second logger is working as expected
+	assertKVinLogentry(t, tempDir2, "log.logger", secondLoggerName)
+	assertKVinLogentry(t, tempDir2, "message", secondLoggerMessage)
+
+	// Ensure the first logger is working as expected
+	assertKVinLogentry(t, tempDir1, "log.logger", firstLoggerName)
+	assertKVinLogentry(t, tempDir1, "message", firstLoggerMessage)
+}
+
+func assertKVinLogentry(t *testing.T, dir, key, value string) {
+	t.Helper()
+
 	// Find the log file. The file name gets the date added, so we list the
 	// directory and ensure there is only one file there.
-	files, err := os.ReadDir(tempDir2)
+	files, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("could not read temporary directory '%s': %s", tempDir2, err)
+		t.Fatalf("could not read temporary directory '%s': %s", dir, err)
 	}
 
 	// If there is more than one file, list all files
 	// and fail the test.
 	if len(files) != 1 {
-		t.Errorf("found %d files in '%s', there must be only one", len(files), tempDir2)
-		t.Errorf("Files in '%s':", tempDir2)
+		t.Errorf("found %d files in '%s', there must be only one", len(files), dir)
+		t.Errorf("Files in '%s':", dir)
 		for _, f := range files {
 			t.Error(f.Name())
 		}
 		t.FailNow()
 	}
 
-	logData, err := os.ReadFile(filepath.Join(tempDir2, files[0].Name()))
+	fullPath := filepath.Join(dir, files[0].Name())
+	f, err := os.Open(fullPath)
 	if err != nil {
-		t.Fatalf("could not read log file: %s", err)
+		t.Fatalf("could not open '%s' for reading: %s", fullPath, err)
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	lines := []string{}
+	for sc.Scan() {
+		logData := sc.Bytes()
+
+		logEntry := map[string]any{}
+		if err := json.Unmarshal(logData, &logEntry); err != nil {
+			t.Fatalf("could not read log entry as JSON. Log entry: '%s'", string(logData))
+		}
+
+		if logEntry[key] == value {
+			return
+		}
+		lines = append(lines, string(logData))
 	}
 
-	logEntry := map[string]any{}
-	if err := json.Unmarshal(logData, &logEntry); err != nil {
-		t.Fatalf("could not read log entry as JSON. Log entry: '%s'", string(logData))
-	}
-
-	// Ensure a couple of fields exist
-	if logEntry["log.logger"] != expectedLogLoggerName {
-		t.Fatalf("expecting 'log.logger' to be '%s', got '%s' instead", expectedLogLoggerName, logEntry["log.logger"])
-	}
-	if logEntry["message"] != expectedLogMessage {
-		t.Fatalf("expecting 'message' to be '%s, got '%s' instead", expectedLogMessage, logEntry["message"])
+	t.Errorf("could not find [%s]='%s' in any log line.", key, value)
+	t.Log("Log lines:")
+	for _, l := range lines {
+		t.Log(l)
 	}
 }
 
