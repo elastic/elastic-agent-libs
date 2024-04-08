@@ -66,7 +66,7 @@ func Logging(beatName string, cfg *config.C) error {
 
 // LoggingWithOutputs builds a logp.Config based on the given common.Config and the specified
 // CLI flags along with the given outputs.
-func LoggingWithOutputs(beatName string, cfg, typedCfg *config.C, outputs ...zapcore.Core) error {
+func LoggingWithOutputs(beatName string, cfg *config.C, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
 	if cfg != nil {
