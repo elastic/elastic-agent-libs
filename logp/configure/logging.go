@@ -80,8 +80,6 @@ func LoggingWithOutputs(beatName string, cfg, typedCfg *config.C, outputs ...zap
 }
 
 // LoggingWithTypedOutputs applies some defaults then calls ConfigureWithTypedOutputs
-//
-// TODO (Tiago): Do we even need this?
 func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
@@ -93,11 +91,22 @@ func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, k
 
 	applyFlags(&config)
 
-	typedLogpConfig := logp.DefaultConfig(environment)
-	typedLogpConfig.ToFiles = true
-	typedLogpConfig.ToStderr = false
-	if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
-		return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
+	typedLogpConfig := logp.DefaultEventConfig(environment)
+	defaultName := typedLogpConfig.Files.Name
+	typedLogpConfig.Beat = beatName
+	if typedCfg != nil {
+		if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
+			return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
+		}
+	}
+
+	// Make sure we're always running on the same log level
+	typedLogpConfig.Level = config.Level
+	typedLogpConfig.Selectors = config.Selectors
+
+	// If the name has not been configured, make it {beatName}-events-data
+	if typedLogpConfig.Files.Name == defaultName {
+		typedLogpConfig.Files.Name = beatName + "-events-data"
 	}
 
 	return logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
