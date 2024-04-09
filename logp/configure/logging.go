@@ -96,7 +96,7 @@ func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, k
 	typedLogpConfig.Beat = beatName
 	if typedCfg != nil {
 		if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
-			return fmt.Errorf("cannot unpack sensitiveCfg: %w", err)
+			return fmt.Errorf("cannot unpack typed output config: %w", err)
 		}
 	}
 

@@ -43,9 +43,13 @@ func (t *typedLoggerCore) Enabled(l zapcore.Level) bool {
 }
 
 func (t *typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
-	t.defaultCore = t.defaultCore.With(fields)
-	t.typedCore = t.typedCore.With(fields)
-	return t
+	newCore := typedLoggerCore{
+		defaultCore: t.defaultCore.With(fields),
+		typedCore:   t.typedCore.With(fields),
+		key:         t.key,
+		value:       t.value,
+	}
+	return &newCore
 }
 
 func (t *typedLoggerCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
