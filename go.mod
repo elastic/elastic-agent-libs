@@ -37,7 +37,6 @@ require (
 	github.com/google/licenseclassifier v0.0.0-20200402202327-879cb1424de0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jcchavezs/porto v0.1.0 // indirect
-	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/markbates/pkger v0.17.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
