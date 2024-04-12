@@ -74,7 +74,9 @@ func TestTypedCoreSelectors(t *testing.T) {
 	eventsCfg.ToFiles = defaultCfg.ToFiles
 	eventsCfg.Selectors = defaultCfg.Selectors
 
-	ConfigureWithTypedOutput(defaultCfg, eventsCfg, "log.type", "event")
+	if err := ConfigureWithTypedOutput(defaultCfg, eventsCfg, "log.type", "event"); err != nil {
+		t.Fatalf("could not configure logger: %s", err)
+	}
 
 	enabledSelector := NewLogger(logSelector)
 	disabledSelector := NewLogger("foo-selector")
