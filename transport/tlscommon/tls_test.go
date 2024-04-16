@@ -694,6 +694,7 @@ mrPVWmOCMtwHJrO7kF1ENDgHPkhoZFcpFhu3lzOY7mhpW5mPZPVs87ZmI75G7zMV
 AcV8KJqa/7XTTpvIzXePw9FtSSux5SkU6iKAKqwUt82D1E73bbppSg==
 -----END CERTIFICATE-----
 `
+			//nolint:gosec // testing key
 			key := `
 -----BEGIN RSA PRIVATE KEY-----
 Proc-Type: 4,ENCRYPTED
