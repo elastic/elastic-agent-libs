@@ -18,6 +18,7 @@
 package tlscommon
 
 import (
+	"crypto/tls"
 	"fmt"
 	"testing"
 
@@ -261,4 +262,244 @@ func mustLoadServerConfig(t *testing.T, yamlStr string) *ServerConfig {
 		t.Fatal(err)
 	}
 	return cfg
+}
+
+func Test_TLSVerificaionMode_Unpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		hasErr bool
+		in     interface{}
+		exp    TLSVerificationMode
+	}{{
+		name:   "nil",
+		hasErr: false,
+		in:     nil,
+		exp:    VerifyFull,
+	}, {
+		name:   "empty string",
+		hasErr: false,
+		in:     "",
+		exp:    VerifyFull,
+	}, {
+		name:   "unknown string",
+		hasErr: true,
+		in:     "unknown",
+	}, {
+		name:   "string",
+		hasErr: false,
+		in:     "strict",
+		exp:    VerifyStrict,
+	}, {
+		name:   "int64",
+		hasErr: false,
+		in:     int64(1),
+		exp:    VerifyNone,
+	}, {
+		name:   "uint64",
+		hasErr: false,
+		in:     uint64(1),
+		exp:    VerifyNone,
+	}, {
+		name:   "unknown type",
+		hasErr: true,
+		in:     uint8(1),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := new(TLSVerificationMode)
+			err := v.Unpack(tc.in)
+			if tc.hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.exp, *v)
+			}
+		})
+	}
+}
+
+func Test_TLSClientAuth_Unpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		hasErr bool
+		in     interface{}
+		exp    TLSClientAuth
+	}{{
+		name:   "nil",
+		hasErr: false,
+		in:     nil,
+		exp:    TLSClientAuthNone,
+	}, {
+		name:   "empty string",
+		hasErr: false,
+		in:     "",
+		exp:    TLSClientAuthNone,
+	}, {
+		name:   "unknown string",
+		hasErr: true,
+		in:     "unknown",
+	}, {
+		name:   "string",
+		hasErr: false,
+		in:     "optional",
+		exp:    TLSClientAuthOptional,
+	}, {
+		name:   "int64",
+		hasErr: false,
+		in:     int64(3),
+		exp:    TLSClientAuthOptional,
+	}, {
+		name:   "uint64",
+		hasErr: false,
+		in:     uint64(3),
+		exp:    TLSClientAuthOptional,
+	}, {
+		name:   "unknown type",
+		hasErr: true,
+		in:     uint8(1),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := new(TLSClientAuth)
+			err := v.Unpack(tc.in)
+			if tc.hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.exp, *v)
+			}
+		})
+	}
+}
+
+func Test_CipherSuite_Unpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		hasErr bool
+		in     interface{}
+		exp    CipherSuite
+	}{{
+		name:   "unknown string",
+		hasErr: true,
+		in:     "unknown",
+	}, {
+		name:   "string",
+		hasErr: false,
+		in:     "RSA-AES-128-CBC-SHA",
+		exp:    CipherSuite(tls.TLS_RSA_WITH_AES_128_CBC_SHA),
+	}, {
+		name:   "int64",
+		hasErr: false,
+		in:     int64(47),
+		exp:    CipherSuite(tls.TLS_RSA_WITH_AES_128_CBC_SHA),
+	}, {
+		name:   "uint64",
+		hasErr: false,
+		in:     uint64(47),
+		exp:    CipherSuite(tls.TLS_RSA_WITH_AES_128_CBC_SHA),
+	}, {
+		name:   "unknown type",
+		hasErr: true,
+		in:     uint8(1),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := new(CipherSuite)
+			err := v.Unpack(tc.in)
+			if tc.hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.exp, *v)
+			}
+		})
+	}
+}
+
+func Test_tlsCurveType_Unpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		hasErr bool
+		in     interface{}
+		exp    tlsCurveType
+	}{{
+		name:   "unknown string",
+		hasErr: true,
+		in:     "unknown",
+	}, {
+		name:   "string",
+		hasErr: false,
+		in:     "P-256",
+		exp:    tlsCurveType(tls.CurveP256),
+	}, {
+		name:   "int64",
+		hasErr: false,
+		in:     int64(23),
+		exp:    tlsCurveType(tls.CurveP256),
+	}, {
+		name:   "uint64",
+		hasErr: false,
+		in:     uint64(23),
+		exp:    tlsCurveType(tls.CurveP256),
+	}, {
+		name:   "unknown type",
+		hasErr: true,
+		in:     uint8(1),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := new(tlsCurveType)
+			err := v.Unpack(tc.in)
+			if tc.hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.exp, *v)
+			}
+		})
+	}
+}
+
+func Test_TLSRenegotiationSupport_Unpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		hasErr bool
+		in     interface{}
+		exp    TLSRenegotiationSupport
+	}{{
+		name:   "unknown string",
+		hasErr: true,
+		in:     "unknown",
+	}, {
+		name:   "string",
+		hasErr: false,
+		in:     "never",
+		exp:    TLSRenegotiationSupport(tls.RenegotiateNever),
+	}, {
+		name:   "int64",
+		hasErr: false,
+		in:     int64(0),
+		exp:    TLSRenegotiationSupport(tls.RenegotiateNever),
+	}, {
+		name:   "uint64",
+		hasErr: false,
+		in:     uint64(0),
+		exp:    TLSRenegotiationSupport(tls.RenegotiateNever),
+	}, {
+		name:   "unknown type",
+		hasErr: true,
+		in:     uint8(1),
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := new(TLSRenegotiationSupport)
+			err := v.Unpack(tc.in)
+			if tc.hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.exp, *v)
+			}
+		})
+	}
 }
