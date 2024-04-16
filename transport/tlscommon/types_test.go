@@ -101,6 +101,32 @@ func TestRepackConfig(t *testing.T) {
 	assert.Equal(t, cfg.VerificationMode, VerifyCertificate)
 }
 
+func TestRepackConfigFromJSON(t *testing.T) {
+	cfg, err := loadJSON(`{
+    "enabled": true,
+    "verification_mode": "certificate",
+    "supported_protocols": ["TLSv1.1", "TLSv1.2"],
+    "cipher_suites": ["RSA-AES-256-CBC-SHA"],
+    "certificate_authorities": ["/path/to/ca.crt"],
+    "certificate": "/path/to/cert.crt",
+    "key": "/path/to/key.crt",
+    "curve_types": "P-521",
+    "renegotiation": "freely",
+    "ca_sha256": ["example"],
+    "ca_trusted_fingerprint": "fingerprint"
+  }`)
+
+	assert.NoError(t, err)
+	assert.Equal(t, cfg.VerificationMode, VerifyCertificate)
+
+	tmp, err := ucfg.NewFrom(cfg)
+	assert.NoError(t, err)
+
+	err = tmp.Unpack(cfg)
+	assert.NoError(t, err)
+	assert.Equal(t, cfg.VerificationMode, VerifyCertificate)
+}
+
 func TestTLSClientAuthUnpack(t *testing.T) {
 	tests := []struct {
 		val    string
