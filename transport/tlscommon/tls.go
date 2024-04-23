@@ -31,9 +31,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/youmark/pkcs8"
-
 	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/pkcs8"
 )
 
 const logSelector = "tls"
