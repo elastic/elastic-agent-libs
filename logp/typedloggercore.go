@@ -77,6 +77,7 @@ func (t *typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 			if f.String == t.value {
 				return t.typedCore.Write(e, fields)
 			}
+			return t.defaultCore.Write(e, fields)
 		}
 	}
 
