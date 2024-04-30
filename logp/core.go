@@ -151,6 +151,56 @@ func ConfigureWithOutputs(defaultLoggerCfg Config, outputs ...zapcore.Core) erro
 	return nil
 }
 
+// ConfigureWithCore configures the global logger to use an output created
+// from `defaultLoggerCfg` and all the output passed by `output`.
+func ConfigureWithCore(defaultLoggerCfg Config, core zapcore.Core) error {
+	var (
+		sink         zapcore.Core
+		level        zap.AtomicLevel
+	)
+
+	level = zap.NewAtomicLevelAt(defaultLoggerCfg.Level.ZapLevel())
+	sink = wrappedCore(core)
+	
+	// Default logger is always discard, debug level below will
+	// possibly re-enable it.
+	golog.SetOutput(io.Discard)
+
+	// Enabled selectors when debug is enabled.
+	selectors := make(map[string]struct{}, len(defaultLoggerCfg.Selectors))
+	if defaultLoggerCfg.Level.Enabled(DebugLevel) && len(defaultLoggerCfg.Selectors) > 0 {
+		for _, sel := range defaultLoggerCfg.Selectors {
+			selectors[strings.TrimSpace(sel)] = struct{}{}
+		}
+
+		// Default to all enabled if no selectors are specified.
+		if len(selectors) == 0 {
+			selectors["*"] = struct{}{}
+		}
+
+		// Re-enable the default go logger output when either stdlog
+		// or all selector is enabled.
+		_, stdlogEnabled := selectors["stdlog"]
+		_, allEnabled := selectors["*"]
+		if stdlogEnabled || allEnabled {
+			golog.SetOutput(_defaultGoLog)
+		}
+
+		sink = selectiveWrapper(sink, selectors)
+	}
+
+	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
+	storeLogger(&coreLogger{
+		selectors:    selectors,
+		rootLogger:   root,
+		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
+		logger:       newLogger(root, ""),
+		level:        level,
+		observedLogs: nil,
+	})
+	return nil
+}
+
 // ConfigureWithTypedOutput configures the global logger to use typed outputs.
 //
 // If a log entry matches the defined key/value, this entry is logged using the
