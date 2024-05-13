@@ -213,7 +213,7 @@ func createLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error
 	case MacOSServiceEnvironment, WindowsServiceEnvironment:
 		fallthrough
 	default:
-		return makeFileOutput(cfg, enab)
+		return zapcore.NewNopCore(), nil
 	}
 }
 
