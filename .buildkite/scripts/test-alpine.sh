@@ -4,13 +4,16 @@ junitfile=$1 # filename for jnit annotation plugin
 set -euo pipefail
 
 echo "--- Pre install"
+apk update
+apk add openrc rsyslog bash
+
 source .buildkite/scripts/pre-install-command.sh
 go version
 add_bin_path
 with_go_junit_report
 
 apk update
-apk add openrc rsyslog
+apk add openrc rsyslog bash
 openrc
 touch /run/openrc/softlevel
 rc-service rsyslog start
