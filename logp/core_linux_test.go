@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build windows
+//go:build linux
 
 package logp
 
@@ -26,17 +26,16 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func TestEventLogOutputCanBeClosed(t *testing.T) {
+func TestSyslogOutputCanBeClosed(t *testing.T) {
 	cfg := DefaultConfig(DefaultEnvironment)
 	cfg.ToFiles = true
-	cfg.Beat = t.Name()
 
-	eventLog, err := makeEventLogOutput(cfg, zapcore.DebugLevel)
+	syslogOutput, err := makeSyslogOutput(cfg, zapcore.DebugLevel)
 	if err != nil {
-		t.Fatalf("cannot create eventLog output: %s", err)
+		t.Fatalf("cannot create syslog output: %s", err)
 	}
 
-	if _, ok := eventLog.(io.Closer); !ok {
-		t.Fatal("the EventLog Output does not implement io.Closer")
+	if _, ok := syslogOutput.(io.Closer); !ok {
+		t.Fatal("the 'Syslog Output' does not implement io.Closer")
 	}
 }

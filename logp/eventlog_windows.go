@@ -108,3 +108,7 @@ func (c *eventLogCore) Clone() *eventLogCore {
 	copy(clone.fields, c.fields)
 	return &clone
 }
+
+func (c *eventLogCore) Close() error {
+	return c.log.Close()
+}

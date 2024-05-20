@@ -621,22 +621,13 @@ func TestCoresCanBeClosed(t *testing.T) {
 	cfg := DefaultConfig(DefaultEnvironment)
 	cfg.ToFiles = true
 
-	cores := map[string]zapcore.Core{}
-	var err error
-	cores["File Output"], err = makeFileOutput(cfg, zapcore.DebugLevel)
+	fileOutput, err := makeFileOutput(cfg, zapcore.DebugLevel)
 	if err != nil {
 		t.Fatalf("cannot create file output: %s", err)
 	}
 
-	cores["Syslog Output"], err = makeSyslogOutput(cfg, zapcore.DebugLevel)
-	if err != nil {
-		t.Fatalf("cannot create syslog output: %s", err)
-	}
-
-	for name, c := range cores {
-		if _, ok := c.(io.Closer); !ok {
-			t.Fatalf("the %s does not implement io.Closer", name)
-		}
+	if _, ok := fileOutput.(io.Closer); !ok {
+		t.Fatal("the 'File Output' does not implement io.Closer")
 	}
 }
 
