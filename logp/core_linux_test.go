@@ -45,10 +45,11 @@ func TestSyslogOutputCanBeClosed(t *testing.T) {
 
 	if err := server.ListenUnixgram("/var/run/syslog"); err != nil {
 		t.Errorf("cannot configure syslog to listen on '/var/run/syslog/': %s", err)
-		t.Log("You might already have a syslog running, this test assumes" +
-			"there is no syslog running on the host. You can run this test" +
-			"in a Docker container:\n" +
-			"'docker run --rm -it -v $PWD:$PWD -w $PWD  golang:1.21.10 go test ./logp'")
+		t.Log("You might already have a syslog running, this test assumes " +
+			"there is no syslog running on the host. You can run this test " +
+			"in a Docker container (adjust the image tag to the current " +
+			"Go version):\n" +
+			"'docker run --rm -it -v $PWD:$PWD -w $PWD golang:1.21.10 go test ./logp'")
 	}
 
 	if err := server.Boot(); err != nil {
