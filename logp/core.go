@@ -68,6 +68,11 @@ type closerCore struct {
 	io.Closer
 }
 
+func (c *closerCore) With(fields []zapcore.Field) zapcore.Core {
+	c.Core = c.Core.With(fields)
+	return c
+}
+
 // Configure configures the logp package.
 func Configure(cfg Config) error {
 	return ConfigureWithOutputs(cfg)
@@ -330,7 +335,7 @@ func makeFileOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error)
 		Closer: rotator,
 	}
 
-	return cc, err
+	return &cc, err
 }
 
 func newCore(enc zapcore.Encoder, ws zapcore.WriteSyncer, enab zapcore.LevelEnabler) zapcore.Core {
@@ -344,7 +349,7 @@ func wrappedCore(core zapcore.Core) zapcore.Core {
 			Core:   wc,
 			Closer: closeCore,
 		}
-		return cc
+		return &cc
 	}
 
 	return wc
