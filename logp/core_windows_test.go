@@ -36,7 +36,11 @@ func TestEventLogOutputCanBeClosed(t *testing.T) {
 		t.Fatalf("cannot create eventLog output: %s", err)
 	}
 
-	if _, ok := eventLog.(io.Closer); !ok {
+	closer, ok := eventLog.(io.Closer)
+	if !ok {
 		t.Fatal("the EventLog Output does not implement io.Closer")
+	}
+	if err := closer.Close(); err != nil {
+		t.Fatalf("Close must not return any error, got: %s", err)
 	}
 }

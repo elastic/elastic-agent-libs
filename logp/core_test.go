@@ -626,8 +626,12 @@ func TestCoresCanBeClosed(t *testing.T) {
 		t.Fatalf("cannot create file output: %s", err)
 	}
 
-	if _, ok := fileOutput.(io.Closer); !ok {
+	closer, ok := fileOutput.(io.Closer)
+	if !ok {
 		t.Fatal("the 'File Output' does not implement io.Closer")
+	}
+	if err := closer.Close(); err != nil {
+		t.Fatalf("Close must not return any error, got: %s", err)
 	}
 }
 
