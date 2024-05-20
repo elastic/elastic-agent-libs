@@ -15,9 +15,9 @@ steps:
   - label: ":linux: Test Linux"
     key: test-lin
     command:
-      - ".buildkite/scripts/test.sh"
+      - ".buildkite/scripts/test-alpine.sh"
     agents:
-      image: golang:${GO_VERSION}
+      image: golang:${GO_VERSION}-alpine
       cpu: "8"
       memory: "4G"
     artifact_paths:
