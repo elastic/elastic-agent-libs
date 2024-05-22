@@ -56,6 +56,16 @@ func New(log *logp.Logger, mux *http.ServeMux, c *config.C) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	return new(log, mux, cfg)
+}
+
+// NewFromConfig creates a new API server from the given Config object.
+func NewFromConfig(log *logp.Logger, mux *http.ServeMux, cfg Config) (*Server, error) {
+	return new(log, mux, cfg)
+}
+
+// new creates the server from a config struct
+func new(log *logp.Logger, mux *http.ServeMux, cfg Config) (*Server, error) {
 	srv := &http.Server{ReadHeaderTimeout: cfg.Timeout}
 	l, err := makeListener(cfg)
 	if err != nil {
@@ -89,6 +99,12 @@ func (s *Server) Stop() error {
 // Shutdown gracefully drains the API server of connections by using the go [net/http.Server.Shutdown] function
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.srv.Shutdown(ctx)
+}
+
+// Addr returns the network address of the server
+// This is useful for tests, where we usually pass the port as `0` to get allocated a random free port
+func (s *Server) Addr() net.Addr {
+	return s.l.Addr()
 }
 
 // AttachHandler will attach a handler at the specified route and return an error instead of panicing.

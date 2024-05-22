@@ -18,6 +18,10 @@
 package httpcommon
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -89,6 +93,153 @@ ssl:
 			require.NoError(t, err)
 
 			require.Equal(t, tc.expected, settings)
+		})
+	}
+}
+
+func TestReadAllWithLimit(t *testing.T) {
+	size := 100
+	body := bytes.Repeat([]byte{'a'}, size)
+	cases := []struct {
+		name    string
+		resp    *http.Response
+		limit   int64
+		expBody []byte
+		expErr  error
+	}{
+		{
+			name: "reads known size without limit",
+			resp: &http.Response{
+				ContentLength: int64(size),
+				Body:          io.NopCloser(bytes.NewBuffer(body)),
+			},
+			limit:   -1,
+			expBody: body,
+		},
+		{
+			name: "does not read known size if exceeds limit",
+			resp: &http.Response{
+				ContentLength: int64(size),
+				Body:          io.NopCloser(bytes.NewBuffer(body)),
+			},
+			limit:  10,
+			expErr: ErrResponseLimit,
+		},
+		{
+			name: "reads unknown size without limit",
+			resp: &http.Response{
+				ContentLength: -1,
+				Body:          io.NopCloser(bytes.NewBuffer(body)),
+			},
+			limit:   -1,
+			expBody: body,
+		},
+		{
+			name: "partially reads unknown size with limit",
+			resp: &http.Response{
+				ContentLength: -1,
+				Body:          io.NopCloser(bytes.NewBuffer(body)),
+			},
+			limit:   10,
+			expBody: body[:10],
+		},
+		{
+			name: "supports empty with size=0",
+			resp: &http.Response{
+				ContentLength: 0,
+			},
+			limit:   -1,
+			expBody: []byte{},
+		},
+		{
+			name: "does not read the body if `No Content` status",
+			resp: &http.Response{
+				StatusCode: http.StatusNoContent,
+			},
+			limit:   -1,
+			expBody: []byte{},
+		},
+		{
+			name: "supports empty with unknown size",
+			resp: &http.Response{
+				ContentLength: -1,
+				Body:          io.NopCloser(bytes.NewBuffer(nil)),
+			},
+			limit:   -1,
+			expBody: []byte{},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			actBody, err := ReadAllWithLimit(tc.resp, tc.limit)
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+				require.Nil(t, actBody)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.expBody, actBody)
+		})
+	}
+}
+
+func BenchmarkReadAll(b *testing.B) {
+	sizes := []int{
+		1024,        // 1KB
+		100 * 1024,  // 100KB
+		1024 * 1024, // 1MB
+	}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size: %d", size), func(b *testing.B) {
+
+			// emulate a file or an HTTP response
+			generated := bytes.Repeat([]byte{'a'}, size)
+			content := bytes.NewReader(generated)
+			cases := []struct {
+				name string
+				resp *http.Response
+			}{
+				{
+					name: "unknown length",
+					resp: &http.Response{
+						ContentLength: -1,
+						Body:          io.NopCloser(content),
+					},
+				},
+				{
+					name: "known length",
+					resp: &http.Response{
+						ContentLength: int64(size),
+						Body:          io.NopCloser(content),
+					},
+				},
+			}
+
+			b.ResetTimer()
+
+			for _, tc := range cases {
+				b.Run(tc.name, func(b *testing.B) {
+					b.Run("io.ReadAll", func(b *testing.B) {
+						for i := 0; i < b.N; i++ {
+							_, err := content.Seek(0, io.SeekStart) // reset
+							require.NoError(b, err)
+							data, err := io.ReadAll(tc.resp.Body)
+							require.NoError(b, err)
+							require.Equalf(b, size, len(data), "size does not match, expected %d, actual %d", size, len(data))
+						}
+					})
+					b.Run("bytes.Buffer+io.Copy", func(b *testing.B) {
+						for i := 0; i < b.N; i++ {
+							_, err := content.Seek(0, io.SeekStart) // reset
+							require.NoError(b, err)
+							data, err := ReadAll(tc.resp)
+							require.NoError(b, err)
+							require.Equalf(b, size, len(data), "size does not match, expected %d, actual %d", size, len(data))
+						}
+					})
+				})
+			}
 		})
 	}
 }
