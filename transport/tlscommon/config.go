@@ -18,8 +18,11 @@
 package tlscommon
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
+	"time"
 )
 
 // Config defines the user configurable options in the yaml file.
@@ -98,4 +101,32 @@ func (c *Config) Validate() error {
 // IsEnabled returns true if the `enable` field is set to true in the yaml.
 func (c *Config) IsEnabled() bool {
 	return c != nil && (c.Enabled == nil || *c.Enabled)
+}
+
+// DiagCerts returns a diagnostics hook callback that will validate if the certifiactes (cert + key, and CAs) present in the config are valid.
+func (c *Config) DiagCerts() func() []byte {
+	if c == nil {
+		return func() []byte {
+			return []byte(`error: nil tlscommon.Config`)
+		}
+	}
+	return func() []byte {
+		var b bytes.Buffer
+		fmt.Fprintf(&b, "tlscommon.Config diagnostics %s\n", time.Now().UTC())
+		fmt.Fprintf(&b, "verification_mode: %s\n", c.VerificationMode)
+
+		fmt.Fprint(&b, "\n")
+		diagCertificate(&b, &c.Certificate)
+		fmt.Fprint(&b, "\n")
+		diagCAs(&b, c.CAs)
+		fmt.Fprint(&b, "\n")
+
+		if c.CATrustedFingerprint != "" {
+			fmt.Fprintf(&b, "ca_trusted_fingerprint: %s\n", c.CATrustedFingerprint)
+		}
+		if len(c.CASha256) > 0 {
+			fmt.Fprintf(&b, "ca_sha256: %v\n", c.CASha256)
+		}
+		return b.Bytes()
+	}
 }
