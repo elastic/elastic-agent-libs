@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/textproto"
+
+	"github.com/elastic/elastic-agent-libs/transport/tlscommon"
 )
 
 // DiagRequest returns a diagnostics hook callback that will send the passed requests using a roundtripper generated from the settings and log httptrace events in the returned bytes.
@@ -84,6 +86,17 @@ func (settings *HTTPTransportSettings) DiagRequests(reqs []*http.Request, opts .
 			},
 			TLSHandshakeDone: func(state tls.ConnectionState, err error) {
 				logger.Printf("TLS handshake done. state=%+v err=%v", state, err)
+				logger.Printf("Peer certificate count %d", len(state.PeerCertificates))
+				for i, crt := range state.PeerCertificates {
+					logger.Printf("- Peer Certificate %d\n\t%s", i, tlscommon.CertDiagString(crt))
+				}
+
+				logger.Printf("Verified chains count: %d", len(state.VerifiedChains))
+				for i, chain := range state.VerifiedChains {
+					for j, crt := range chain {
+						logger.Printf("- Chain %d certificate %d\n\t%s", i, j, tlscommon.CertDiagString(crt))
+					}
+				}
 			},
 			WroteHeaders: func() {
 				logger.Printf("Wrote request headers")

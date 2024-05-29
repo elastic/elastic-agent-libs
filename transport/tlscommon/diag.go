@@ -100,16 +100,7 @@ func diagCertificate(logger *log.Logger, cfg *CertificateConfig) {
 			logger.Printf("cert %d - error loading cert: %v", i, err)
 			continue
 		}
-		logger.Printf("cert %d - Subject: %s\n\tIssuer: %s\n\tNotBefore: %s\n\tNotAfter: %s\n\tFingerprint: %s\n\tSAN IP: %v\n\tSAN DNS: %v\n",
-			i,
-			cert.Subject,
-			cert.Issuer,
-			cert.NotBefore,
-			cert.NotAfter,
-			Fingerprint(cert),
-			cert.IPAddresses,
-			cert.DNSNames,
-		)
+		logger.Printf("cert %d %s", i, CertDiagString(cert))
 	}
 }
 
@@ -132,18 +123,29 @@ func diagCAs(logger *log.Logger, cas []string) {
 			continue
 		}
 		for _, cert := range certs {
-			logger.Printf("- cert %d Subject: %s\n\tIsCa: %v\n\tBasicConstraintsValid: %v\n\tNotBefore: %s\n\tNotAfter: %s\n\tFingerprint: %s",
-				i,
-				cert.Subject,
-				cert.IsCA,
-				cert.BasicConstraintsValid,
-				cert.NotBefore,
-				cert.NotAfter,
-				Fingerprint(cert),
-			)
+			logger.Printf("- cert %d %s", i, CertDiagString(cert))
 			i++
 		}
 	}
+}
+
+// CertDiagString returns a diagnostics string describing the passed certificate
+func CertDiagString(cert *x509.Certificate) string {
+	if cert == nil {
+		return ""
+	}
+	return fmt.Sprintf("Subject=%s\n\tIssuer=%s\n\tIsCA=%v\n\tBasicConstraintsValid=%v\n\tNotBefore=%s\n\tNotAfter=%s\n\tFingerprint=%s\n\tSAN IP=%v\n\tSAN DNS=%v\n\tSAN URI=%v",
+		cert.Subject,
+		cert.Issuer,
+		cert.IsCA,
+		cert.BasicConstraintsValid,
+		cert.NotBefore,
+		cert.NotAfter,
+		Fingerprint(cert),
+		cert.IPAddresses,
+		cert.DNSNames,
+		cert.URIs,
+	)
 }
 
 func getCACerts(ca string) ([]*x509.Certificate, error) {
