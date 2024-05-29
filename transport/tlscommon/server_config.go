@@ -18,11 +18,9 @@
 package tlscommon
 
 import (
-	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/elastic/elastic-agent-libs/config"
 )
@@ -139,36 +137,4 @@ func (c *ServerConfig) Validate() error {
 // IsEnabled returns true if the `enable` field is set to true in the yaml.
 func (c *ServerConfig) IsEnabled() bool {
 	return c != nil && (c.Enabled == nil || *c.Enabled)
-}
-
-// DiagCerts returns a diagnostics hook callback that will validate if the certifiactes (cert + key, and CAs) present in the config are valid.
-//
-// Implementation is mostly a copy of Config.DiagCerts
-func (c *ServerConfig) DiagCerts() func() []byte {
-	if c == nil {
-		return func() []byte {
-			return []byte(`error: nil tlscommon.ServerConfig`)
-		}
-	}
-	return func() []byte {
-		var b bytes.Buffer
-		fmt.Fprintf(&b, "tlscommon.ServerConfig diagnostics %s\n", time.Now().UTC())
-		fmt.Fprintf(&b, "verification_mode: %s\n", c.VerificationMode)
-		if c.ClientAuth != nil {
-			fmt.Fprintf(&b, "client_auth: %s\n", c.ClientAuth)
-		} else {
-			fmt.Fprint(&b, "client_auth: nil\n")
-		}
-
-		fmt.Fprint(&b, "\n")
-		diagCertificate(&b, &c.Certificate)
-		fmt.Fprint(&b, "\n")
-		diagCAs(&b, c.CAs)
-		fmt.Fprint(&b, "\n")
-
-		if len(c.CASha256) > 0 {
-			fmt.Fprintf(&b, "ca_sha256: %v\n", c.CASha256)
-		}
-		return b.Bytes()
-	}
 }

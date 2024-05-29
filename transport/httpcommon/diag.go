@@ -26,16 +26,16 @@ import (
 	"net/textproto"
 )
 
-// DiagRequest returns a diagnostics hook callback that will send the passed request using a roundtripper generated from the settings and log httptrace events in the returned bytes.
-func (settings *HTTPTransportSettings) DiagRequest(req *http.Request, opts ...TransportOption) func() []byte { // TODO do we want to pass a function to get req instead so it can be generated ad-hoc?
+// DiagRequest returns a diagnostics hook callback that will send the passed requests using a roundtripper generated from the settings and log httptrace events in the returned bytes.
+func (settings *HTTPTransportSettings) DiagRequests(reqs []*http.Request, opts ...TransportOption) func() []byte {
 	if settings == nil {
 		return func() []byte {
 			return []byte(`error: nil httpcommon.HTTPTransportSettings`)
 		}
 	}
-	if req == nil {
+	if len(reqs) == 0 {
 		return func() []byte {
-			return []byte(`error: nil request`)
+			return []byte(`error: 0 requests`)
 		}
 	}
 	return func() []byte {
@@ -95,11 +95,14 @@ func (settings *HTTPTransportSettings) DiagRequest(req *http.Request, opts ...Tr
 				logger.Printf("Wrote request err=%v", info.Err)
 			},
 		}
-		req = req.WithContext(httptrace.WithClientTrace(req.Context(), ct))
-		if _, err := rt.RoundTrip(req); err != nil {
-			logger.Printf("request error: %v", err)
-		} else {
-			logger.Print("request successful.")
+		for i, req := range reqs {
+			logger.Printf("Request %d to %s starting", i, req.URL.String())
+			req = req.WithContext(httptrace.WithClientTrace(req.Context(), ct))
+			if _, err := rt.RoundTrip(req); err != nil {
+				logger.Printf("request %d error: %v", i, err)
+			} else {
+				logger.Printf("request %d successful.", i)
+			}
 		}
 		return b.Bytes()
 	}

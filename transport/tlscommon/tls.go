@@ -87,42 +87,6 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 	return &cert, nil
 }
 
-// diagCertificate will write diagnostics information about the cert/key to the passed writer.
-func diagCertificate(w io.Writer, cfg *CertificateConfig) {
-	fmt.Fprint(w, "checking certificate keypair\n")
-	if cfg == nil {
-		fmt.Fprint(w, "certificate keypair is nil.\n")
-		return
-	}
-	crt, err := LoadCertificate(cfg)
-	if err != nil {
-		fmt.Fprintf(w, "certificate keypair error: %v\n", err)
-		return
-	}
-	if crt == nil {
-		fmt.Fprint(w, "certificate keypair is nil.\n")
-		return
-	}
-	fmt.Fprint(w, "certificate keypair ok.\n")
-	for i, p := range crt.Certificate {
-		cert, err := x509.ParseCertificate(p)
-		if err != nil {
-			fmt.Fprintf(w, "cert %d - error loading cert: %v\n", i, err)
-			continue
-		}
-		fmt.Fprintf(w, "cert %d - Subject: %s\n\tIssuer: %s\n\tNotBefore: %s\n\tNotAfter: %s\n\tFingerprint: %s\n\tSAN IP: %v\n\tSAN DNS: %v\n",
-			i,
-			cert.Subject,
-			cert.Issuer,
-			cert.NotBefore,
-			cert.NotAfter,
-			Fingerprint(cert),
-			cert.IPAddresses,
-			cert.DNSNames,
-		)
-	}
-}
-
 // ReadPEMFile reads a PEM formatted string either from disk or passed as a plain text starting with a "-"
 // and decrypt it with the provided password and  return the raw content.
 func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
@@ -269,45 +233,6 @@ func LoadCertificateAuthorities(CAs []string) (*x509.CertPool, []error) {
 	}
 
 	return roots, errors
-}
-
-// diagCAs will write diagnostics information about the passed cas into w.
-//
-// If there is an error in handling a ca, it is logged in the output.
-// Otherwise the CA subject, IsCa, validity flags, and a fingerprint are written.
-func diagCAs(w io.Writer, cas []string) {
-	fmt.Fprint(w, "checking certificate_authorities\n")
-	if len(cas) == 0 {
-		fmt.Fprint(w, "certificate_authorities not provided, using system certificates.\n")
-		return
-	}
-	fmt.Fprint(w, "certificate_authorities provided.\n")
-	for _, ca := range cas {
-		func(ca string) { // using inner function so that we can be sure the readers all close
-			r, err := NewPEMReader(ca)
-			if err != nil {
-				fmt.Fprintf(w, "- %s: error reading CA: %v\n", ca, err)
-				return
-			}
-			defer r.Close()
-			p, err := io.ReadAll(r)
-			if err != nil {
-				fmt.Fprintf(w, "- %s: error reading CA: %v\n", ca, err)
-				return
-			}
-			certs, err := x509.ParseCertificates(p)
-			if err != nil {
-				fmt.Fprintf(w, "- %s: error parsing CA: %v\n", ca, err)
-				return
-			}
-			for _, cert := range certs {
-				fmt.Fprintf(w, "- %s: Subject: %s\n\tIsCa: %v\n\tBasicConstraintsValid: %v\n\tNotBefore: %s\n\tNotAfter: %s\n\tFingerprint: %s\n",
-					ca, cert.Subject, cert.IsCA, cert.BasicConstraintsValid,
-					cert.NotBefore, cert.NotAfter, Fingerprint(cert),
-				)
-			}
-		}(ca)
-	}
 }
 
 func extractMinMaxVersion(versions []TLSVersion) (uint16, uint16) {
