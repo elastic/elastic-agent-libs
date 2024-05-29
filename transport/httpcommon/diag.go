@@ -102,7 +102,7 @@ func (settings *HTTPTransportSettings) DiagRequests(reqs []*http.Request, opts .
 				logger.Printf("request %d error: %v", i, err)
 			} else {
 				resp.Body.Close()
-				logger.Printf("request %d successful.", i)
+				logger.Printf("request %d successful. status=%d", i, resp.StatusCode)
 			}
 		}
 		return b.Bytes()
