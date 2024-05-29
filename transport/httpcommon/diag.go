@@ -98,9 +98,10 @@ func (settings *HTTPTransportSettings) DiagRequests(reqs []*http.Request, opts .
 		for i, req := range reqs {
 			logger.Printf("Request %d to %s starting", i, req.URL.String())
 			req = req.WithContext(httptrace.WithClientTrace(req.Context(), ct))
-			if _, err := rt.RoundTrip(req); err != nil {
+			if resp, err := rt.RoundTrip(req); err != nil {
 				logger.Printf("request %d error: %v", i, err)
 			} else {
+				resp.Body.Close()
 				logger.Printf("request %d successful.", i)
 			}
 		}
