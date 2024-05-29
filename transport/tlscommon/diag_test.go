@@ -19,12 +19,15 @@ package tlscommon
 
 import (
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+const verificationDefault = "verification_mode=full"
 
 func Test_Config_DiagCerts(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
@@ -37,43 +40,21 @@ func Test_Config_DiagCerts(t *testing.T) {
 		config := &Config{}
 		p := config.DiagCerts()()
 
-		require.Contains(t, string(p), "verification_mode=full")
+		require.Contains(t, string(p), verificationDefault)
 		require.Contains(t, string(p), "certificate keypair is nil.")
 		require.Contains(t, string(p), "certificate_authorities not provided, using system certificates.")
 	})
 
 	t.Run("with CA and cert", func(t *testing.T) {
-		ca, err := genCA()
-		require.NoError(t, err)
-		crt, err := genSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
-		require.NoError(t, err)
-
-		caBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: ca.Certificate[0],
-		})
-		require.NotEmpty(t, caBytes)
-		crtBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: crt.Certificate[0],
-		})
-		require.NotEmpty(t, crtBytes)
-		keyBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(crt.PrivateKey.(*rsa.PrivateKey)),
-		})
-		require.NotEmpty(t, keyBytes)
-
+		ca, cas := makeCAs(t)
+		cert := makeCertificateConfig(t, ca)
 		config := &Config{
-			Certificate: CertificateConfig{
-				Certificate: string(crtBytes),
-				Key:         string(keyBytes),
-			},
-			CAs: []string{string(caBytes)},
+			Certificate: cert,
+			CAs:         cas,
 		}
 		p := config.DiagCerts()()
 
-		require.Contains(t, string(p), "verification_mode=full")
+		require.Contains(t, string(p), verificationDefault)
 		require.Contains(t, string(p), "certificate keypair OK.")
 		require.Contains(t, string(p), "certificate_authorities provided.")
 	})
@@ -90,46 +71,57 @@ func Test_ServerConfig_DiagCerts(t *testing.T) {
 		config := &ServerConfig{}
 		p := config.DiagCerts()()
 
-		require.Contains(t, string(p), "verification_mode=full")
+		require.Contains(t, string(p), verificationDefault)
 		require.Contains(t, string(p), "client_auth=<nil>")
 		require.Contains(t, string(p), "certificate keypair is nil.")
 		require.Contains(t, string(p), "certificate_authorities not provided, using system certificates.")
 	})
 
 	t.Run("with CA and cert", func(t *testing.T) {
-		ca, err := genCA()
-		require.NoError(t, err)
-		crt, err := genSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
-		require.NoError(t, err)
-
-		caBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: ca.Certificate[0],
-		})
-		require.NotEmpty(t, caBytes)
-		crtBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: crt.Certificate[0],
-		})
-		require.NotEmpty(t, crtBytes)
-		keyBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(crt.PrivateKey.(*rsa.PrivateKey)),
-		})
-		require.NotEmpty(t, keyBytes)
-
+		ca, cas := makeCAs(t)
+		cert := makeCertificateConfig(t, ca)
 		config := &ServerConfig{
-			Certificate: CertificateConfig{
-				Certificate: string(crtBytes),
-				Key:         string(keyBytes),
-			},
-			CAs: []string{string(caBytes)},
+			Certificate: cert,
+			CAs:         cas,
 		}
 		p := config.DiagCerts()()
 
-		require.Contains(t, string(p), "verification_mode=full")
+		require.Contains(t, string(p), verificationDefault)
 		require.Contains(t, string(p), "client_auth=<nil>")
 		require.Contains(t, string(p), "certificate keypair OK.")
 		require.Contains(t, string(p), "certificate_authorities provided.")
 	})
+}
+
+func makeCAs(t *testing.T) (tls.Certificate, []string) {
+	t.Helper()
+	ca, err := genCA()
+	require.NoError(t, err)
+	p := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: ca.Certificate[0],
+	})
+	require.NotEmpty(t, p)
+	return ca, []string{string(p)}
+
+}
+
+func makeCertificateConfig(t *testing.T, ca tls.Certificate) CertificateConfig {
+	t.Helper()
+	crt, err := genSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
+	require.NoError(t, err)
+	crtBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: crt.Certificate[0],
+	})
+	require.NotEmpty(t, crtBytes)
+	keyBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(crt.PrivateKey.(*rsa.PrivateKey)),
+	})
+	require.NotEmpty(t, keyBytes)
+	return CertificateConfig{
+		Certificate: string(crtBytes),
+		Key:         string(keyBytes),
+	}
 }
