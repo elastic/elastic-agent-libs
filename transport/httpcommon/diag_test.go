@@ -146,7 +146,7 @@ func Test_HTTPRequestOnHTTPSPort(t *testing.T) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://google.com:443", nil)
 	require.NoError(t, err)
-	_, err = (&http.Client{}).Do(req)
+	_, err = (&http.Client{}).Do(req) //nolint:bodyclose // expected to return an error
 	require.Error(t, err)
 
 	var nErr *net.OpError
@@ -165,7 +165,7 @@ func Test_diagError(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
 		require.NoError(t, err)
 
-		_, err = (&http.Client{}).Do(req)
+		_, err = (&http.Client{}).Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
 		require.Contains(t, diagError(err), "caused by no trusted client CA.")
 	})
@@ -180,7 +180,7 @@ func Test_diagError(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.Replace(srv.URL, "http", "https", 1), nil)
 		require.NoError(t, err)
 
-		_, err = srv.Client().Do(req)
+		_, err = srv.Client().Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
 		require.Contains(t, diagError(err), "caused by using HTTPS schema on HTTP server.")
 	})
@@ -194,7 +194,7 @@ func Test_diagError(t *testing.T) {
 		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
-		srv.TLS = &tls.Config{
+		srv.TLS = &tls.Config{ //nolint:gosec //used for tests
 			Certificates: []tls.Certificate{crt},
 		}
 		srv.StartTLS()
@@ -206,12 +206,12 @@ func Test_diagError(t *testing.T) {
 
 		client := http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
+				TLSClientConfig: &tls.Config{ //nolint:gosec //used for tests
 					RootCAs: pool,
 				},
 			},
 		}
-		_, err = client.Do(req)
+		_, err = client.Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
 		require.Contains(t, diagError(err), "caused by invalid server certificate.")
 	})
@@ -225,7 +225,7 @@ func Test_diagError(t *testing.T) {
 		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
-		srv.TLS = &tls.Config{
+		srv.TLS = &tls.Config{ //nolint:gosec //used for tests
 			Certificates: []tls.Certificate{crt},
 			ClientAuth:   tls.RequireAndVerifyClientCert,
 		}
@@ -238,12 +238,12 @@ func Test_diagError(t *testing.T) {
 
 		client := http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
+				TLSClientConfig: &tls.Config{ //nolint:gosec //used for tests
 					RootCAs: pool,
 				},
 			},
 		}
-		_, err = client.Do(req)
+		_, err = client.Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
 		require.Contains(t, diagError(err), "caused by missing mTLS client cert.")
 	})
@@ -261,7 +261,7 @@ func Test_diagError(t *testing.T) {
 		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
-		srv.TLS = &tls.Config{
+		srv.TLS = &tls.Config{ //nolint:gosec //used for tests
 			Certificates: []tls.Certificate{crt},
 			ClientAuth:   tls.RequireAndVerifyClientCert,
 			ClientCAs:    serverPool,
@@ -275,13 +275,13 @@ func Test_diagError(t *testing.T) {
 
 		client := http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
+				TLSClientConfig: &tls.Config{ //nolint:gosec //used for tests
 					Certificates: []tls.Certificate{clientCrt},
 					RootCAs:      pool,
 				},
 			},
 		}
-		_, err = client.Do(req)
+		_, err = client.Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
 		require.Contains(t, diagError(err), "caused by expired mTLS client cert.")
 	})
