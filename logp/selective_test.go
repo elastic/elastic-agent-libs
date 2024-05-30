@@ -107,14 +107,14 @@ func TestTypedAndCloserCoreSelectors(t *testing.T) {
 	}
 
 	for i, logEntry := range logEntries {
-		msg := logEntry["message"].(string)
+		msg := logEntry["message"].(string) //nolint: errcheck // We know it's a string and it is a test
 		if msg != expectedMsg {
 			t.Fatalf("[%d] expecting log message '%s', got '%s'", i, expectedMsg, msg)
 		}
 
 		// The second entry should also contain `log.type: event`
 		if i == 1 {
-			logType := logEntry["log.type"].(string)
+			logType := logEntry["log.type"].(string) //nolint: errcheck // We know it's a string and it is a test
 			if logType != "event" {
 				t.Errorf("expecting value 'event', got '%s'", logType)
 			}
@@ -151,8 +151,8 @@ func takeAllLogsFromPath(t *testing.T, path string) []map[string]any {
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		t1 := entries[i]["@timestamp"].(string)
-		t2 := entries[j]["@timestamp"].(string)
+		t1 := entries[i]["@timestamp"].(string) //nolint: errcheck // We know it's a string and it is a test
+		t2 := entries[j]["@timestamp"].(string) //nolint: errcheck // We know it's a string and it is a test
 		return t1 < t2
 	})
 
