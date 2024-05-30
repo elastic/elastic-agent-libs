@@ -163,6 +163,8 @@ func TestWith(t *testing.T) {
 	}
 
 	logger := logp.L()
+	defer logger.Close()
+
 	logger.Info("Very first message")
 
 	// Add a field and write messages
@@ -188,8 +190,8 @@ func TestWith(t *testing.T) {
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		t1 := entries[i]["@timestamp"].(string)
-		t2 := entries[j]["@timestamp"].(string)
+		t1 := entries[i]["@timestamp"].(string) //nolint: errcheck // We know it's a sting and it is a test
+		t2 := entries[j]["@timestamp"].(string) //nolint: errcheck // We know it's a sting and it is a test
 		return t1 < t2
 	})
 
@@ -314,8 +316,8 @@ func TestConcurrency(t *testing.T) {
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		t1 := entries[i]["sort_field"].(float64)
-		t2 := entries[j]["sort_field"].(float64)
+		t1 := entries[i]["sort_field"].(float64) //nolint: errcheck // We know it's a float64 and it is a test
+		t2 := entries[j]["sort_field"].(float64) //nolint: errcheck // We know it's a float64 and it is a test
 		return t1 < t2
 	})
 
@@ -337,14 +339,14 @@ func TestConcurrency(t *testing.T) {
 	for i := range strEntries {
 		assert.JSONEq(t, strEntries[i], expectedLines[i], "Some log entries are different than expected")
 	}
+
+	// Get a logger and close it so the file descriptors are released.
+	// This is specially important on Windows
+	logp.L().Close()
 }
 
 func strField(key, val string) zapcore.Field {
 	return zapcore.Field{Type: zapcore.StringType, Key: key, String: val}
-}
-
-func skipField() zapcore.Field {
-	return zapcore.Field{Type: zapcore.SkipType}
 }
 
 func takeAllLogsFromPath(t *testing.T, path string) []map[string]any {

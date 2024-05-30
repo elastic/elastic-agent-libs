@@ -88,7 +88,9 @@ func TestTypedAndCloserCoreSelectors(t *testing.T) {
 	}
 
 	enabledSelector := NewLogger(logSelector)
+	defer enabledSelector.Close()
 	disabledSelector := NewLogger("foo-selector")
+	defer disabledSelector.Close()
 
 	enabledSelector.Debugw(expectedMsg)
 	enabledSelector.Debugw(expectedMsg, "log.type", "event")
