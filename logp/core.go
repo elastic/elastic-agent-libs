@@ -66,12 +66,10 @@ type coreLogger struct {
 type closerCore struct {
 	zapcore.Core
 	io.Closer
-	foo int
 }
 
-func (c *closerCore) With(fields []zapcore.Field) zapcore.Core {
-	c.foo++
-	return &closerCore{
+func (c closerCore) With(fields []zapcore.Field) zapcore.Core {
+	return closerCore{
 		Core:   c.Core.With(fields),
 		Closer: c.Closer,
 	}
