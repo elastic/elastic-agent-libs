@@ -134,7 +134,7 @@ func CertDiagString(cert *x509.Certificate) string {
 	if cert == nil {
 		return ""
 	}
-	return fmt.Sprintf("Subject=%s\n\tIssuer=%s\n\tIsCA=%v\n\tBasicConstraintsValid=%v\n\tNotBefore=%s\n\tNotAfter=%s\n\tFingerprint=%s\n\tSAN IP=%v\n\tSAN DNS=%v\n\tSAN URI=%v",
+	return fmt.Sprintf("\n\tSubject=%s\n\tIssuer=%s\n\tIsCA=%v\n\tBasicConstraintsValid=%v\n\tNotBefore=%s\n\tNotAfter=%s\n\tFingerprint=%s\n\tSAN IP=%v\n\tSAN DNS=%v\n\tSAN URI=%v",
 		cert.Subject,
 		cert.Issuer,
 		cert.IsCA,
