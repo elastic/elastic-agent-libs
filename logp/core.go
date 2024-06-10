@@ -68,9 +68,11 @@ type closerCore struct {
 	io.Closer
 }
 
-func (c *closerCore) With(fields []zapcore.Field) zapcore.Core {
-	c.Core = c.Core.With(fields)
-	return c
+func (c closerCore) With(fields []zapcore.Field) zapcore.Core {
+	return closerCore{
+		Core:   c.Core.With(fields),
+		Closer: c.Closer,
+	}
 }
 
 // Configure configures the logp package.
