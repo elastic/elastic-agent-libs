@@ -1,13 +1,6 @@
 #!/bin/bash
 junitfile=$1 # filename for jnit annotation plugin
-
 set -euo pipefail
-
-echo "--- Pre install"
-source .buildkite/scripts/pre-install-command.sh
-go version
-add_bin_path
-with_go_junit_report
 
 echo "--- Go Test"
 set +e
