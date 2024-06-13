@@ -34,7 +34,7 @@ func InstallGoLicenser() error {
 	)
 }
 
-// InstallGoLicenser target installs go-licenser
+// InstallGoNoticeGen target installs go-licenser
 func InstallGoNoticeGen() error {
 	return gotool.Install(
 		gotool.Install.Package(GoNoticeGeneratorImportPath),
