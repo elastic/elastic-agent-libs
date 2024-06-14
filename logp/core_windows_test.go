@@ -15,28 +15,32 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package mage
+//go:build windows
 
-import "github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
+package logp
 
-var (
-	// GoLicenserImportPath controls the import path used to install go-licenser.
-	GoLicenserImportPath = "github.com/elastic/go-licenser@latest"
+import (
+	"io"
+	"testing"
 
-	// GoNoticeGeneratorImportPath controls the import path used to install go-licence-detector.
-	GoNoticeGeneratorImportPath = "go.elastic.co/go-licence-detector@latest"
+	"go.uber.org/zap/zapcore"
 )
 
-// InstallGoLicenser target installs go-licenser
-func InstallGoLicenser() error {
-	return gotool.Install(
-		gotool.Install.Package(GoLicenserImportPath),
-	)
-}
+func TestEventLogOutputCanBeClosed(t *testing.T) {
+	cfg := DefaultConfig(DefaultEnvironment)
+	cfg.ToFiles = true
+	cfg.Beat = t.Name()
 
-// InstallGoNoticeGen target installs go-licenser
-func InstallGoNoticeGen() error {
-	return gotool.Install(
-		gotool.Install.Package(GoNoticeGeneratorImportPath),
-	)
+	eventLog, err := makeEventLogOutput(cfg, zapcore.DebugLevel)
+	if err != nil {
+		t.Fatalf("cannot create eventLog output: %s", err)
+	}
+
+	closer, ok := eventLog.(io.Closer)
+	if !ok {
+		t.Fatal("the EventLog Output does not implement io.Closer")
+	}
+	if err := closer.Close(); err != nil {
+		t.Fatalf("Close must not return any error, got: %s", err)
+	}
 }
