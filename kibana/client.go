@@ -345,8 +345,6 @@ func (client *Client) readVersion() error {
 func (client *Client) GetVersion() version.V { return client.Version }
 
 // KibanaIsServerless returns true if we're talking to a serverless instance.
-// Right now we don't have an API to tell us if we're running against serverless or not, so this actual implementation is something of a hack.
-// see https://github.com/elastic/kibana/pull/164850
 func (client *Client) KibanaIsServerless() (bool, error) {
 
 	type apiStatus struct {
