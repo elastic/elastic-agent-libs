@@ -283,7 +283,7 @@ func Test_diagError(t *testing.T) {
 		}
 		_, err = client.Do(req) //nolint:bodyclose // expected to return an error
 		require.Error(t, err)
-		require.Contains(t, diagError(err), "caused by expired mTLS client cert.")
+		require.Contains(t, diagError(err), "expired certificate")
 	})
 }
 
