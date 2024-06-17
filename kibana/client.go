@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -226,7 +225,7 @@ func (conn *Connection) Request(method, extraPath string,
 	}
 	defer resp.Body.Close()
 
-	result, err := ioutil.ReadAll(resp.Body)
+	result, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, nil, fmt.Errorf("fail to read response: %w", err)
 	}
@@ -356,15 +355,18 @@ func (client *Client) KibanaIsServerless() (bool, error) {
 		} `json:"version"`
 	}
 
+	// we can send a GET to `/api/status` without auth, but it won't actually return version info.
 	params := http.Header{}
 	if client.APIKey != "" {
 		v := "ApiKey " + base64.StdEncoding.EncodeToString([]byte(client.APIKey))
 		params.Add("Authorization", v)
 	}
+
 	ret, resp, err := client.Connection.Request("GET", "/api/status", nil, params, nil)
 	if err != nil {
 		return false, fmt.Errorf("error in HTTP request: %w", err)
 	}
+
 	respString := string(resp)
 	if ret > http.StatusMultipleChoices {
 		return false, fmt.Errorf("got invalid response code: %v (%s)", ret, respString)
@@ -375,6 +377,7 @@ func (client *Client) KibanaIsServerless() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error unmarshalling JSON: %w", err)
 	}
+
 	if status.Version.BuildFlavor == "serverless" {
 		return true, nil
 	} else {
