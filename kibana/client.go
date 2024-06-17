@@ -349,13 +349,38 @@ func (client *Client) GetVersion() version.V { return client.Version }
 // Right now we don't have an API to tell us if we're running against serverless or not, so this actual implementation is something of a hack.
 // see https://github.com/elastic/kibana/pull/164850
 func (client *Client) KibanaIsServerless() (bool, error) {
-	ret, _, err := client.Connection.Request("GET", "/api/saved_objects/_find", nil, nil, nil)
-	if ret > 300 && strings.Contains(err.Error(), "not available with the current configuration") {
-		return true, nil
-	} else if err != nil {
-		return false, fmt.Errorf("error checking serverless status: %w", err)
+
+	type apiStatus struct {
+		Version struct {
+			BuildFlavor string `json:"build_flavor"`
+		} `json:"version"`
 	}
-	return false, nil
+
+	params := http.Header{}
+	if client.APIKey != "" {
+		v := "ApiKey " + base64.StdEncoding.EncodeToString([]byte(client.APIKey))
+		params.Add("Authorization", v)
+	}
+	ret, resp, err := client.Connection.Request("GET", "/api/status", nil, params, nil)
+	if err != nil {
+		return false, fmt.Errorf("error in HTTP request: %w", err)
+	}
+	respString := string(resp)
+	if ret > http.StatusMultipleChoices {
+		return false, fmt.Errorf("got invalid response code: %v (%s)", ret, respString)
+	}
+
+	status := apiStatus{}
+	err = json.Unmarshal(resp, &status)
+	if err != nil {
+		return false, fmt.Errorf("error unmarshalling JSON: %w", err)
+	}
+	if status.Version.BuildFlavor == "serverless" {
+		return true, nil
+	} else {
+		return false, nil
+	}
+
 }
 
 func (client *Client) ImportMultiPartFormFile(url string, params url.Values, filename string, contents string) error {
