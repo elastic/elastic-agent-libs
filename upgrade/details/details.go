@@ -17,5 +17,22 @@
 
 package details
 
-// DownloadRate is a float64
+import (
+	"encoding/json"
+	"math"
+)
+
+// DownloadRate is a float64 that can be safely marshalled to JSON
+// when the value is Infinity. The rate is always in bytes/second units.
 type DownloadRate float64
+
+func (dr *DownloadRate) MarshalJSON() ([]byte, error) {
+	downloadRateBytesPerSecond := float64(*dr)
+	if math.IsInf(downloadRateBytesPerSecond, 0) {
+		return json.Marshal(math.MaxFloat64)
+	}
+
+	return json.Marshal(
+		downloadRateBytesPerSecond,
+	)
+}
