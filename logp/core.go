@@ -155,13 +155,13 @@ func ConfigureWithOutputs(defaultLoggerCfg Config, outputs ...zapcore.Core) erro
 // from `defaultLoggerCfg` and all the output passed by `output`.
 func ConfigureWithCore(defaultLoggerCfg Config, core zapcore.Core) error {
 	var (
-		sink         zapcore.Core
-		level        zap.AtomicLevel
+		sink  zapcore.Core
+		level zap.AtomicLevel
 	)
 
 	level = zap.NewAtomicLevelAt(defaultLoggerCfg.Level.ZapLevel())
 	sink = wrappedCore(core)
-	
+
 	// Default logger is always discard, debug level below will
 	// possibly re-enable it.
 	golog.SetOutput(io.Discard)
