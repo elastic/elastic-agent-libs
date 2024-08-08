@@ -74,19 +74,17 @@ func (r *Doer) AddN(n uint64) {
 }
 
 func (r *Doer) Start() {
-	if r.started.Load() {
+	if r.started.Swap(true) {
 		return
 	}
 
 	r.done = make(chan struct{})
-	r.started.Store(true)
 	r.lastDone = r.nowFn()
 	r.ticker = r.newTickerFn(r.period)
 
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-
 		defer r.ticker.Stop()
 
 		for {
@@ -102,19 +100,21 @@ func (r *Doer) Start() {
 }
 
 func (r *Doer) Stop() {
-	if !r.started.Load() {
+	if !r.started.Swap(false) {
 		return
 	}
 
 	close(r.done)
 	r.wg.Wait()
-	r.started.Store(false)
 }
 
 func (r *Doer) do() {
 	count := r.count.Swap(0)
-	if count > 0 {
-		r.lastDone = r.nowFn()
-		r.doFn(count, r.period)
+	if count == 0 {
+		return
 	}
+
+	r.lastDone = r.nowFn()
+	r.doFn(count, r.period)
+
 }
