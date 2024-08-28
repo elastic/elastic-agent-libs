@@ -22,8 +22,7 @@ package file
 import (
 	"errors"
 	"os"
-
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 func stat(name string, statFunc func(name string) (os.FileInfo, error)) (FileInfo, error) {
@@ -36,7 +35,7 @@ func stat(name string, statFunc func(name string) (os.FileInfo, error)) (FileInf
 }
 
 func wrap(info os.FileInfo) (FileInfo, error) {
-	stat, ok := info.Sys().(*unix.Stat_t)
+	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return nil, errors.New("failed to get uid/gid")
 	}
