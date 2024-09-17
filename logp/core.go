@@ -151,25 +151,25 @@ func ConfigureWithOutputs(defaultLoggerCfg Config, outputs ...zapcore.Core) erro
 	return nil
 }
 
-// ConfigureWithCore configures the global logger to use an output created
-// from `defaultLoggerCfg` and all the output passed by `output`.
-func ConfigureWithCore(defaultLoggerCfg Config, core zapcore.Core) error {
+// ConfigureWithCore configures the global logger to use the passed in
+// core.  It is assumed that an output has already been defined with
+// the core and a new one should not be created.  The loggerCfg is
+// only used to set selectors and level.  This is useful if a part of
+// your code uses logp but the log output is already handled.  Normal
+// use cases should use Configure or ConfigureWithOutput.
+func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 	var (
 		sink  zapcore.Core
 		level zap.AtomicLevel
 	)
 
-	level = zap.NewAtomicLevelAt(defaultLoggerCfg.Level.ZapLevel())
+	level = zap.NewAtomicLevelAt(loggerCfg.Level.ZapLevel())
 	sink = wrappedCore(core)
 
-	// Default logger is always discard, debug level below will
-	// possibly re-enable it.
-	golog.SetOutput(io.Discard)
-
 	// Enabled selectors when debug is enabled.
-	selectors := make(map[string]struct{}, len(defaultLoggerCfg.Selectors))
-	if defaultLoggerCfg.Level.Enabled(DebugLevel) && len(defaultLoggerCfg.Selectors) > 0 {
-		for _, sel := range defaultLoggerCfg.Selectors {
+	selectors := make(map[string]struct{}, len(loggerCfg.Selectors))
+	if loggerCfg.Level.Enabled(DebugLevel) && len(loggerCfg.Selectors) > 0 {
+		for _, sel := range loggerCfg.Selectors {
 			selectors[strings.TrimSpace(sel)] = struct{}{}
 		}
 
@@ -178,18 +178,10 @@ func ConfigureWithCore(defaultLoggerCfg Config, core zapcore.Core) error {
 			selectors["*"] = struct{}{}
 		}
 
-		// Re-enable the default go logger output when either stdlog
-		// or all selector is enabled.
-		_, stdlogEnabled := selectors["stdlog"]
-		_, allEnabled := selectors["*"]
-		if stdlogEnabled || allEnabled {
-			golog.SetOutput(_defaultGoLog)
-		}
-
 		sink = selectiveWrapper(sink, selectors)
 	}
 
-	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
+	root := zap.New(sink, makeOptions(loggerCfg)...)
 	storeLogger(&coreLogger{
 		selectors:    selectors,
 		rootLogger:   root,
