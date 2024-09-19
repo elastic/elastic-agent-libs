@@ -21,10 +21,10 @@ package npipe
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"testing"
 
+	"github.com/elastic/elastic-agent-libs/transport/httpcommon"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,7 +55,7 @@ func TestHTTPOverNamedPipe(t *testing.T) {
 	// nolint:noctx // for testing purposes
 	r, err := c.Get("http://npipe/echo-hello")
 	require.NoError(t, err)
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := httpcommon.ReadAll(r)
 	require.NoError(t, err)
 	defer r.Body.Close()
 

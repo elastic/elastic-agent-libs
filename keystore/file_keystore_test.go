@@ -20,7 +20,6 @@ package keystore
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -348,7 +347,7 @@ func CreateAnExistingKeystore(path string) Keystore {
 
 // GetTemporaryKeystoreFile create a temporary file on disk to save the keystore.
 func GetTemporaryKeystoreFile() string {
-	path, err := ioutil.TempDir("", "testing")
+	path, err := os.MkdirTemp("", "testing")
 	if err != nil {
 		panic(err)
 	}

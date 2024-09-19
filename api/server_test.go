@@ -20,8 +20,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -32,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/elastic/elastic-agent-libs/config"
+	"github.com/elastic/elastic-agent-libs/transport/httpcommon"
 )
 
 const (
@@ -71,7 +70,7 @@ func TestSocket(t *testing.T) {
 	}
 
 	t.Run("socket doesn't exist before", func(t *testing.T) {
-		tmpDir, err := ioutil.TempDir("", "testsocket")
+		tmpDir, err := os.MkdirTemp("", "testsocket")
 		require.NoError(t, err)
 		defer os.RemoveAll(tmpDir)
 
@@ -102,7 +101,7 @@ func TestSocket(t *testing.T) {
 	})
 
 	t.Run("starting beat and recover a dangling socket file", func(t *testing.T) {
-		tmpDir, err := ioutil.TempDir("", "testsocket")
+		tmpDir, err := os.MkdirTemp("", "testsocket")
 		require.NoError(t, err)
 		defer os.RemoveAll(tmpDir)
 
@@ -161,7 +160,7 @@ func getResponse(t *testing.T, sockFile, url string) string {
 	require.NoError(t, err)
 	defer r.Body.Close()
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := httpcommon.ReadAll(r)
 	require.NoError(t, err)
 	return string(body)
 }
@@ -188,7 +187,7 @@ func TestHTTP(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := httpcommon.ReadAll(r)
 	require.NoError(t, err)
 
 	assert.Equal(t, "ehlo!", string(body))
@@ -229,7 +228,7 @@ func TestAttachHandler(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	body, err := io.ReadAll(r.Body)
+	body, err := httpcommon.ReadAll(r)
 	require.NoError(t, err)
 
 	assert.Equal(t, "test!", string(body))

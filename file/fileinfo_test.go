@@ -24,7 +24,6 @@
 package file_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +34,7 @@ import (
 )
 
 func TestStat(t *testing.T) {
-	f, err := ioutil.TempFile("", "teststat")
+	f, err := os.CreateTemp("", "teststat")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,6 @@
 package api
 
 import (
-	"io/ioutil"
 	"net/http"
 	"testing"
 
@@ -29,6 +28,7 @@ import (
 
 	"github.com/elastic/elastic-agent-libs/api/npipe"
 	"github.com/elastic/elastic-agent-libs/config"
+	"github.com/elastic/elastic-agent-libs/transport/httpcommon"
 )
 
 func TestNamedPipe(t *testing.T) {
@@ -57,7 +57,7 @@ func TestNamedPipe(t *testing.T) {
 	require.NoError(t, err)
 	defer r.Body.Close()
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := httpcommon.ReadAll(r)
 	require.NoError(t, err)
 
 	assert.Equal(t, "ehlo!", string(body))
