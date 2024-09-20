@@ -43,7 +43,8 @@ func TestHTTPOverNamedPipe(t *testing.T) {
 	})
 
 	go func() {
-		_ = http.Serve(l, mux)
+		_ = http.Serve(l, mux) //nolint:gosec // Serve does not support setting timeouts, it is fine for tests.
+
 	}()
 
 	c := http.Client{
@@ -52,7 +53,7 @@ func TestHTTPOverNamedPipe(t *testing.T) {
 		},
 	}
 
-	// nolint:noctx // for testing purposes
+	//nolint:noctx // for testing purposes
 	r, err := c.Get("http://npipe/echo-hello")
 	require.NoError(t, err)
 	body, err := httpcommon.ReadAll(r)
