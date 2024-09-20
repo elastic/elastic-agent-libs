@@ -27,10 +27,8 @@ import (
 // treat an EOF as an error to be reported.
 //
 // This function is similar to io.ReadAll, but uses a bytes.Buffer to
-// accumulate the data, which has a more efficient growing algorithm.
-//
-// Compared to io.ReadAll, this implementation is more cpu and memory
-// efficient in general, specially for > 512 byte reads.
+// accumulate the data, which has a more efficient growing algorithm and
+// uses io.WriterTo if r implements it.
 func ReadAll(r io.Reader) ([]byte, error) {
 	var buf bytes.Buffer
 	_, err := io.Copy(&buf, r)
