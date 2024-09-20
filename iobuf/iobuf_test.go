@@ -86,7 +86,10 @@ func BenchmarkReadAll(b *testing.B) {
 		buf := genFunc(size)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			buf.Seek(0, io.SeekStart) // reset
+			_, err := buf.Seek(0, io.SeekStart) // reset
+			if err != nil {
+				b.Fatal(err)
+			}
 			data, err := readFunc(buf)
 			if err != nil {
 				b.Fatal(err)

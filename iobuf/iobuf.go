@@ -33,27 +33,6 @@ import (
 // efficient in general, specially for > 512 byte reads.
 func ReadAll(r io.Reader) ([]byte, error) {
 	var buf bytes.Buffer
-	// if _, ok := r.(io.WriterTo); !ok {
-	// 	buf.Grow(512)
-	// 	b := buf.AvailableBuffer()
-	// 	for {
-	// 		n, err := r.Read(b[len(b):cap(b)])
-	// 		b = b[:len(b)+n]
-	// 		if err != nil {
-	// 			if err == io.EOF {
-	// 				err = nil
-	// 			}
-	// 			return b, err
-	// 		}
-
-	// 		if len(b) == cap(b) {
-	// 			// buffer full, leave to io.Copy to handle the rest
-	// 			buf.Write(b)
-	// 			break
-	// 		}
-	// 	}
-	// }
-
 	_, err := io.Copy(&buf, r)
 	return buf.Bytes(), err
 }
