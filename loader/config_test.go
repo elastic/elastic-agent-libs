@@ -55,11 +55,7 @@ func TestInputsResolveNOOP(t *testing.T) {
 		},
 	}
 
-	tmp, err := os.MkdirTemp("", "config")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmp)
-
-	cfgPath := filepath.Join(tmp, "config.yml")
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
 	dumpToYAML(t, cfgPath, contents)
 
 	cfg, err := LoadFile(cfgPath)
@@ -86,9 +82,7 @@ func testToMapStr(t *testing.T) {
 }
 
 func testLoadFiles(t *testing.T) {
-	tmp, err := os.MkdirTemp("", "watch")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmp)
+	tmp := t.TempDir()
 
 	f1 := filepath.Join(tmp, "1.yml")
 	dumpToYAML(t, f1, map[string]interface{}{

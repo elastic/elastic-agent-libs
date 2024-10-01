@@ -36,7 +36,7 @@ var keyValue = "output.elasticsearch.password"
 var secretValue = []byte(",s3cRet~`! @#$%^&*()_-+={[}]|\\:;\"'<,>.?/")
 
 func TestCanCreateAKeyStore(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore, err := NewFileKeystore(path)
@@ -50,7 +50,7 @@ func TestCanCreateAKeyStore(t *testing.T) {
 }
 
 func TestCanReadAnExistingKeyStoreWithEmptyString(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	CreateAnExistingKeystore(path)
@@ -67,7 +67,7 @@ func TestCanReadAnExistingKeyStoreWithEmptyString(t *testing.T) {
 }
 
 func TestCanDeleteAKeyFromTheStoreAndPersistChanges(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	CreateAnExistingKeystore(path)
@@ -97,7 +97,7 @@ func TestFilePermissionOnCreate(t *testing.T) {
 		t.Skip("Permission check is not running on windows")
 	}
 
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 	CreateAnExistingKeystore(path)
 
@@ -115,7 +115,7 @@ func TestFilePermissionOnUpdate(t *testing.T) {
 		t.Skip("Permission check is not running on windows")
 	}
 
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore := CreateAnExistingKeystore(path)
@@ -141,7 +141,7 @@ func TestFilePermissionOnLoadWhenStrictIsOn(t *testing.T) {
 		t.Skip("Permission check is not running on windows")
 	}
 
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	// Create a world readable keystore file
@@ -154,7 +154,7 @@ func TestFilePermissionOnLoadWhenStrictIsOn(t *testing.T) {
 }
 
 func TestReturnsUsedKeysInTheStore(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore := CreateAnExistingKeystore(path)
@@ -170,7 +170,7 @@ func TestReturnsUsedKeysInTheStore(t *testing.T) {
 }
 
 func TestCannotDecryptKeyStoreWithWrongPassword(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore, err := NewFileKeystoreWithPassword(path, NewSecureString([]byte("password")))
@@ -211,7 +211,7 @@ func TestSecretWithASCIIEncodedSecret(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore := CreateAnExistingKeystore(path)
@@ -239,7 +239,7 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestShouldRaiseAndErrorWhenVersionDontMatch(t *testing.T) {
-	temporaryPath := GetTemporaryKeystoreFile()
+	temporaryPath := GetTemporaryKeystoreFile(t)
 	defer os.Remove(temporaryPath)
 
 	badVersion := `v2D/EQwnDNO7yZsjsRFVWGgbkZudhPxVhBkaQAVud66+tK4HRdfPrNrNNgSmhioDGrQ0z/VZpvbw68gb0G
@@ -258,7 +258,7 @@ func TestShouldRaiseAndErrorWhenVersionDontMatch(t *testing.T) {
 }
 
 func TestMissingEncryptedBlock(t *testing.T) {
-	temporaryPath := GetTemporaryKeystoreFile()
+	temporaryPath := GetTemporaryKeystoreFile(t)
 	defer os.Remove(temporaryPath)
 
 	badVersion := "v1"
@@ -276,7 +276,7 @@ func TestMissingEncryptedBlock(t *testing.T) {
 }
 
 func createAndReadKeystoreSecret(t *testing.T, password []byte, key string, value []byte) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore, err := NewFileKeystoreWithPassword(path, NewSecureString(password))
@@ -298,7 +298,7 @@ func createAndReadKeystoreSecret(t *testing.T, password []byte, key string, valu
 }
 
 func createAndReadKeystoreWithPassword(t *testing.T, password []byte) {
-	path := GetTemporaryKeystoreFile()
+	path := GetTemporaryKeystoreFile(t)
 	defer os.Remove(path)
 
 	keyStore, err := NewFileKeystoreWithPassword(path, NewSecureString(password))
@@ -346,12 +346,9 @@ func CreateAnExistingKeystore(path string) Keystore {
 }
 
 // GetTemporaryKeystoreFile create a temporary file on disk to save the keystore.
-func GetTemporaryKeystoreFile() string {
-	path, err := os.MkdirTemp("", "testing")
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(path, "keystore")
+func GetTemporaryKeystoreFile(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "keystore")
 }
 
 func TestRandomBytesLength(t *testing.T) {

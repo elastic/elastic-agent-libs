@@ -70,10 +70,7 @@ func TestSocket(t *testing.T) {
 	}
 
 	t.Run("socket doesn't exist before", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "testsocket")
-		require.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
-
+		tmpDir := t.TempDir()
 		sockFile := tmpDir + "/test.sock"
 
 		cfg := config.MustNewConfigFrom(map[string]interface{}{
@@ -101,11 +98,7 @@ func TestSocket(t *testing.T) {
 	})
 
 	t.Run("starting beat and recover a dangling socket file", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "testsocket")
-		require.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
-
-		sockFile := tmpDir + "/test.sock"
+		sockFile := t.TempDir() + "/test.sock"
 
 		// Create the socket before the server.
 		f, err := os.Create(sockFile)

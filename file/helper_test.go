@@ -29,14 +29,10 @@ import (
 )
 
 func TestSafeFileRotateExistingFile(t *testing.T) {
-	tempdir, err := os.MkdirTemp("", "")
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, os.RemoveAll(tempdir))
-	}()
+	tempdir := t.TempDir()
 
 	// create an existing registry file
-	err = os.WriteFile(filepath.Join(tempdir, "registry"),
+	err := os.WriteFile(filepath.Join(tempdir, "registry"),
 		[]byte("existing filebeat"), 0x777)
 	assert.NoError(t, err)
 
