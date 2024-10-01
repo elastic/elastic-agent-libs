@@ -52,7 +52,7 @@ func NewRootCA() (crypto.PrivateKey, *x509.Certificate, Pair, error) {
 		return nil, nil, Pair{}, fmt.Errorf("could not create private key: %w", err)
 	}
 
-	_, cert, pair, err := newRootCert(rootKey, &rootKey.PublicKey)
+	cert, pair, err := newRootCert(rootKey, &rootKey.PublicKey)
 	return rootKey, cert, pair, err
 }
 
@@ -67,7 +67,7 @@ func NewRSARootCA() (crypto.PrivateKey, *x509.Certificate, Pair, error) {
 	if err != nil {
 		return nil, nil, Pair{}, fmt.Errorf("could not create private key: %w", err)
 	}
-	_, cert, pair, err := newRootCert(rootKey, &rootKey.PublicKey)
+	cert, pair, err := newRootCert(rootKey, &rootKey.PublicKey)
 	return rootKey, cert, pair, err
 }
 
@@ -189,7 +189,7 @@ func NewRSARootAndChildCerts() (Pair, Pair, error) {
 //   - a Pair containing the certificate and private key in PEM format.
 //
 // If an error occurs during certificate creation, it returns a non-nil error.
-func newRootCert(priv crypto.PrivateKey, pub crypto.PublicKey) (any, *x509.Certificate, Pair, error) {
+func newRootCert(priv crypto.PrivateKey, pub crypto.PublicKey) (*x509.Certificate, Pair, error) {
 	notBefore, notAfter := makeNotBeforeAndAfter()
 
 	rootTemplate := x509.Certificate{
@@ -211,12 +211,12 @@ func newRootCert(priv crypto.PrivateKey, pub crypto.PublicKey) (any, *x509.Certi
 	rootCertRawBytes, err := x509.CreateCertificate(
 		rand.Reader, &rootTemplate, &rootTemplate, pub, priv)
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not create CA: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create CA: %w", err)
 	}
 
 	rootPrivKeyDER, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not marshal private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not marshal private key: %w", err)
 	}
 
 	// PEM private key
@@ -225,7 +225,7 @@ func newRootCert(priv crypto.PrivateKey, pub crypto.PublicKey) (any, *x509.Certi
 	err = pem.Encode(rootPrivateKeyBuff,
 		&pem.Block{Type: keyBlockType(priv), Bytes: rootPrivKeyDER})
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not pem.Encode private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not pem.Encode private key: %w", err)
 	}
 
 	// PEM certificate
@@ -234,22 +234,22 @@ func newRootCert(priv crypto.PrivateKey, pub crypto.PublicKey) (any, *x509.Certi
 	err = pem.Encode(rootCertPemBuff,
 		&pem.Block{Type: "CERTIFICATE", Bytes: rootCertRawBytes})
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not pem.Encode certificate: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not pem.Encode certificate: %w", err)
 	}
 
 	// tls.Certificate
 	rootTLSCert, err := tls.X509KeyPair(
 		rootCertPemBuff.Bytes(), rootPrivateKeyBuff.Bytes())
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not create key pair: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create key pair: %w", err)
 	}
 
 	rootCACert, err := x509.ParseCertificate(rootTLSCert.Certificate[0])
 	if err != nil {
-		return nil, nil, Pair{}, fmt.Errorf("could not parse certificate: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not parse certificate: %w", err)
 	}
 
-	return priv, rootCACert, Pair{
+	return rootCACert, Pair{
 		Cert: rootCertPemBuff.Bytes(),
 		Key:  rootPrivateKeyBuff.Bytes(),
 	}, nil
