@@ -34,13 +34,14 @@ import (
 )
 
 func TestStat(t *testing.T) {
-	f, err := os.CreateTemp("", "teststat")
+	tmpDir := t.TempDir()
+	f, err := os.Create(filepath.Join(tmpDir, "teststat"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer f.Close()
 
-	link := filepath.Join(os.TempDir(), "teststat-link")
+	link := filepath.Join(tmpDir, "teststat-link")
 	if err := os.Symlink(f.Name(), link); err != nil {
 		t.Fatal(err)
 	}
