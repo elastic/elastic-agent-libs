@@ -15,18 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package mage
+package iobuf
 
-import "github.com/elastic/elastic-agent-libs/dev-tools/mage/gotool"
-
-var (
-	// GoLicenserImportPath controls the import path used to install go-licenser.
-	GoLicenserImportPath = "github.com/elastic/go-licenser@latest"
+import (
+	"bytes"
+	"io"
 )
 
-// InstallGoLicenser target installs go-licenser
-func InstallGoLicenser() error {
-	return gotool.Install(
-		gotool.Install.Package(GoLicenserImportPath),
-	)
+// ReadAll reads all data from r and returns it as a byte slice.
+// A successful call returns err == nil, not err == EOF. It does not
+// treat an EOF as an error to be reported.
+//
+// This function is similar to io.ReadAll, but uses a bytes.Buffer to
+// accumulate the data, which has a more efficient growing algorithm and
+// uses io.WriterTo if r implements it.
+func ReadAll(r io.Reader) ([]byte, error) {
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, r)
+	return buf.Bytes(), err
 }
