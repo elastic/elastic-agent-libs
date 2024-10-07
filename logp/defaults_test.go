@@ -126,7 +126,7 @@ func TestDefaultConfigContainer(t *testing.T) {
 	}
 
 	if os.Getenv("TEST_DEFAULT_CONFIG_CONTAINER") != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultConfigContainer$", "-test.v")
+		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultConfigContainer$", "-test.v") //nolint:gosec // This is intentionally running a subprocess
 		cmd.Env = append(cmd.Env, "TEST_DEFAULT_CONFIG_CONTAINER=1")
 
 		var stderr bytes.Buffer
