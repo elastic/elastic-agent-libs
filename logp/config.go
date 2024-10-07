@@ -70,9 +70,16 @@ const (
 // DefaultConfig returns the default config options for a given environment the
 // Beat is supposed to be run within.
 func DefaultConfig(environment Environment) Config {
+	toFiles := true
+
+	// If running in a container environment, don't write to files by default.
+	if environment == ContainerEnvironment {
+		toFiles = false
+	}
+
 	return Config{
 		Level:   defaultLevel,
-		ToFiles: true,
+		ToFiles: toFiles,
 		Files: FileConfig{
 			MaxSize:         10 * 1024 * 1024,
 			MaxBackups:      7,

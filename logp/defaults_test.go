@@ -19,9 +19,11 @@ package logp_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -115,6 +117,55 @@ func TestDefaultConfig(t *testing.T) {
 		t.Log("Original log entry:")
 		t.Log(string(data))
 	}
+}
+
+func TestDefaultConfigContainer(t *testing.T) {
+	switch runtime.GOOS {
+	case "wasip1", "js", "ios":
+		t.Skipf("cannot exec subprocess on %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	if os.Getenv("TEST_DEFAULT_CONFIG_CONTAINER") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultConfigContainer$", "-test.v")
+		cmd.Env = append(cmd.Env, "TEST_DEFAULT_CONFIG_CONTAINER=1")
+
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+
+		err := cmd.Run()
+		data := stderr.Bytes()
+		assert.NoError(t, err, "command failed with error: %s\nstderr: %s", err, data)
+		t.Logf("output:\n%s", data)
+
+		logEntry := struct {
+			LogLevel  string `json:"log.level"`
+			LogOrigin struct {
+				FileName string `json:"file.name"`
+				FileLine int    `json:"file.line"`
+			} `json:"log.origin"`
+			Message string `json:"message"`
+		}{}
+
+		assert.NoError(t, json.Unmarshal(data, &logEntry), "cannot unmarshal log entry from stderr")
+
+		assert.Equal(t, "info", logEntry.LogLevel)
+		assert.Equal(t, "foo", logEntry.Message)
+
+		_, fileName, _, _ := runtime.Caller(0)
+		expectedFileName := filepath.Base(fileName)
+		gotFileName := filepath.Base(logEntry.LogOrigin.FileName)
+		assert.Equal(t, expectedFileName, gotFileName)
+
+		return
+	}
+
+	// This is running in a separate process. By default the
+	// container environment should be logging to stderr.
+	cfg := logp.DefaultConfig(logp.ContainerEnvironment)
+	assert.NoError(t, logp.Configure(cfg))
+	logger := logp.L()
+	defer logger.Close()
+	logger.Info("foo")
 }
 
 func TestWith(t *testing.T) {
