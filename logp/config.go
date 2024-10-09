@@ -71,15 +71,19 @@ const (
 // Beat is supposed to be run within.
 func DefaultConfig(environment Environment) Config {
 	toFiles := true
+	toStderr := false
 
-	// If running in a container environment, don't write to files by default.
-	if environment == ContainerEnvironment {
+	// For container and systemd environments, we don't write to files by default.
+	switch environment {
+	case ContainerEnvironment, SystemdEnvironment:
 		toFiles = false
+		toStderr = true
 	}
 
 	return Config{
-		Level:   defaultLevel,
-		ToFiles: toFiles,
+		Level:    defaultLevel,
+		ToFiles:  toFiles,
+		ToStderr: toStderr,
 		Files: FileConfig{
 			MaxSize:         10 * 1024 * 1024,
 			MaxBackups:      7,
