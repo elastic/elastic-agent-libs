@@ -119,63 +119,23 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigContainer(t *testing.T) {
-	switch runtime.GOOS {
-	case "wasip1", "js", "ios":
-		t.Skipf("cannot exec subprocess on %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-
-	if os.Getenv("TEST_DEFAULT_CONFIG_CONTAINER") != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultConfigContainer$", "-test.v") //nolint:gosec // This is intentionally running a subprocess
-		cmd.Env = append(cmd.Env, "TEST_DEFAULT_CONFIG_CONTAINER=1")
-
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-
-		err := cmd.Run()
-		data := stderr.Bytes()
-		assert.NoError(t, err, "command failed with error: %s\nstderr: %s", err, data)
-		t.Logf("output:\n%s", data)
-
-		logEntry := struct {
-			LogLevel  string `json:"log.level"`
-			LogOrigin struct {
-				FileName string `json:"file.name"`
-				FileLine int    `json:"file.line"`
-			} `json:"log.origin"`
-			Message string `json:"message"`
-		}{}
-
-		assert.NoError(t, json.Unmarshal(data, &logEntry), "cannot unmarshal log entry from stderr")
-
-		assert.Equal(t, "info", logEntry.LogLevel)
-		assert.Equal(t, "foo", logEntry.Message)
-
-		_, fileName, _, _ := runtime.Caller(0)
-		expectedFileName := filepath.Base(fileName)
-		gotFileName := filepath.Base(logEntry.LogOrigin.FileName)
-		assert.Equal(t, expectedFileName, gotFileName)
-
-		return
-	}
-
-	// This is running in a separate process.
-	cfg := logp.DefaultConfig(logp.ContainerEnvironment)
-	assert.NoError(t, logp.Configure(cfg))
-	logger := logp.L()
-	defer logger.Close()
-	logger.Info("foo")
+func TestDefaultConfigContainerLogsToStderr(t *testing.T) {
+	runTestEnvStderr(t, logp.ContainerEnvironment)
 }
 
-func TestDefaultConfigSystemd(t *testing.T) {
+func TestDefaultConfigSystemdLogsToStderr(t *testing.T) {
+	runTestEnvStderr(t, logp.SystemdEnvironment)
+}
+
+func runTestEnvStderr(t *testing.T, envType logp.Environment) {
 	switch runtime.GOOS {
 	case "wasip1", "js", "ios":
 		t.Skipf("cannot exec subprocess on %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
-	if os.Getenv("TEST_DEFAULT_CONFIG_SYSTEMD") != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultConfigSystemd$", "-test.v") //nolint:gosec // This is intentionally running a subprocess
-		cmd.Env = append(cmd.Env, "TEST_DEFAULT_CONFIG_SYSTEMD=1")
+	if os.Getenv("TEST_DEFAULT_CONFIG_STDERR") != "1" {
+		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=^%s$", t.Name()), "-test.v") //nolint:gosec // This is intentionally running a subprocess
+		cmd.Env = append(cmd.Env, "TEST_DEFAULT_CONFIG_STDERR=1")
 
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -207,8 +167,8 @@ func TestDefaultConfigSystemd(t *testing.T) {
 		return
 	}
 
-	// This is running in a separate process.
-	cfg := logp.DefaultConfig(logp.SystemdEnvironment)
+	// This is running in a separate process to make sure we capture stderr.
+	cfg := logp.DefaultConfig(envType)
 	assert.NoError(t, logp.Configure(cfg))
 	logger := logp.L()
 	defer logger.Close()
