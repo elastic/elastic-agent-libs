@@ -84,7 +84,7 @@ func main() {
 	rootCert, rootKey := getCA(rsa, caPath, caKeyPath, dest, filePrefix)
 	priv, pub := generateKey(rsa)
 
-	childCert, childPair, err := certutil.GenerateChildCert(
+	childCert, childPair, err := certutil.GenerateGenericChildCert(
 		name,
 		netIPs,
 		priv,
