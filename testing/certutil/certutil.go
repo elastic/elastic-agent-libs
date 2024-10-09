@@ -101,7 +101,7 @@ func GenerateChildCert(name string, ips []net.IP, caPrivKey crypto.PrivateKey, c
 
 // GenerateGenericChildCert generates a x509 Certificate using priv and pub
 // as the certificate's private and public keys and as a child of caCert.
-// Use this function if oyu need fine control over keys or ips and certificate name,
+// Use this function if you need fine control over keys or ips and certificate name,
 // otherwise prefer GenerateChildCert or NewRootAndChildCerts/NewRSARootAndChildCerts
 //
 // It returns the following:

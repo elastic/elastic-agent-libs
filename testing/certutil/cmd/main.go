@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// nolint:errorlint,forbidigo // it's a cli application
+//nolint:errorlint,forbidigo // it's a cli application
 package main
 
 import (
