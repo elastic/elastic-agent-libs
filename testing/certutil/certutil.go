@@ -101,7 +101,7 @@ func NewRSARootCA(opts ...Option) (crypto.PrivateKey, *x509.Certificate, Pair, e
 func GenerateChildCert(name string, ips []net.IP, caPrivKey crypto.PrivateKey, caCert *x509.Certificate, opts ...Option) (*tls.Certificate, Pair, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		return nil, Pair{}, fmt.Errorf("could not create RSA private key: %w", err)
+		return nil, Pair{}, fmt.Errorf("could not create ECDSA private key: %w", err)
 	}
 
 	cert, childPair, err :=
@@ -144,7 +144,7 @@ func GenerateRSAChildCert(name string, ips []net.IP, caPrivKey crypto.PrivateKey
 			opts...)
 	if err != nil {
 		return nil, Pair{}, fmt.Errorf(
-			"could not generate child TLS certificate CA: %w", err)
+			"could not generate child TLS certificate: %w", err)
 	}
 
 	return cert, childPair, nil
