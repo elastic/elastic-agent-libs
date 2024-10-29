@@ -1154,6 +1154,12 @@ func TestFindFold(t *testing.T) {
 			expVal: field1level2,
 		},
 		{
+			name:   "returns normal key, one level",
+			key:    "level1_Field1",
+			expKey: "level1_Field1",
+			expVal: field1level1,
+		},
+		{
 			name:   "returns case-insensitive full match",
 			key:    "level1_field1.level2_field1.level3_field1",
 			expKey: "level1_Field1.level2_Field1.level3_Field1",
@@ -1164,6 +1170,12 @@ func TestFindFold(t *testing.T) {
 			key:    "level1_field1.level2_field1",
 			expKey: "level1_Field1.level2_Field1",
 			expVal: field1level2,
+		},
+		{
+			name:   "returns case-insensitive one-level match",
+			key:    "level1_field1",
+			expKey: "level1_Field1",
+			expVal: field1level1,
 		},
 		{
 			name:   "returns collision error",
