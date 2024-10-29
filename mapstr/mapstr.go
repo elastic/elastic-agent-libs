@@ -188,7 +188,7 @@ func (m M) FindFold(key string) (matchedKey string, value interface{}, err error
 	// start with the root
 	current := m
 	// allocate only once
-	mapType := false
+	var mapType bool
 
 	for i, segment := range path {
 		if !found {
