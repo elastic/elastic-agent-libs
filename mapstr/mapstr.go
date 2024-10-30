@@ -516,7 +516,7 @@ func AddTagsWithKey(ms M, key string, tags []string) error {
 	return nil
 }
 
-// toMapStr performs a type assertion on v and returns a MapStr. v can be either
+// ToMapStr performs a type assertion on v and returns a MapStr. v can be either
 // a MapStr or a map[string]interface{}. If it's any other type or nil then
 // an error is returned.
 func ToMapStr(v interface{}) (M, error) {
