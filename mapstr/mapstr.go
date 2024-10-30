@@ -229,6 +229,10 @@ func (m M) FindFold(key string) (matchedKey string, value interface{}, err error
 		}
 	}
 
+	if !found {
+		return "", nil, ErrKeyNotFound
+	}
+
 	return matchedKey, value, nil
 }
 
@@ -462,7 +466,7 @@ func mergeFieldsGetDestMap(target, from M, underRoot bool) (M, error) {
 		} else {
 			// Use existing 'fields' value.
 			var err error
-			destMap, err = toMapStr(f)
+			destMap, err = ToMapStr(f)
 			if err != nil {
 				return nil, err
 			}
@@ -515,7 +519,7 @@ func AddTagsWithKey(ms M, key string, tags []string) error {
 // toMapStr performs a type assertion on v and returns a MapStr. v can be either
 // a MapStr or a map[string]interface{}. If it's any other type or nil then
 // an error is returned.
-func toMapStr(v interface{}) (M, error) {
+func ToMapStr(v interface{}) (M, error) {
 	m, ok := tryToMapStr(v)
 	if !ok {
 		return nil, fmt.Errorf("expected map but type is %T", v)
@@ -571,7 +575,7 @@ func mapFind(
 			}
 		}
 
-		v, err := toMapStr(d)
+		v, err := ToMapStr(d)
 		if err != nil {
 			return "", nil, nil, false, err
 		}

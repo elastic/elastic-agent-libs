@@ -1192,6 +1192,11 @@ func TestFindFold(t *testing.T) {
 			key:    "level1_field1.not_exists.some_key",
 			expErr: "key not found",
 		},
+		{
+			name:   "returns non-found error",
+			key:    "level1_field4",
+			expErr: "key not found",
+		},
 	}
 
 	for _, tc := range cases {
