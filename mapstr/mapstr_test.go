@@ -1193,7 +1193,7 @@ func TestFindFold(t *testing.T) {
 			expErr: "key not found",
 		},
 		{
-			name:   "returns non-found error",
+			name:   "returns not found error",
 			key:    "level1_field4",
 			expErr: "key not found",
 		},
