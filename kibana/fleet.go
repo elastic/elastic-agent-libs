@@ -37,13 +37,13 @@ const (
 	fleetAgentsAPI               = "/api/fleet/agents"
 	fleetAgentsDeleteAPI         = "/api/fleet/agent_policies/delete"
 	fleetEnrollmentAPIKeysAPI    = "/api/fleet/enrollment_api_keys" //nolint:gosec // no API key being leaked here
-	fleetFleetServerHostAPI      = "/api/fleet/fleet_server_hosts/%s"
 	fleetFleetServerHostsAPI     = "/api/fleet/fleet_server_hosts"
 	fleetPackagePoliciesAPI      = "/api/fleet/package_policies"
 	fleetUnEnrollAgentAPI        = "/api/fleet/agents/%s/unenroll"
 	fleetUninstallTokensAPI      = "/api/fleet/uninstall_tokens" //nolint:gosec // NOT the "Potential hardcoded credentials"
 	fleetUpgradeAgentAPI         = "/api/fleet/agents/%s/upgrade"
 	fleetAgentDownloadSourcesAPI = "/api/fleet/agent_download_sources"
+	fleetProxiesAPI              = "/api/fleet/proxies"
 )
 
 //
@@ -474,19 +474,41 @@ func (client *Client) UpgradeAgent(ctx context.Context, request UpgradeAgentRequ
 type FleetServerHost struct {
 	ID              string   `json:"id"`
 	Name            string   `json:"name"`
-	IsDefault       bool     `json:"is_default"`
 	HostURLs        []string `json:"host_urls"`
+	IsDefault       bool     `json:"is_default"`
+	IsInternal      bool     `json:"is_internal"`
 	IsPreconfigured bool     `json:"is_preconfigured"`
+	ProxyID         string   `json:"proxy_id"`
 }
 
-// ListFleetServerHostsRequest is currently unused
+// ListFleetServerHostsRequest ...
 type ListFleetServerHostsRequest struct {
-	// For future use
+	HostURLs        []string `json:"host_urls"`
+	ID              string   `json:"id"`
+	IsDefault       bool     `json:"is_default"`
+	IsInternal      bool     `json:"is_internal"`
+	IsPreconfigured bool     `json:"is_preconfigured"`
+	Name            string   `json:"name"`
+	ProxyID         string   `json:"proxy_id"`
 }
 
 // ListFleetServerHostsResponse is the JSON response for ListFleetServerHosts
 type ListFleetServerHostsResponse struct {
 	Items []FleetServerHost `json:"items"`
+}
+
+// FleetServerHostsResponse is the json representation of the response from POST
+// to fleetFleetServerHostsAPI
+type FleetServerHostsResponse struct {
+	Item struct {
+		ID              string   `json:"id"`
+		HostUrls        []string `json:"host_urls"`
+		IsDefault       bool     `json:"is_default"`
+		IsInternal      bool     `json:"is_internal"`
+		IsPreconfigured bool     `json:"is_preconfigured"`
+		Name            string   `json:"name"`
+		ProxyID         string   `json:"proxy_id"`
+	} `json:"item"`
 }
 
 // ListFleetServerHosts returns a list of fleet server hosts
@@ -500,6 +522,35 @@ func (client *Client) ListFleetServerHosts(ctx context.Context, _ ListFleetServe
 	err = readJSONResponse(resp, &r)
 
 	return r, err
+}
+
+// CreateFleetServerHosts creates a new Fleet Server host
+func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetServerHostsRequest) (FleetServerHostsResponse, error) {
+	bs, err := json.Marshal(req)
+	if err != nil {
+		return FleetServerHostsResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest")
+	}
+
+	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost,
+		fleetFleetServerHostsAPI,
+		nil, nil, bytes.NewReader(bs))
+	if err != nil {
+		return FleetServerHostsResponse{}, fmt.Errorf("error calling new fleet server hosts API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return FleetServerHostsResponse{}, fmt.Errorf("error reading fleet response: %w", err)
+	}
+
+	var fleetResp FleetServerHostsResponse
+	err = json.Unmarshal(body, &fleetResp)
+	if err != nil {
+		return FleetServerHostsResponse{}, fmt.Errorf("error parsing fleet response: %w", err)
+	}
+
+	return fleetResp, nil
 }
 
 //
@@ -516,7 +567,7 @@ type GetFleetServerHostResponse FleetServerHost
 
 // GetFleetServerHost returns data on a fleet server
 func (client *Client) GetFleetServerHost(ctx context.Context, request GetFleetServerHostRequest) (r GetFleetServerHostResponse, err error) {
-	apiURL := fmt.Sprintf(fleetFleetServerHostAPI, request.ID)
+	apiURL := fleetFleetServerHostsAPI + "/" + request.ID
 
 	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
 	if err != nil {
@@ -536,6 +587,7 @@ func (client *Client) GetFleetServerHost(ctx context.Context, request GetFleetSe
 // Fleet Package Policy
 //
 
+// PackagePolicyRequest
 // https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#createPackagePolicy
 // request https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy_request
 type PackagePolicyRequest struct {
@@ -554,11 +606,13 @@ type PackagePolicyRequestPackage struct {
 	Version string `json:"version"`
 }
 
+// PackagePolicyResponse
 // https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#create_package_policy_200_response
 type PackagePolicyResponse struct {
 	Item PackagePolicy `json:"item"`
 }
 
+// PackagePolicy
 // https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy
 type PackagePolicy struct {
 	ID          string                      `json:"id,omitempty"`
@@ -573,6 +627,7 @@ type PackagePolicy struct {
 	Description string                      `json:"description"`
 }
 
+// DeletePackagePolicyResponse
 // https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#delete_package_policy_200_response
 type DeletePackagePolicyResponse struct {
 	ID string `json:"id"`
@@ -628,6 +683,59 @@ func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID st
 	return r, err
 }
 
+//
+// Fleet Proxies
+//
+
+type ProxiesRequest struct {
+	Certificate            string            `json:"certificate"`
+	CertificateAuthorities string            `json:"certificate_authorities"`
+	CertificateKey         string            `json:"certificate_key"`
+	ID                     string            `json:"id"`
+	IsPreconfigured        bool              `json:"is_preconfigured"`
+	Name                   string            `json:"name"`
+	ProxyHeaders           map[string]string `json:"proxy_headers"`
+	URL                    string            `json:"url"`
+}
+
+type ProxiesResponse struct {
+	Item struct {
+		Certificate            string            `json:"certificate"`
+		CertificateAuthorities string            `json:"certificate_authorities"`
+		CertificateKey         string            `json:"certificate_key"`
+		ID                     string            `json:"id"`
+		IsPreconfigured        bool              `json:"is_preconfigured"`
+		Name                   string            `json:"name"`
+		ProxyHeaders           map[string]string `json:"proxy_headers"`
+		URL                    string            `json:"url"`
+	} `json:"item"`
+}
+
+// CreateFleetProxy creates a new proxy
+func (client *Client) CreateFleetProxy(ctx context.Context, req ProxiesRequest) (ProxiesResponse, error) {
+	bs, err := json.Marshal(req)
+	if err != nil {
+		return ProxiesResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest")
+	}
+
+	r, err := client.Connection.SendWithContext(ctx, http.MethodPost,
+		fleetProxiesAPI, nil, nil,
+		bytes.NewReader(bs),
+	)
+	if err != nil {
+		return ProxiesResponse{}, err
+	}
+	defer r.Body.Close()
+
+	resp := ProxiesResponse{}
+	err = readJSONResponse(r, &resp)
+	if err != nil {
+		return ProxiesResponse{}, fmt.Errorf("failes parsing response")
+	}
+
+	return resp, nil
+}
+
 // UninstallTokenResponse uninstall tokens response with resolved token values
 type UninstallTokenResponse struct {
 	Items   []UninstallTokenItem `json:"items"`
@@ -647,7 +755,7 @@ type uninstallTokenValueResponse struct {
 	Item UninstallTokenItem `json:"item"`
 }
 
-// GetPolicyUninstallTokens Retrieves the the policy uninstall tokens
+// GetPolicyUninstallTokens Retrieves the policy uninstall tokens
 func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID string) (r UninstallTokenResponse, err error) {
 	// Fetch uninstall token for the policy
 	// /api/fleet/uninstall_tokens?policyId={policyId}&page=1&perPage=1000
