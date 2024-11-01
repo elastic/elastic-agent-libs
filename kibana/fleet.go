@@ -519,6 +519,9 @@ func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetS
 		return FleetServerHostsResponse{}, fmt.Errorf("error calling new fleet server hosts API: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return FleetServerHostsResponse{}, fmt.Errorf("error creating fleet-server host: unexpected status code: %s", r.Status)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -695,6 +698,9 @@ func (client *Client) CreateFleetProxy(ctx context.Context, req ProxiesRequest) 
 		return ProxiesResponse{}, err
 	}
 	defer r.Body.Close()
+	if r.StatusCode != http.StatusOK {
+		return ProxiesResponse{}, fmt.Errorf("error creating proxy: unexpected status code: %s", r.Status)
+	}
 
 	resp := ProxiesResponse{}
 	err = readJSONResponse(r, &resp)
