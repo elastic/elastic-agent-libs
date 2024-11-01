@@ -520,7 +520,7 @@ func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetS
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return FleetServerHostsResponse{}, fmt.Errorf("error creating fleet-server host: unexpected status code: %s", r.Status)
+		return FleetServerHostsResponse{}, fmt.Errorf("error creating fleet-server host: unexpected status code: %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
