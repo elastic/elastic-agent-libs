@@ -30,6 +30,8 @@ import (
 	"github.com/elastic/elastic-agent-libs/upgrade/details"
 )
 
+// The full documentation for the Kibana API can be found on
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json
 const (
 	fleetAgentAPI                = "/api/fleet/agents/%s"
 	fleetAgentPoliciesAPI        = "/api/fleet/agent_policies"
@@ -46,12 +48,20 @@ const (
 	fleetProxiesAPI              = "/api/fleet/proxies"
 )
 
-//
-// Create Policy
-//
+// Constant booleans for convenience for dealing with *bool
+var (
+	bt bool = true
+	bf bool = false
 
-// MonitoringEnabledOption is a Kibana JSON value that specifies the various monitoring option types
-type MonitoringEnabledOption string
+	TRUE  *bool = &bt
+	FALSE *bool = &bf
+)
+
+//
+// Agent Policies
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Elastic%20Agent%20policies
+//
 
 const (
 	// MonitoringEnabledLogs specifies log monitoring
@@ -60,9 +70,13 @@ const (
 	MonitoringEnabledMetrics MonitoringEnabledOption = "metrics"
 )
 
-// AgentPolicy is the JSON that represents a agent policy. These fields are used by both the create policy request, and the GET request for an agent policy.
-// see: https://github.com/elastic/kibana/blob/v8.8.0/x-pack/plugins/fleet/common/openapi/components/schemas/agent_policy_create_request.yaml
-// and https://github.com/elastic/kibana/blob/v8.8.0/x-pack/plugins/fleet/common/openapi/components/schemas/agent_policy.yaml
+type policyResp struct {
+	Item PolicyResponse `json:"item"`
+}
+
+// MonitoringEnabledOption is a Kibana JSON value that specifies the various monitoring option types
+type MonitoringEnabledOption string
+
 type AgentPolicy struct {
 	ID string `json:"id,omitempty"`
 	// Name of the policy. Required to create a policy.
@@ -82,9 +96,6 @@ type AgentPolicy struct {
 	IsProtected        bool                      `json:"is_protected"`
 }
 
-// PolicyResponse is the response JSON from a policy request
-// This is returned on a GET request for a policy, and on a policy create request
-// See https://github.com/elastic/kibana/blob/v8.8.0/x-pack/plugins/fleet/common/openapi/paths/agent_policies.yaml
 type PolicyResponse struct {
 	AgentPolicy     `json:",inline"`
 	UpdatedOn       time.Time                `json:"updated_on"`
@@ -96,7 +107,6 @@ type PolicyResponse struct {
 
 // AgentPolicyUpdateRequest is the JSON object for requesting an updated policy
 // Unlike the Agent create and response structures, the update request does not contain an ID field.
-// See https://github.com/elastic/kibana/blob/v8.9.0/x-pack/plugins/fleet/common/openapi/components/schemas/agent_policy_update_request.yaml
 type AgentPolicyUpdateRequest struct {
 	// Name of the policy. Required in an update request.
 	Name string `json:"name"`
@@ -113,19 +123,6 @@ type AgentPolicyUpdateRequest struct {
 	AgentFeatures      []map[string]interface{}  `json:"agent_features,omitempty"`
 	Overrides          map[string]interface{}    `json:"overrides,omitempty"`
 	IsProtected        *bool                     `json:"is_protected,omitempty"` // Optional bool for compatibility with the older pre 8.9.0 stack
-}
-
-// Constant booleans for convenience for dealing with *bool
-var (
-	bt bool = true
-	bf bool = false
-
-	TRUE  *bool = &bt
-	FALSE *bool = &bf
-)
-
-type policyResp struct {
-	Item PolicyResponse `json:"item"`
 }
 
 // CreatePolicy creates a new agent policy with the given config
@@ -207,7 +204,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 	return body, nil
 }
 
-// GetPolicy returns the requested ID
+// GetPolicy returns the policy with 'policy_id' id.
 func (client *Client) GetPolicy(ctx context.Context, id string) (r PolicyResponse, err error) {
 	apiURL := fmt.Sprintf(fleetAgentPolicyAPI, id)
 	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
@@ -268,15 +265,15 @@ func (client *Client) DeletePolicy(ctx context.Context, id string) error {
 
 //
 // Create Enrollment API Key
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Fleet%20enrollment%20API%20keys
 //
 
-// CreateEnrollmentAPIKeyRequest is the JSON object for requesting an enrollment API key
 type CreateEnrollmentAPIKeyRequest struct {
 	Name     string `json:"name"`
 	PolicyID string `json:"policy_id"`
 }
 
-// CreateEnrollmentAPIKeyResponse is the JSON response the an enrollment key request
 type CreateEnrollmentAPIKeyResponse struct {
 	Active   bool   `json:"active"`
 	APIKey   string `json:"api_key"`
@@ -307,10 +304,12 @@ func (client *Client) CreateEnrollmentAPIKey(ctx context.Context, request Create
 }
 
 //
-// List Agents
+// Elastic Agents
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Elastic%20Agents
 //
 
-// AgentCommon represents common agent data used across APIs
+// AgentCommon represents common agent data used across Agent APIs
 type AgentCommon struct {
 	Active bool   `json:"active"`
 	Status string `json:"status"`
@@ -341,18 +340,15 @@ type AgentUpgradeDetails struct {
 	} `json:"metadata"`
 }
 
-// AgentExisting is the data structure for an existing agent
 type AgentExisting struct {
 	ID          string `json:"id"`
 	AgentCommon `json:",inline"`
 }
 
-// ListAgentsRequest is currently unused
 type ListAgentsRequest struct {
 	// For future use
 }
 
-// ListAgentsResponse is a list of agents returned by the API
 type ListAgentsResponse struct {
 	Items []AgentExisting `json:"items"`
 }
@@ -369,16 +365,10 @@ func (client *Client) ListAgents(ctx context.Context, _ ListAgentsRequest) (r Li
 	return r, err
 }
 
-//
-// Get Agent
-//
-
-// GetAgentRequest contains the ID used for fetching agent data
 type GetAgentRequest struct {
 	ID string
 }
 
-// GetAgentResponse is the JSON response for GetAgent
 type GetAgentResponse AgentExisting
 
 // GetAgent fetches data for an agent
@@ -399,16 +389,16 @@ func (client *Client) GetAgent(ctx context.Context, request GetAgentRequest) (r 
 }
 
 //
-// Unenroll Agent
+// Elastic Agent actions
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Elastic%20Agent%20actions
 //
 
-// UnEnrollAgentRequest is the JSON request for unenrolling an agent
 type UnEnrollAgentRequest struct {
 	ID     string `json:"-"` // ID is not part of the request body send to the Fleet API
 	Revoke bool   `json:"revoke"`
 }
 
-// UnEnrollAgentResponse is currently unused
 type UnEnrollAgentResponse struct {
 	// For future use
 }
@@ -431,11 +421,6 @@ func (client *Client) UnEnrollAgent(ctx context.Context, request UnEnrollAgentRe
 	return r, err
 }
 
-//
-// Upgrade Agent
-//
-
-// UpgradeAgentRequest is the JSON request for an agent upgrade
 type UpgradeAgentRequest struct {
 	ID        string `json:"-"` // ID is not part of the request body send to the Fleet API
 	Version   string `json:"version"`
@@ -443,7 +428,6 @@ type UpgradeAgentRequest struct {
 	Force     bool   `json:"force"`
 }
 
-// UpgradeAgentResponse is currently unused
 type UpgradeAgentResponse struct {
 	// For future use
 }
@@ -467,10 +451,11 @@ func (client *Client) UpgradeAgent(ctx context.Context, request UpgradeAgentRequ
 }
 
 //
-// List Fleet Server Hosts
+// Fleet Server Hosts
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Fleet%20Server%20hosts
 //
 
-// FleetServerHost handles JSON data for fleet server info
 type FleetServerHost struct {
 	ID              string   `json:"id"`
 	Name            string   `json:"name"`
@@ -481,7 +466,6 @@ type FleetServerHost struct {
 	ProxyID         string   `json:"proxy_id"`
 }
 
-// ListFleetServerHostsRequest ...
 type ListFleetServerHostsRequest struct {
 	HostURLs        []string `json:"host_urls"`
 	ID              string   `json:"id"`
@@ -492,13 +476,10 @@ type ListFleetServerHostsRequest struct {
 	ProxyID         string   `json:"proxy_id"`
 }
 
-// ListFleetServerHostsResponse is the JSON response for ListFleetServerHosts
 type ListFleetServerHostsResponse struct {
 	Items []FleetServerHost `json:"items"`
 }
 
-// FleetServerHostsResponse is the json representation of the response from POST
-// to fleetFleetServerHostsAPI
 type FleetServerHostsResponse struct {
 	Item struct {
 		ID              string   `json:"id"`
@@ -528,7 +509,7 @@ func (client *Client) ListFleetServerHosts(ctx context.Context, _ ListFleetServe
 func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetServerHostsRequest) (FleetServerHostsResponse, error) {
 	bs, err := json.Marshal(req)
 	if err != nil {
-		return FleetServerHostsResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest")
+		return FleetServerHostsResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest: %w", err)
 	}
 
 	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost,
@@ -553,19 +534,12 @@ func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetS
 	return fleetResp, nil
 }
 
-//
-// Get Fleet Server Host
-//
-
-// GetFleetServerHostRequest is the ID for a request via GetFleetServerHost
 type GetFleetServerHostRequest struct {
 	ID string
 }
 
-// GetFleetServerHostResponse is the JSON respose from GetFleetServerHost
 type GetFleetServerHostResponse FleetServerHost
 
-// GetFleetServerHost returns data on a fleet server
 func (client *Client) GetFleetServerHost(ctx context.Context, request GetFleetServerHostRequest) (r GetFleetServerHostResponse, err error) {
 	apiURL := fleetFleetServerHostsAPI + "/" + request.ID
 
@@ -585,11 +559,10 @@ func (client *Client) GetFleetServerHost(ctx context.Context, request GetFleetSe
 
 //
 // Fleet Package Policy
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Fleet%20package%20policies
 //
 
-// PackagePolicyRequest
-// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#createPackagePolicy
-// request https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy_request
 type PackagePolicyRequest struct {
 	ID        string                      `json:"id,omitempty"`
 	Name      string                      `json:"name"`
@@ -606,14 +579,10 @@ type PackagePolicyRequestPackage struct {
 	Version string `json:"version"`
 }
 
-// PackagePolicyResponse
-// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#create_package_policy_200_response
 type PackagePolicyResponse struct {
 	Item PackagePolicy `json:"item"`
 }
 
-// PackagePolicy
-// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#package_policy
 type PackagePolicy struct {
 	ID          string                      `json:"id,omitempty"`
 	Revision    int                         `json:"revision"`
@@ -627,8 +596,6 @@ type PackagePolicy struct {
 	Description string                      `json:"description"`
 }
 
-// DeletePackagePolicyResponse
-// https://www.elastic.co/guide/en/fleet/8.8/fleet-apis.html#delete_package_policy_200_response
 type DeletePackagePolicyResponse struct {
 	ID string `json:"id"`
 }
@@ -685,6 +652,8 @@ func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID st
 
 //
 // Fleet Proxies
+// see full documentation on:
+// https://petstore.swagger.io/?url=https://raw.githubusercontent.com/elastic/kibana/main/oas_docs/bundle.json#/Fleet%20proxies
 //
 
 type ProxiesRequest struct {
@@ -715,7 +684,7 @@ type ProxiesResponse struct {
 func (client *Client) CreateFleetProxy(ctx context.Context, req ProxiesRequest) (ProxiesResponse, error) {
 	bs, err := json.Marshal(req)
 	if err != nil {
-		return ProxiesResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest")
+		return ProxiesResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest: %w", err)
 	}
 
 	r, err := client.Connection.SendWithContext(ctx, http.MethodPost,
@@ -730,13 +699,12 @@ func (client *Client) CreateFleetProxy(ctx context.Context, req ProxiesRequest) 
 	resp := ProxiesResponse{}
 	err = readJSONResponse(r, &resp)
 	if err != nil {
-		return ProxiesResponse{}, fmt.Errorf("failes parsing response")
+		return ProxiesResponse{}, fmt.Errorf("failes parsing response: %w", err)
 	}
 
 	return resp, nil
 }
 
-// UninstallTokenResponse uninstall tokens response with resolved token values
 type UninstallTokenResponse struct {
 	Items   []UninstallTokenItem `json:"items"`
 	Total   int                  `json:"total"`
