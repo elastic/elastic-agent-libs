@@ -1275,7 +1275,7 @@ func TestAlterPath(t *testing.T) {
 				},
 			},
 			exp: M{
-				"level1_field1": M{
+				"level1_field1": M{ //first level is unchanged - already in lowercase
 					"key": "value1",
 				},
 			},
