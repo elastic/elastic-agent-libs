@@ -1265,6 +1265,22 @@ func TestAlterPath(t *testing.T) {
 			},
 		},
 		{
+			name:      "alters keys on second level with case-insensitive matching",
+			from:      "level1_field1.key",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_field1": M{
+					"Key": "value1",
+				},
+			},
+			exp: M{
+				"level1_field1": M{
+					"key": "value1",
+				},
+			},
+		},
+		{
 			name:      "alters keys on all nested levels with case-insensitive matching",
 			from:      "level1_field1.level2_field1.level3_field1",
 			mode:      CaseInsensitiveMode,

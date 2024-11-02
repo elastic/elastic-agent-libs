@@ -218,12 +218,16 @@ func (m M) AlterPath(path string, mode TraversalMode, alterFunc AlterFunc) (err 
 		if newKey == "" {
 			return fmt.Errorf("replacement key for %q cannot be empty", key)
 		}
-		_, exists := level[newKey]
-		if exists {
-			return fmt.Errorf("replacement key %q already exists: %w", newKey, ErrKeyCollision)
+
+		// if altered key is equal to the original key, skip below delete/put func
+		if newKey != key {
+			_, exists := level[newKey]
+			if exists {
+				return fmt.Errorf("replacement key %q already exists: %w", newKey, ErrKeyCollision)
+			}
+			delete(level, key)
+			level[newKey] = val
 		}
-		delete(level, key)
-		level[newKey] = val
 
 		return nil
 	})
@@ -271,7 +275,7 @@ func (m M) Traverse(path string, mode TraversalMode, visitor TraversalVisitor) (
 
 	for i, segment := range segments {
 		if !found {
-			return ErrKeyNotFound
+			return fmt.Errorf("could not fetch value for key: %s, Error: %w ", path, ErrKeyNotFound)
 		}
 		found = false
 
@@ -316,7 +320,7 @@ func (m M) Traverse(path string, mode TraversalMode, visitor TraversalVisitor) (
 	}
 
 	if !found {
-		return ErrKeyNotFound
+		return fmt.Errorf("could not fetch value for key: %s, Error: %w", path, ErrKeyNotFound)
 	}
 
 	return nil
