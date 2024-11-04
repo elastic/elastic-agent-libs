@@ -1265,7 +1265,7 @@ func TestAlterPath(t *testing.T) {
 			},
 		},
 		{
-			name:      "alters keys on second level with case-insensitive matching",
+			name:      "does not return an error if alterFunc returns the key unchanged",
 			from:      "level1_field1.key",
 			mode:      CaseInsensitiveMode,
 			alterFunc: lower,
