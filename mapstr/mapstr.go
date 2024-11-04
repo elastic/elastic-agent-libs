@@ -220,14 +220,16 @@ func (m M) AlterPath(path string, mode TraversalMode, alterFunc AlterFunc) (err 
 		}
 
 		// if altered key is equal to the original key, skip below delete/put func
-		if newKey != key {
-			_, exists := level[newKey]
-			if exists {
-				return fmt.Errorf("replacement key %q already exists: %w", newKey, ErrKeyCollision)
-			}
-			delete(level, key)
-			level[newKey] = val
+		if newKey == key {
+			return nil
 		}
+
+		_, exists := level[newKey]
+		if exists {
+			return fmt.Errorf("replacement key %q already exists: %w", newKey, ErrKeyCollision)
+		}
+		delete(level, key)
+		level[newKey] = val
 
 		return nil
 	})
