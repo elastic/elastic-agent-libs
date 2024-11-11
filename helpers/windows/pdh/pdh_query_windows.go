@@ -73,7 +73,7 @@ func (q *Query) Open() error {
 	return nil
 }
 
-// // AddEnglishCounter adds the specified counter to the query.
+// AddEnglishCounter adds the specified counter to the query.
 func (q *Query) AddEnglishCounter(counterPath string) (PdhCounterHandle, error) {
 	h, err := PdhAddEnglishCounter(q.Handle, counterPath, 0)
 	return h, err
