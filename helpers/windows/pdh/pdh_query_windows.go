@@ -331,7 +331,6 @@ func getCounterValue(counter *Counter) CounterValue {
 			}
 		} else {
 			counterValue.Measurement = value.Value
-			fmt.Println(value.Value)
 		}
 	default:
 		counterValue.Err.Error = fmt.Errorf("initialization failed: format '%#v' "+
