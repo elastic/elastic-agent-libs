@@ -30,10 +30,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIdleConnTimeoutError(t *testing.T) {
+func TestCloseConnectionError(t *testing.T) {
 	// observe all logs
-	logp.DevelopmentSetup(logp.ToObserverOutput())
-	logger := logp.NewLogger("test")
+	if err := logp.DevelopmentSetup(logp.ToObserverOutput()); err != nil {
+		t.Fatalf("cannot initialise logger on development mode: %+v", err)
+	}
 
 	// Set up a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +42,7 @@ func TestIdleConnTimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
+	logger := logp.NewLogger("test")
 	// Set IdleConnTimeout to 2 seconds and a custom dialer
 	transport := &http.Transport{
 		IdleConnTimeout: 2 * time.Second,
@@ -53,13 +55,13 @@ func TestIdleConnTimeoutError(t *testing.T) {
 	}
 
 	// First request to the test server
-	resp, err := client.Get(server.URL)
+	resp, err := client.Get(server.URL) //nolint:noctx // It is a test
 	require.NoError(t, err, "first request failed")
 	_, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
 
 	// Wait for a duration longer than IdleConnTimeout
-	waitTime := 6 * time.Second
+	waitTime := 6 * time.Second //nolint:noctx // It is a test
 	time.Sleep(waitTime)
 
 	// Second request to the test server after idle timeout
