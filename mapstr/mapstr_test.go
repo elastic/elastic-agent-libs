@@ -21,6 +21,7 @@ package mapstr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -1104,6 +1105,343 @@ func TestFormat(t *testing.T) {
 		t.Run(verb, func(t *testing.T) {
 			actual := fmt.Sprintf(verb, input)
 			assert.Equal(t, expected, actual)
+		})
+	}
+}
+
+func TestFindFold(t *testing.T) {
+	field1level2 := M{
+		"level3_Field1": "value2",
+	}
+	field1level1 := M{
+		"non_map":       "value1",
+		"level2_Field1": field1level2,
+	}
+
+	input := M{
+		// baseline
+		"level1_Field1": field1level1,
+		// fold equal testing
+		"Level1_fielD2": M{
+			"lEvel2_fiEld2": M{
+				"levEl3_fIeld2": "value3",
+			},
+		},
+		// collision testing
+		"level1_field2": M{
+			"level2_field2": M{
+				"level3_field2": "value4",
+			},
+		},
+	}
+
+	cases := []struct {
+		name   string
+		key    string
+		expKey string
+		expVal interface{}
+		expErr string
+	}{
+		{
+			name:   "returns normal key, full match",
+			key:    "level1_Field1.level2_Field1.level3_Field1",
+			expKey: "level1_Field1.level2_Field1.level3_Field1",
+			expVal: "value2",
+		},
+		{
+			name:   "returns normal key, partial match",
+			key:    "level1_Field1.level2_Field1",
+			expKey: "level1_Field1.level2_Field1",
+			expVal: field1level2,
+		},
+		{
+			name:   "returns normal key, one level",
+			key:    "level1_Field1",
+			expKey: "level1_Field1",
+			expVal: field1level1,
+		},
+		{
+			name:   "returns case-insensitive full match",
+			key:    "level1_field1.level2_field1.level3_field1",
+			expKey: "level1_Field1.level2_Field1.level3_Field1",
+			expVal: "value2",
+		},
+		{
+			name:   "returns case-insensitive partial match",
+			key:    "level1_field1.level2_field1",
+			expKey: "level1_Field1.level2_Field1",
+			expVal: field1level2,
+		},
+		{
+			name:   "returns case-insensitive one-level match",
+			key:    "level1_field1",
+			expKey: "level1_Field1",
+			expVal: field1level1,
+		},
+		{
+			name:   "returns collision error",
+			key:    "level1_field2.level2_field2.level3_field2",
+			expErr: "collision",
+		},
+		{
+			name:   "returns non-map error",
+			key:    "level1_field1.non_map.some_key",
+			expErr: "is not a map",
+		},
+		{
+			name:   "returns non-found error",
+			key:    "level1_field1.not_exists.some_key",
+			expErr: "key not found",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, val, err := input.FindFold(tc.key)
+			if tc.expErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expErr)
+				assert.Nil(t, val)
+				assert.Empty(t, key)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expKey, key)
+			assert.Equal(t, tc.expVal, val)
+		})
+	}
+}
+
+func TestAlterPath(t *testing.T) {
+	var (
+		lower AlterFunc = func(s string) (string, error) {
+			return strings.ToLower(s), nil
+		}
+
+		exclamation AlterFunc = func(s string) (string, error) {
+			return s + "!", nil
+		}
+
+		empty AlterFunc = func(string) (string, error) {
+			return "", nil
+		}
+
+		errorFunc AlterFunc = func(string) (string, error) {
+			return "", errors.New("oops")
+		}
+	)
+
+	cases := []struct {
+		name      string
+		from      string
+		mode      TraversalMode
+		alterFunc AlterFunc
+		m         M
+		exp       M
+		expErr    string
+	}{
+		{
+			name:      "alters keys on root level with case-insensitive matching",
+			from:      "level1_field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "Value2",
+						"level3_Field1": "Value3",
+					},
+				},
+			},
+			exp: M{
+				"level1_field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "Value2",
+						"level3_Field1": "Value3",
+					},
+				},
+			},
+		},
+		{
+			name:      "does not return an error if alterFunc returns the key unchanged",
+			from:      "level1_field1.key",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_field1": M{
+					"Key": "value1",
+				},
+			},
+			exp: M{
+				"level1_field1": M{ //first level is unchanged - already in lowercase
+					"key": "value1",
+				},
+			},
+		},
+		{
+			name:      "alters keys on all nested levels with case-insensitive matching",
+			from:      "level1_field1.level2_field1.level3_field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "Value2",
+						"level3_Field1": "Value3",
+					},
+				},
+			},
+			exp: M{
+				"level1_field1": M{
+					"Key": "value1",
+					"level2_field1": M{
+						"Key":           "Value2",
+						"level3_field1": "Value3",
+					},
+				},
+			},
+		},
+		{
+			name:      "alters keys on all nested levels with case-sensitive matchig",
+			from:      "level1_Field1.level2_Field1.level3_Field1",
+			mode:      CaseSensitiveMode,
+			alterFunc: exclamation,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "Value2",
+						"level3_Field1": "Value3",
+					},
+				},
+			},
+			exp: M{
+				"level1_Field1!": M{
+					"Key": "value1",
+					"level2_Field1!": M{
+						"Key":            "Value2",
+						"level3_Field1!": "Value3",
+					},
+				},
+			},
+		},
+		{
+			name:      "errors if the source does not exist",
+			from:      "level1_Field1.NOT_EXIST.level3_Field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+				},
+			},
+			expErr: "key not found",
+		},
+		{
+			name:      "errors if the casing does not match",
+			from:      "level1_Field1.level2_field1.level3_Field1",
+			mode:      CaseSensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+				},
+			},
+			expErr: "key not found",
+		},
+		{
+			name:      "errors if the last segment does not match",
+			from:      "level1_Field1.level2_Field1.level3_field1",
+			mode:      CaseSensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+				},
+			},
+			expErr: "key not found",
+		},
+		{
+			name:      "errors if the new name already exists",
+			from:      "level1_Field1.level2_Field1.level3_Field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: lower,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+					"Level2_field1": M{
+						"Key":           "value4",
+						"level3_Field2": "value5",
+					},
+				},
+			},
+			expErr: "key collision",
+		},
+		{
+			name:      "errors if alter function returns empty string",
+			from:      "level1_Field1.level2_Field1.level3_Field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: empty,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+				},
+			},
+			expErr: "cannot be empty",
+		},
+		{
+			name:      "errors if alter function returns error",
+			from:      "level1_Field1.level2_Field1.level3_Field1",
+			mode:      CaseInsensitiveMode,
+			alterFunc: errorFunc,
+			m: M{
+				"level1_Field1": M{
+					"Key": "value1",
+					"level2_Field1": M{
+						"Key":           "value2",
+						"level3_Field1": "value3",
+					},
+				},
+			},
+			expErr: "oops",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloned := tc.m.Clone() // we need to preserve the initial state
+
+			err := cloned.AlterPath(tc.from, tc.mode, tc.alterFunc)
+			if tc.expErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.exp.StringToPrint(), cloned.StringToPrint())
 		})
 	}
 }
