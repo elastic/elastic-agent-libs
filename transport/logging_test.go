@@ -61,11 +61,11 @@ func TestCloseConnectionError(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for a duration longer than IdleConnTimeout
-	waitTime := 6 * time.Second //nolint:noctx // It is a test
+	waitTime := 6 * time.Second
 	time.Sleep(waitTime)
 
 	// Second request to the test server after idle timeout
-	resp, err = client.Get(server.URL)
+	resp, err = client.Get(server.URL) //nolint:noctx // It is a test
 	require.NoError(t, err, "second request failed")
 	_, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
