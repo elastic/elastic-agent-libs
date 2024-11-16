@@ -203,6 +203,22 @@ func (q *Query) GetCountersAndInstances(objectName string) ([]string, []string, 
 	return UTF16ToStringArray(counters), UTF16ToStringArray(instances), nil
 }
 
+func (q *Query) GetRawCounterValue(counterName string) (*PdhRawCounter, error) {
+	if _, ok := q.Counters[counterName]; !ok {
+		if err := q.AddCounter(counterName, "", "", false); err != nil {
+			return nil, err
+		}
+	}
+	if err := q.CollectData(); err != nil {
+		return nil, err
+	}
+	c, err := PdhGetRawCounterValue(q.Counters[counterName].handle)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 // ExpandWildCardPath  examines local computer and returns those counter paths that match the given counter path which contains wildcard characters.
 func (q *Query) ExpandWildCardPath(wildCardPath string) ([]string, error) {
 	if wildCardPath == "" {
