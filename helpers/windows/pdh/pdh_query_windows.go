@@ -88,7 +88,7 @@ func (q *Query) AddCounter(counterPath string, instance string, format string, w
 	var instanceName string
 	// Extract the instance name from the counterPath.
 	if instance == "" || wildcard {
-		instanceName, err = matchInstanceName(counterPath)
+		instanceName, err = MatchInstanceName(counterPath)
 		if err != nil {
 			return err
 		}
@@ -271,7 +271,7 @@ func (q *Query) Close() error {
 }
 
 // matchInstanceName will check first for instance and then for any objects names.
-func matchInstanceName(counterPath string) (string, error) {
+func MatchInstanceName(counterPath string) (string, error) {
 	matches := instanceNameRegexp.FindStringSubmatch(counterPath)
 	if len(matches) == 2 {
 		return returnLastInstance(matches[1]), nil
