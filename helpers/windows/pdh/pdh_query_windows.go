@@ -203,11 +203,22 @@ func (q *Query) GetCountersAndInstances(objectName string) ([]string, []string, 
 	return UTF16ToStringArray(counters), UTF16ToStringArray(instances), nil
 }
 
-func (q *Query) GetRawCounterValue(counterName string) (*PdhRawCounter, error) {
+func (q *Query) GetRawCounterValue(counterName string) (PdhRawCounter, error) {
+	if _, ok := q.Counters[counterName]; !ok {
+		return PdhRawCounter{}, fmt.Errorf("%s doesn't exist in the map; call AddCounter()", counterName)
+	}
+	c, err := PdhGetRawCounterValue(q.Counters[counterName].handle)
+	if err != nil {
+		return PdhRawCounter{}, err
+	}
+	return c, nil
+}
+
+func (q *Query) GetRawCounterArray(counterName string) ([]*PdhRawCounterItem, error) {
 	if _, ok := q.Counters[counterName]; !ok {
 		return nil, fmt.Errorf("%s doesn't exist in the map; call AddCounter()", counterName)
 	}
-	c, err := PdhGetRawCounterValue(q.Counters[counterName].handle)
+	c, err := PdhGetRawCounterArray(q.Counters[counterName].handle)
 	if err != nil {
 		return nil, err
 	}

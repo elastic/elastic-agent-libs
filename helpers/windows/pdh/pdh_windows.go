@@ -108,6 +108,17 @@ type PdhRawCounter struct {
 	SecondValue int64
 	MultiCount  uint32
 }
+type pdhRawCounterItem struct {
+	// Pointer to a null-terminated string that specifies the instance name of the counter. The string is appended to the end of this structure.
+	SzName *uint16
+	//A pdhRawCounter structure that contains the raw counter value of the instance
+	RawValue PdhRawCounter
+}
+
+type PdhRawCounterItem struct {
+	InstanceName string
+	RawValue     PdhRawCounter
+}
 
 // PdhOpenQuery creates a new query.
 func PdhOpenQuery(dataSource string, userData uintptr) (PdhQueryHandle, error) {
@@ -207,13 +218,37 @@ func PdhGetFormattedCounterValueLong(counter PdhCounterHandle) (uint32, *PdhCoun
 }
 
 // PdhGetRawCounterValue returns the raw value of a given counter.
-func PdhGetRawCounterValue(counter PdhCounterHandle) (*PdhRawCounter, error) {
+func PdhGetRawCounterValue(counter PdhCounterHandle) (PdhRawCounter, error) {
 	var value PdhRawCounter
 	if err := _PdhGetRawCounter(counter, uintptr(unsafe.Pointer(&value))); err != nil {
-		return &value, PdhErrno(err.(syscall.Errno))
+		return value, PdhErrno(err.(syscall.Errno))
 	}
 
-	return &value, nil
+	return value, nil
+}
+
+func PdhGetRawCounterArray(counter PdhCounterHandle) ([]*PdhRawCounterItem, error) {
+	var bufferSize, itemCount uint32
+	buf := make([]byte, 1)
+	if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, &buf[0]); err != nil {
+		if PdhErrno(err.(syscall.Errno)) != PDH_MORE_DATA {
+			return nil, PdhErrno(err.(syscall.Errno))
+		}
+		buf := make([]byte, bufferSize)
+		if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, &buf[0]); err != nil {
+			return nil, PdhErrno(err.(syscall.Errno))
+		}
+		items := (*[1 << 20]pdhRawCounterItem)(unsafe.Pointer(&buf[0]))[:itemCount]
+		ret := make([]*PdhRawCounterItem, 0, len(items))
+		for _, item := range items {
+			ret = append(ret, &PdhRawCounterItem{
+				RawValue:     item.RawValue,
+				InstanceName: windows.UTF16PtrToString(item.SzName),
+			})
+		}
+		return ret, nil
+	}
+	return nil, PdhErrno(syscall.ERROR_NOT_FOUND)
 }
 
 // PdhExpandWildCardPath returns counter paths that match the given counter path.
