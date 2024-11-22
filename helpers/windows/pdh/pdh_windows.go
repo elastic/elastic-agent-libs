@@ -207,13 +207,13 @@ func PdhGetFormattedCounterValueLong(counter PdhCounterHandle) (uint32, *PdhCoun
 }
 
 // PdhGetRawCounterValue returns the raw value of a given counter.
-func PdhGetRawCounterValue(counter PdhCounterHandle) (*PdhRawCounter, error) {
+func PdhGetRawCounterValue(counter PdhCounterHandle) (PdhRawCounter, error) {
 	var value PdhRawCounter
 	if err := _PdhGetRawCounter(counter, uintptr(unsafe.Pointer(&value))); err != nil {
-		return &value, PdhErrno(err.(syscall.Errno))
+		return value, PdhErrno(err.(syscall.Errno))
 	}
 
-	return &value, nil
+	return value, nil
 }
 
 // PdhExpandWildCardPath returns counter paths that match the given counter path.
