@@ -69,9 +69,6 @@ var (
 	procPdhEnumObjectItemsW         = modpdh.NewProc("PdhEnumObjectItemsW")
 	procPdhGetRawCounter          	= modpdh.NewProc("PdhGetRawCounterValue")
 	procPdhGetRawCounterArray       = modpdh.NewProc("PdhGetRawCounterArrayW")
-
-	libPdhDll = syscall.MustLoadDLL("pdh.dll")
-	pdhGetRawCounterArrayW      	= libPdhDll.MustFindProc("PdhGetRawCounterArrayW")
 )
 
 func _PdhOpenQuery(dataSource *uint16, userData uintptr, query *PdhQueryHandle) (errcode error) {

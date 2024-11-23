@@ -23,7 +23,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -244,26 +243,13 @@ func PdhGetRawCounterValue(counter PdhCounterHandle) (PdhRawCounter, error) {
 	return value, nil
 }
 
-// use buffer pool to resue the underlying byte slice. This reduces memory allocations
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 1024)
-	},
-}
-
 func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCouterArray, error) {
 	var bufferSize, itemCount uint32
 	if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, nil); err != nil {
 		if PdhErrno(err.(syscall.Errno)) != PDH_MORE_DATA {
 			return nil, PdhErrno(err.(syscall.Errno))
 		}
-		// Get the byte buffer
-		buf := bufPool.Get().([]byte)
-
-		// if the buffer is lower than required size, then create a new one.
-		if len(buf) < int(bufferSize) {
-			buf = make([]byte, bufferSize)
-		}
+		buf := make([]byte, bufferSize)
 		if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, &buf[0]); err != nil {
 			return nil, PdhErrno(err.(syscall.Errno))
 		}
@@ -282,9 +268,6 @@ func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCoute
 		// we sort the array by the instance name to ensure that each index in the final array corresponds to a specific core
 		// This is important because we will be collecting three different types of counters, and sorting ensures that each index in each counter aligns with the correct core.
 		sort.Sort(RawCouterArray(ret))
-
-		// reuse the buffer
-		bufPool.Put(buf)
 		return ret, nil
 	}
 	return nil, PdhErrno(syscall.ERROR_NOT_FOUND)
