@@ -20,7 +20,10 @@
 package pdh
 
 import (
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -118,6 +121,20 @@ type pdhRawCounterItem struct {
 type PdhRawCounterItem struct {
 	InstanceName string
 	RawValue     PdhRawCounter
+}
+
+type RawCouterArray []PdhRawCounterItem
+
+func (a RawCouterArray) Len() int {
+	return len(a)
+}
+
+func (a RawCouterArray) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a RawCouterArray) Less(i, j int) bool {
+	return a[i].InstanceName < a[j].InstanceName
 }
 
 // PdhOpenQuery creates a new query.
@@ -227,25 +244,47 @@ func PdhGetRawCounterValue(counter PdhCounterHandle) (PdhRawCounter, error) {
 	return value, nil
 }
 
-func PdhGetRawCounterArray(counter PdhCounterHandle) ([]*PdhRawCounterItem, error) {
+// use buffer pool to resue the underlying byte slice. This reduces memory allocations
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 1024)
+	},
+}
+
+func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCouterArray, error) {
 	var bufferSize, itemCount uint32
-	buf := make([]byte, 1)
-	if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, &buf[0]); err != nil {
+	if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, nil); err != nil {
 		if PdhErrno(err.(syscall.Errno)) != PDH_MORE_DATA {
 			return nil, PdhErrno(err.(syscall.Errno))
 		}
-		buf := make([]byte, bufferSize)
+		// Get the byte buffer
+		buf := bufPool.Get().([]byte)
+
+		// if the buffer is lower than required size, then create a new one.
+		if len(buf) < int(bufferSize) {
+			buf = make([]byte, bufferSize)
+		}
 		if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, &buf[0]); err != nil {
 			return nil, PdhErrno(err.(syscall.Errno))
 		}
-		items := (*[1 << 20]pdhRawCounterItem)(unsafe.Pointer(&buf[0]))[:itemCount]
-		ret := make([]*PdhRawCounterItem, 0, len(items))
+		items := unsafe.Slice((*pdhRawCounterItem)(unsafe.Pointer(&buf[0])), itemCount)
+		ret := make([]PdhRawCounterItem, 0, len(items))
 		for _, item := range items {
-			ret = append(ret, &PdhRawCounterItem{
+			instance := windows.UTF16PtrToString(item.SzName)
+			if filterTotal && strings.Contains(instance, "_Total") {
+				continue
+			}
+			ret = append(ret, PdhRawCounterItem{
 				RawValue:     item.RawValue,
-				InstanceName: windows.UTF16PtrToString(item.SzName),
+				InstanceName: instance,
 			})
 		}
+		// we sort the array by the instance name to ensure that each index in the final array corresponds to a specific core
+		// This is important because we will be collecting three different types of counters, and sorting ensures that each index in each counter aligns with the correct core.
+		sort.Sort(RawCouterArray(ret))
+
+		// reuse the buffer
+		bufPool.Put(buf)
 		return ret, nil
 	}
 	return nil, PdhErrno(syscall.ERROR_NOT_FOUND)

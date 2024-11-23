@@ -193,3 +193,49 @@ func TestUTF16ToStringArray(t *testing.T) {
 		assert.Contains(t, array, res)
 	}
 }
+
+func TestSortOrder(t *testing.T) {
+	scenarios := []struct {
+		name     string
+		counters []string
+	}{{
+		name: "processor-information",
+		counters: []string{
+			"\\Processor Information(*)\\% User Time",
+			"\\Processor Information(*)\\% Privileged Time",
+			"\\Processor Information(*)\\% Idle Time",
+		},
+	}, {
+		name: "processor",
+		counters: []string{
+			"\\Processor(*)\\% User Time",
+			"\\Processor(*)\\% Privileged Time",
+			"\\Processor(*)\\% Idle Time",
+		},
+	}}
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			var q Query
+			assert.NoError(t, q.Open())
+			for _, counter := range s.counters {
+				assert.NoError(t, q.AddCounter(counter, "", "", false))
+			}
+			assert.NoError(t, q.CollectData())
+			rawCounters := make([][]PdhRawCounterItem, 0)
+			for _, counter := range s.counters {
+				arr, err := q.GetRawCounterArray(counter, true)
+				assert.NoError(t, err)
+				rawCounters = append(rawCounters, arr)
+			}
+			for i := 0; i < len(rawCounters)-1; i++ {
+				assert.Equalf(t, len(rawCounters[i]), len(rawCounters[i+1]), "returned counters should be equal")
+			}
+			// confirm that each index corresponds to one particular instance (i.e. core)
+			for i := 0; i < len(rawCounters)-1; i++ {
+				for j := 0; j < len(rawCounters[i]); j++ {
+					assert.Equalf(t, rawCounters[i][j].InstanceName, rawCounters[i+1][j].InstanceName, "Instanse name should be equal")
+				}
+			}
+		})
+	}
+}
