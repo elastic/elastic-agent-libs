@@ -218,7 +218,7 @@ func TestSortOrder(t *testing.T) {
 			var q Query
 			assert.NoError(t, q.Open())
 			for _, counter := range s.counters {
-				assert.NoError(t, q.AddCounter(counter, "", "", false))
+				assert.NoError(t, q.AddCounter(counter, "", "", false, false))
 			}
 			assert.NoError(t, q.CollectData())
 			rawCounters := make([][]PdhRawCounterItem, 0)
