@@ -38,7 +38,7 @@ func TestAddCounterInvalidArgWhenQueryClosed(t *testing.T) {
 	queryPath, err := q.GetCounterPaths(validQuery)
 	// if windows os language is ENG then err will be nil, else the GetCounterPaths will execute the AddCounter
 	if assert.NoError(t, err) {
-		err = q.AddCounter(queryPath[0], "TestInstanceName", "float", false)
+		err = q.AddCounter(queryPath[0], "TestInstanceName", "float", false, false)
 		assert.Error(t, err, PDH_INVALID_HANDLE)
 	} else {
 		assert.Error(t, err, PDH_INVALID_ARGUMENT)
@@ -73,7 +73,7 @@ func TestSuccessfulQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = q.AddCounter(queryPath[0], "TestInstanceName", "floar", false)
+	err = q.AddCounter(queryPath[0], "TestInstanceName", "floar", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
