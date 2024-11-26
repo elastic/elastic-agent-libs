@@ -233,7 +233,7 @@ func TestSortOrder(t *testing.T) {
 			// confirm that each index corresponds to one particular instance (i.e. core)
 			for i := 0; i < len(rawCounters)-1; i++ {
 				for j := 0; j < len(rawCounters[i]); j++ {
-					assert.Equalf(t, rawCounters[i][j].InstanceName, rawCounters[i+1][j].InstanceName, "Instanse name should be equal")
+					assert.Equalf(t, rawCounters[i][j].InstanceName, rawCounters[i+1][j].InstanceName, "Instance name should be equal")
 				}
 			}
 		})

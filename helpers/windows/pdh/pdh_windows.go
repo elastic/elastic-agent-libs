@@ -122,17 +122,17 @@ type PdhRawCounterItem struct {
 	RawValue     PdhRawCounter
 }
 
-type RawCouterArray []PdhRawCounterItem
+type RawCounterArray []PdhRawCounterItem
 
-func (a RawCouterArray) Len() int {
+func (a RawCounterArray) Len() int {
 	return len(a)
 }
 
-func (a RawCouterArray) Swap(i, j int) {
+func (a RawCounterArray) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 
-func (a RawCouterArray) Less(i, j int) bool {
+func (a RawCounterArray) Less(i, j int) bool {
 	return a[i].InstanceName < a[j].InstanceName
 }
 
@@ -243,7 +243,7 @@ func PdhGetRawCounterValue(counter PdhCounterHandle) (PdhRawCounter, error) {
 	return value, nil
 }
 
-func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCouterArray, error) {
+func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCounterArray, error) {
 	var bufferSize, itemCount uint32
 	if err := _PdhGetRawCounterArray(counter, &bufferSize, &itemCount, nil); err != nil {
 		if PdhErrno(err.(syscall.Errno)) != PDH_MORE_DATA {
@@ -267,7 +267,7 @@ func PdhGetRawCounterArray(counter PdhCounterHandle, filterTotal bool) (RawCoute
 		}
 		// we sort the array by the instance name to ensure that each index in the final array corresponds to a specific core
 		// This is important because we will be collecting three different types of counters, and sorting ensures that each index in each counter aligns with the correct core.
-		sort.Sort(RawCouterArray(ret))
+		sort.Sort(RawCounterArray(ret))
 		return ret, nil
 	}
 	return nil, PdhErrno(syscall.ERROR_NOT_FOUND)
