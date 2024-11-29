@@ -20,6 +20,7 @@ package logp
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,4 +79,159 @@ func TestNewInMemory(t *testing.T) {
 	assert.Contains(t, logs[3], "an error message")
 	assert.Contains(t, logs[3], "error_key")
 	assert.Contains(t, logs[3], "error_val")
+}
+
+func TestThrottledLogger(t *testing.T) {
+	l, buff := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	log := l.Throttled(10 * time.Millisecond)
+
+	log.Info("logged")
+	log.Info("throttled")
+
+	logs := strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 1, "expected 1 log entry")
+	require.Contains(t, logs[0], "logged")
+
+	time.Sleep(10 * time.Millisecond)
+
+	log.Warn("logged")
+	log.Info("throttled")
+	log.Info("throttled")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 2, "expected 2 log entries")
+	require.Contains(t, logs[1], "logged")
+}
+
+func TestSampledLogger(t *testing.T) {
+	l, buff := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	log := l.Sampled(2)
+
+	log.Info("1")
+	log.Info("2")
+	log.Info("3")
+
+	logs := strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 2, "expected 2 log entries")
+	require.Contains(t, logs[0], "1")
+	require.Contains(t, logs[1], "3")
+
+	log.Info("4")
+	log.Info("5")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 3, "expected 3 log entries")
+	require.Contains(t, logs[2], "5")
+}
+
+func TestLimitedLogger(t *testing.T) {
+	l, buff := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	log := l.Limited(2)
+
+	log.Info("1")
+	log.Info("2")
+	log.Info("3")
+
+	logs := strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 2, "expected 2 log entries")
+	require.Contains(t, logs[0], "1")
+	require.Contains(t, logs[1], "2")
+
+	log.Info("4")
+	log.Info("5")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 2, "expected 2 log entries")
+}
+
+func TestSampledLimited(t *testing.T) {
+	l, buff := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	log := l.Sampled(2).Limited(3)
+
+	log.Info("1")
+	log.Info("2")
+	log.Info("3")
+
+	logs := strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 3, "expected 3 log entries")
+	require.Contains(t, logs[0], "1")
+	require.Contains(t, logs[1], "2")
+	require.Contains(t, logs[2], "3")
+
+	log.Info("4")
+	log.Info("5")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 4, "expected 4 log entries")
+	require.Contains(t, logs[3], "5")
+}
+
+func TestSampledThrottledLogger(t *testing.T) {
+	l, buff := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	log := l.Throttled(10 * time.Millisecond).Sampled(2)
+
+	log.Info("logged")
+	log.Info("throttled")
+
+	logs := strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 1, "expected 1 log entry")
+	require.Contains(t, logs[0], "logged")
+
+	time.Sleep(10 * time.Millisecond)
+
+	log.Warn("discarded by sampler")
+	log.Info("throttled")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 2, "expected no new log entries")
+
+	time.Sleep(10 * time.Millisecond)
+
+	log.Warn("logged by sampler")
+	log.Info("throttled")
+
+	logs = strings.Split(strings.TrimSpace(buff.String()), "\n")
+	require.Len(t, logs, 3, "expected 3 log entries")
+	require.Contains(t, logs[2], "logged")
+}
+
+func BenchmarkLogger(b *testing.B) {
+	l, _ := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	b.Run("default", func(b *testing.B) {
+		log := l.Named("default")
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			log.Info("message")
+		}
+	})
+
+	b.Run("sampled", func(b *testing.B) {
+		log := l.Sampled(10)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			log.Info("message")
+		}
+	})
+
+	b.Run("throttled", func(b *testing.B) {
+		log := l.Throttled(1 * time.Millisecond)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			log.Info("message")
+		}
+	})
+
+	b.Run("limited", func(b *testing.B) {
+		log := l.Limited(1000)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			log.Info("message")
+		}
+	})
 }

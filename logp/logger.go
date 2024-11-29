@@ -21,10 +21,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/time/rate"
 )
 
 // LogOption configures a Logger.
@@ -32,8 +34,9 @@ type LogOption = zap.Option
 
 // Logger logs messages to the configured output.
 type Logger struct {
-	logger *zap.Logger
-	sugar  *zap.SugaredLogger
+	logger  *zap.Logger
+	sugar   *zap.SugaredLogger
+	limiter *rate.Sometimes
 }
 
 func newLogger(rootLogger *zap.Logger, selector string, options ...LogOption) *Logger {
@@ -41,7 +44,7 @@ func newLogger(rootLogger *zap.Logger, selector string, options ...LogOption) *L
 		WithOptions(zap.AddCallerSkip(1)).
 		WithOptions(options...).
 		Named(selector)
-	return &Logger{log, log.Sugar()}
+	return &Logger{log, log.Sugar(), nil}
 }
 
 // NewLogger returns a new Logger labeled with the name of the selector. This
@@ -81,62 +84,70 @@ func NewInMemory(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes
 	return logger, &buff
 }
 
+func (l *Logger) do(f func()) {
+	if l.limiter != nil {
+		l.limiter.Do(f)
+		return
+	}
+	f()
+}
+
 // WithOptions returns a clone of l with options applied.
 func (l *Logger) WithOptions(options ...LogOption) *Logger {
 	cloned := l.logger.WithOptions(options...)
-	return &Logger{cloned, cloned.Sugar()}
+	return &Logger{cloned, cloned.Sugar(), nil}
 }
 
 // With creates a child logger and adds structured context to it. Fields added
 // to the child don't affect the parent, and vice versa.
 func (l *Logger) With(args ...interface{}) *Logger {
 	sugar := l.sugar.With(args...)
-	return &Logger{sugar.Desugar(), sugar}
+	return &Logger{sugar.Desugar(), sugar, nil}
 }
 
 // Named adds a new path segment to the logger's name. Segments are joined by
 // periods.
 func (l *Logger) Named(name string) *Logger {
 	logger := l.logger.Named(name)
-	return &Logger{logger, logger.Sugar()}
+	return &Logger{logger, logger.Sugar(), nil}
 }
 
 // Sprint
 
 // Debug uses fmt.Sprint to construct and log a message.
 func (l *Logger) Debug(args ...interface{}) {
-	l.sugar.Debug(args...)
+	l.do(func() { l.sugar.Debug(args...) })
 }
 
 // Info uses fmt.Sprint to construct and log a message.
 func (l *Logger) Info(args ...interface{}) {
-	l.sugar.Info(args...)
+	l.do(func() { l.sugar.Info(args...) })
 }
 
 // Warn uses fmt.Sprint to construct and log a message.
 func (l *Logger) Warn(args ...interface{}) {
-	l.sugar.Warn(args...)
+	l.do(func() { l.sugar.Warn(args...) })
 }
 
 // Error uses fmt.Sprint to construct and log a message.
 func (l *Logger) Error(args ...interface{}) {
-	l.sugar.Error(args...)
+	l.do(func() { l.sugar.Error(args...) })
 }
 
 // Fatal uses fmt.Sprint to construct and log a message, then calls os.Exit(1).
 func (l *Logger) Fatal(args ...interface{}) {
-	l.sugar.Fatal(args...)
+	l.do(func() { l.sugar.Fatal(args...) })
 }
 
 // Panic uses fmt.Sprint to construct and log a message, then panics.
 func (l *Logger) Panic(args ...interface{}) {
-	l.sugar.Panic(args...)
+	l.do(func() { l.sugar.Panic(args...) })
 }
 
 // DPanic uses fmt.Sprint to construct and log a message. In development, the
 // logger then panics.
 func (l *Logger) DPanic(args ...interface{}) {
-	l.sugar.DPanic(args...)
+	l.do(func() { l.sugar.DPanic(args...) })
 }
 
 // IsDebug checks to see if the given logger is Debug enabled.
@@ -148,38 +159,38 @@ func (l *Logger) IsDebug() bool {
 
 // Debugf uses fmt.Sprintf to construct and log a message.
 func (l *Logger) Debugf(format string, args ...interface{}) {
-	l.sugar.Debugf(format, args...)
+	l.do(func() { l.sugar.Debugf(format, args...) })
 }
 
 // Infof uses fmt.Sprintf to log a templated message.
 func (l *Logger) Infof(format string, args ...interface{}) {
-	l.sugar.Infof(format, args...)
+	l.do(func() { l.sugar.Infof(format, args...) })
 }
 
 // Warnf uses fmt.Sprintf to log a templated message.
 func (l *Logger) Warnf(format string, args ...interface{}) {
-	l.sugar.Warnf(format, args...)
+	l.do(func() { l.sugar.Warnf(format, args...) })
 }
 
 // Errorf uses fmt.Sprintf to log a templated message.
 func (l *Logger) Errorf(format string, args ...interface{}) {
-	l.sugar.Errorf(format, args...)
+	l.do(func() { l.sugar.Errorf(format, args...) })
 }
 
 // Fatalf uses fmt.Sprintf to log a templated message, then calls os.Exit(1).
 func (l *Logger) Fatalf(format string, args ...interface{}) {
-	l.sugar.Fatalf(format, args...)
+	l.do(func() { l.sugar.Fatalf(format, args...) })
 }
 
 // Panicf uses fmt.Sprintf to log a templated message, then panics.
 func (l *Logger) Panicf(format string, args ...interface{}) {
-	l.sugar.Panicf(format, args...)
+	l.do(func() { l.sugar.Panicf(format, args...) })
 }
 
 // DPanicf uses fmt.Sprintf to log a templated message. In development, the
 // logger then panics.
 func (l *Logger) DPanicf(format string, args ...interface{}) {
-	l.sugar.DPanicf(format, args...)
+	l.do(func() { l.sugar.DPanicf(format, args...) })
 }
 
 // With context (reflection based)
@@ -189,7 +200,7 @@ func (l *Logger) DPanicf(format string, args ...interface{}) {
 // to the log message will be inferred by the value's type. To explicitly
 // specify a type you can pass a Field such as logp.Stringer.
 func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
-	l.sugar.Debugw(msg, keysAndValues...)
+	l.do(func() { l.sugar.Debugw(msg, keysAndValues...) })
 }
 
 // Infow logs a message with some additional context. The additional context
@@ -197,7 +208,7 @@ func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
 // to the log message will be inferred by the value's type. To explicitly
 // specify a type you can pass a Field such as logp.Stringer.
 func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
-	l.sugar.Infow(msg, keysAndValues...)
+	l.do(func() { l.sugar.Infow(msg, keysAndValues...) })
 }
 
 // Warnw logs a message with some additional context. The additional context
@@ -205,7 +216,7 @@ func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
 // to the log message will be inferred by the value's type. To explicitly
 // specify a type you can pass a Field such as logp.Stringer.
 func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
-	l.sugar.Warnw(msg, keysAndValues...)
+	l.do(func() { l.sugar.Warnw(msg, keysAndValues...) })
 }
 
 // Errorw logs a message with some additional context. The additional context
@@ -213,7 +224,7 @@ func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
 // to the log message will be inferred by the value's type. To explicitly
 // specify a type you can pass a Field such as logp.Stringer.
 func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
-	l.sugar.Errorw(msg, keysAndValues...)
+	l.do(func() { l.sugar.Errorw(msg, keysAndValues...) })
 }
 
 // Fatalw logs a message with some additional context, then calls os.Exit(1).
@@ -222,7 +233,7 @@ func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
 // type. To explicitly specify a type you can pass a Field such as
 // logp.Stringer.
 func (l *Logger) Fatalw(msg string, keysAndValues ...interface{}) {
-	l.sugar.Fatalw(msg, keysAndValues...)
+	l.do(func() { l.sugar.Fatalw(msg, keysAndValues...) })
 }
 
 // Panicw logs a message with some additional context, then panics. The
@@ -230,7 +241,7 @@ func (l *Logger) Fatalw(msg string, keysAndValues ...interface{}) {
 // to write the value to the log message will be inferred by the value's type.
 // To explicitly specify a type you can pass a Field such as logp.Stringer.
 func (l *Logger) Panicw(msg string, keysAndValues ...interface{}) {
-	l.sugar.Panicw(msg, keysAndValues...)
+	l.do(func() { l.sugar.Panicw(msg, keysAndValues...) })
 }
 
 // DPanicw logs a message with some additional context. The logger panics only
@@ -239,7 +250,7 @@ func (l *Logger) Panicw(msg string, keysAndValues ...interface{}) {
 // be inferred by the value's type. To explicitly specify a type you can pass a
 // Field such as logp.Stringer.
 func (l *Logger) DPanicw(msg string, keysAndValues ...interface{}) {
-	l.sugar.DPanicw(msg, keysAndValues...)
+	l.do(func() { l.sugar.DPanicw(msg, keysAndValues...) })
 }
 
 // Recover stops a panicking goroutine and logs an Error.
@@ -267,6 +278,36 @@ func (l *Logger) Close() error {
 	}
 
 	return nil
+}
+
+func (l *Logger) rateLimiter() *rate.Sometimes {
+	limiter := l.limiter
+	if limiter == nil {
+		limiter = &rate.Sometimes{}
+	}
+
+	return limiter
+}
+
+// Throttled returns a new Logger that logs at most once every period.
+func (l *Logger) Throttled(period time.Duration) *Logger {
+	limiter := l.rateLimiter()
+	limiter.Interval = period
+	return &Logger{l.logger, l.sugar, limiter}
+}
+
+// Sampled returns a new Logger that logs every nth log message.
+func (l *Logger) Sampled(nth int) *Logger {
+	limiter := l.rateLimiter()
+	limiter.Every = nth
+	return &Logger{l.logger, l.sugar, limiter}
+}
+
+// Limited returns a new Logger that logs the first n log messages.
+func (l *Logger) Limited(n int) *Logger {
+	limiter := l.rateLimiter()
+	limiter.First = n
+	return &Logger{l.logger, l.sugar, limiter}
 }
 
 // L returns an unnamed global logger.
