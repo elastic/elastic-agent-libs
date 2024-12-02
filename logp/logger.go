@@ -41,7 +41,7 @@ type Logger struct {
 
 func newLogger(rootLogger *zap.Logger, selector string, options ...LogOption) *Logger {
 	log := rootLogger.
-		WithOptions(zap.AddCallerSkip(1)).
+		WithOptions(zap.AddCallerSkip(3)).
 		WithOptions(options...).
 		Named(selector)
 	return &Logger{log, log.Sugar(), nil}
