@@ -42,7 +42,7 @@ func SyncParent(path string) error {
 	parent := filepath.Dir(path)
 	f, err := os.Open(parent)
 
-	//nolint:nilerr // ignore error
+	//nolint:nilerr
 	if err != nil {
 		return nil
 	}
