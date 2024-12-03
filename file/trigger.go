@@ -139,7 +139,7 @@ func newIntervalTrigger(interval time.Duration, clock clock) trigger {
 		}
 	}
 
-	t.lastRotate = time.Now()
+	t.lastRotate = clock.Now()
 	return &t
 }
 
