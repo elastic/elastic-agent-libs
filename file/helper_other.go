@@ -42,8 +42,8 @@ func SyncParent(path string) error {
 	parent := filepath.Dir(path)
 	f, err := os.Open(parent)
 
-	//lint:ignore nilerr failing open is ok
 	if err != nil {
+		//lint:ignore nilerr failing open is ok
 		return nil
 	}
 	defer f.Close()
