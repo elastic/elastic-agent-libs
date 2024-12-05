@@ -18,7 +18,9 @@
 package logp
 
 import (
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -233,5 +235,72 @@ func BenchmarkLogger(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			log.Info("message")
 		}
+	})
+}
+
+func BenchmarkConcurrentLogger(b *testing.B) {
+	l, _ := NewInMemory("in_memory", ConsoleEncoderConfig())
+
+	b.Run("default", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Named("default")
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+	})
+
+	b.Run("sampled", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Sampled(10)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
+
+	b.Run("throttled", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Throttled(1 * time.Millisecond)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
+
+	b.Run("limited", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Limited(1000)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
 	})
 }
