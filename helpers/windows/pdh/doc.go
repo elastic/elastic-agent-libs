@@ -15,21 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package file
+package pdh
 
-import (
-	"os"
-)
-
-func stat(name string, statFunc func(name string) (os.FileInfo, error)) (FileInfo, error) {
-	info, err := statFunc(name)
-	if err != nil {
-		return nil, err
-	}
-
-	return wrap(info)
-}
-
-func wrap(info os.FileInfo) (FileInfo, error) {
-	return fileInfo{FileInfo: info}, nil
-}
+//go:generate go run mkpdh_defs.go
+//go:generate go run ../run.go -cmd "go tool cgo -godefs defs_pdh_windows.go" -goarch amd64 -output defs_pdh_windows_amd64.go
+//go:generate go run ../run.go -cmd "go tool cgo -godefs defs_pdh_windows.go" -goarch 386 -output defs_pdh_windows_386.go
+//go:generate go run ../run.go -cmd "go tool cgo -godefs defs_pdh_windows.go" -goarch arm64 -output defs_pdh_windows_arm64.go
+//go:generate go run ../run.go -cmd "go tool cgo -godefs defs_pdh_windows.go" -goarch arm -output defs_pdh_windows_arm.go
+//go:generate go run $GOROOT/src/syscall/mksyscall_windows.go -output zpdh_windows.go pdh_windows.go
+//go:generate goimports -w defs_pdh_windows_amd64.go defs_pdh_windows_386.go defs_pdh_windows_arm64.go defs_pdh_windows_arm.go zpdh_windows.go

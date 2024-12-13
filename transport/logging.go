@@ -33,7 +33,7 @@ type loggingConn struct {
 
 func LoggingDialer(d Dialer, logger *logp.Logger) Dialer {
 	return DialerFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
-		logger := logger.With("network", network, "address", addr)
+		logger := logger.With("network.transport", network, "server.address", addr)
 		c, err := d.DialContext(ctx, network, addr)
 		if err != nil {
 			logger.Errorf("Error dialing %v", err)
@@ -47,7 +47,7 @@ func LoggingDialer(d Dialer, logger *logp.Logger) Dialer {
 
 func (l *loggingConn) Read(b []byte) (int, error) {
 	n, err := l.Conn.Read(b)
-	if err != nil && !errors.Is(err, io.EOF) {
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 		l.logger.Debugf("Error reading from connection: %v", err)
 	}
 	return n, err

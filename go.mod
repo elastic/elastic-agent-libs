@@ -4,15 +4,13 @@ go 1.21
 
 require (
 	github.com/Microsoft/go-winio v0.5.2
-	github.com/docker/go-units v0.5.0
 	github.com/elastic/go-structform v0.0.9
 	github.com/elastic/go-ucfg v0.8.5
 	github.com/elastic/pkcs8 v1.0.0
 	github.com/fatih/color v1.13.0
-	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/gofrs/uuid/v5 v5.2.0
 	github.com/magefile/mage v1.13.0
 	github.com/mattn/go-colorable v0.1.12
-	github.com/mitchellh/hashstructure v1.1.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.9.0

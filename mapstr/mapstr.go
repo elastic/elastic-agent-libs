@@ -41,6 +41,10 @@ const (
 var (
 	// ErrKeyNotFound indicates that the specified key was not found.
 	ErrKeyNotFound = errors.New("key not found")
+	// ErrKeyCollision indicates that during the case-insensitive search multiple keys matched
+	ErrKeyCollision = errors.New("key collision")
+	// ErrNotMapType indicates that the given value is not map type
+	ErrNotMapType = errors.New("value is not a map")
 )
 
 // EventMetadata contains fields and tags that can be added to an event via
@@ -172,6 +176,158 @@ func (m M) HasKey(key string) (bool, error) {
 	return hasKey, err
 }
 
+// FindFold accepts a key and traverses the map trying to match every key segment
+// using `strings.FindFold` (case-insensitive match) and returns the actual
+// key of the map that matched the given key and the value stored under this key.
+// Returns `ErrKeyCollision` if multiple keys match the same request.
+// Returns `ErrNotMapType` when one of the values on the path is not a map and cannot be traversed.
+// Returns `ErrKeyNotFound` when the path does not exist
+func (m M) FindFold(path string) (matchedKey string, value interface{}, err error) {
+	segmentCount := strings.Count(path, ".") + 1
+	err = m.Traverse(path, CaseInsensitiveMode, func(level M, key string) error {
+		segmentCount--
+		matchedKey += key
+		if segmentCount != 0 {
+			matchedKey += "."
+			return nil
+		}
+
+		value = level[key]
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	return matchedKey, value, nil
+}
+
+type AlterFunc func(string) (string, error)
+
+// AlterPath walks the given `path` and replaces matching keys using the value returned by `alterFunc`.
+// `mode` sets the behavior how the given path is matched throughout the levels.
+// Returns `ErrKeyCollision` if multiple keys match the same request (when `mode` is `CaseInsensitiveMode`).
+// Returns `ErrNotMapType` when one of the values on the path is not a map and cannot be traversed.
+// Returns `ErrKeyNotFound` when the path does not exist
+func (m M) AlterPath(path string, mode TraversalMode, alterFunc AlterFunc) (err error) {
+	return m.Traverse(path, mode, func(level M, key string) error {
+		val := level[key]
+		newKey, err := alterFunc(key)
+		if err != nil {
+			return fmt.Errorf("failed to apply a change to %q: %w", key, err)
+		}
+		if newKey == "" {
+			return fmt.Errorf("replacement key for %q cannot be empty", key)
+		}
+
+		// if altered key is equal to the original key, skip below delete/put func
+		if newKey == key {
+			return nil
+		}
+
+		_, exists := level[newKey]
+		if exists {
+			return fmt.Errorf("replacement key %q already exists: %w", newKey, ErrKeyCollision)
+		}
+		delete(level, key)
+		level[newKey] = val
+
+		return nil
+	})
+}
+
+// TraversalMode used for traversing the map through multiple levels.
+type TraversalMode int
+
+const (
+	// The key match is strictly case-sensitive
+	CaseSensitiveMode = iota
+	// The key match is performed with `strings.EqualFold`
+	CaseInsensitiveMode = iota
+)
+
+type TraversalVisitor func(M, string) error
+
+// Traverse walks the given nested `path` in the map and invokes the `visitor` function on each level passing
+// the current-level map and the current key.
+// `mode` sets the behavior how the given path is matched throughout the levels.
+// The `visitor` function is allowed to make changes in the level or collect data.
+// Returns `ErrKeyCollision` if multiple keys match the same request (when `mode` is `CaseInsensitiveMode`).
+// Returns `ErrNotMapType` when one of the values on the path is not a map and cannot be traversed.
+// Returns `ErrKeyNotFound` when the path does not exist
+func (m M) Traverse(path string, mode TraversalMode, visitor TraversalVisitor) (err error) {
+	segments := strings.Split(path, ".")
+	var match func(string, string) bool
+
+	switch mode {
+	case CaseInsensitiveMode:
+		match = strings.EqualFold
+	case CaseSensitiveMode:
+		match = func(a, b string) bool { return a == b }
+	}
+
+	// the initial value must be `true` for the first iteration to work
+	found := true
+	// start with the root
+	current := m
+	// allocate only once
+	var (
+		mapType bool
+		next    interface{}
+	)
+
+	for i, segment := range segments {
+		if !found {
+			return fmt.Errorf("could not fetch value for key: %s, Error: %w ", path, ErrKeyNotFound)
+		}
+		found = false
+
+		// we have to go through the list of all key on each level to detect case-insensitive collisions
+		for k := range current {
+			if !match(segment, k) {
+				continue
+			}
+
+			// if already found on this level, it's a collision
+			if found {
+				return fmt.Errorf("multiple keys match %q on the same level of the path %q: %w", k, path, ErrKeyCollision)
+			}
+
+			// mark for collision detection
+			found = true
+
+			// we need to save this in case the visitor makes changes in keys
+			next = current[k]
+			err = visitor(current, k)
+			if err != nil {
+				return fmt.Errorf("error visiting key %q of the path %q: %w", k, path, err)
+			}
+
+			// if it's the last segment, we don't need to go deeper, skipping...
+			if i == len(segments)-1 {
+				continue
+			}
+
+			// try to go one level deeper
+			current, mapType = tryToMapStr(next)
+			if !mapType {
+				return fmt.Errorf("cannot continue path %q, next value %q is not a map: %w", path, k, ErrNotMapType)
+			}
+
+			// if it's a case-sensitive key match, we don't have to care about collision detection
+			// and we can simply stop iterating here.
+			if mode == CaseSensitiveMode {
+				break
+			}
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("could not fetch value for key: %s, Error: %w", path, ErrKeyNotFound)
+	}
+
+	return nil
+}
+
 // GetValue gets a value from the map. If the key does not exist then an error
 // is returned.
 func (m M) GetValue(key string) (interface{}, error) {
@@ -266,10 +422,12 @@ func (m M) Format(f fmt.State, c rune) {
 // Flatten flattens the given M and returns a flat M.
 //
 // Example:
-//   "hello": M{"world": "test" }
+//
+//	"hello": M{"world": "test" }
 //
 // This is converted to:
-//   "hello.world": "test"
+//
+//	"hello.world": "test"
 //
 // This can be useful for testing or logging.
 func (m M) Flatten() M {
@@ -299,10 +457,12 @@ func flatten(prefix string, in, out M) M {
 // FlattenKeys flattens given MapStr keys and returns a containing array pointer
 //
 // Example:
-//   "hello": MapStr{"world": "test" }
+//
+//	"hello": MapStr{"world": "test" }
 //
 // This is converted to:
-//   ["hello.world"]
+//
+//	["hello.world"]
 func (m M) FlattenKeys() *[]string {
 	out := make([]string, 0)
 	flattenKeys("", m, &out)
