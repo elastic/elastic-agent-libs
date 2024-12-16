@@ -31,7 +31,7 @@ const (
 
 var (
 	// TLSVersionMin is the min TLS version supported.
-	TLSVersionMin = TLSVersion12
+	TLSVersionMin = TLSVersion11
 
 	// TLSVersionMax is the max TLS version supported.
 	TLSVersionMax = TLSVersion13
