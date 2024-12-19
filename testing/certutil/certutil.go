@@ -418,6 +418,7 @@ func generateSubjectKeyID(pub crypto.PublicKey) []byte {
 	case *rsa.PublicKey:
 		publicKeyBytes = x509.MarshalPKCS1PublicKey(publicKey)
 	case *ecdsa.PublicKey:
+		//nolint:staticcheck // no alternative
 		publicKeyBytes = elliptic.Marshal(publicKey.Curve, publicKey.X, publicKey.Y)
 	}
 	h := sha256.Sum256(publicKeyBytes)
