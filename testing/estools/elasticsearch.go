@@ -116,7 +116,7 @@ type APIKeyRequest struct {
 
 // APIKeyResponse contains the response data for an API request
 type APIKeyResponse struct {
-	Id         string `json:"id"`
+	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Expiration int    `json:"expiration"`
 	APIKey     string `json:"api_key"`
