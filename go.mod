@@ -2,7 +2,6 @@ module github.com/elastic/elastic-agent-libs
 
 go 1.22.10
 
-
 require (
 	github.com/Microsoft/go-winio v0.5.2
 	github.com/elastic/elastic-transport-go/v8 v8.6.0
