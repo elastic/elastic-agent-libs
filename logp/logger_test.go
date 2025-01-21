@@ -204,7 +204,7 @@ func TestSampledThrottledLogger(t *testing.T) {
 }
 
 func BenchmarkLogger(b *testing.B) {
-	l, _ := NewInMemory("in_memory", ConsoleEncoderConfig())
+	l := newLogger(zap.NewNop(), "")
 
 	b.Run("default", func(b *testing.B) {
 		log := l.Named("default")
@@ -240,7 +240,7 @@ func BenchmarkLogger(b *testing.B) {
 }
 
 func BenchmarkConcurrentLogger(b *testing.B) {
-	l, _ := NewInMemory("in_memory", ConsoleEncoderConfig())
+	l := newLogger(zap.NewNop(), "")
 
 	b.Run("default", func(b *testing.B) {
 		var group sync.WaitGroup
