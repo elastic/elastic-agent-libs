@@ -239,7 +239,7 @@ func BenchmarkLogger(b *testing.B) {
 	})
 }
 
-func BenchmarkConcurrentLogger(b *testing.B) {
+func BenchmarkConcurrentLoggerSynthetic(b *testing.B) {
 	l := newLogger(zap.NewNop(), "")
 
 	b.Run("default", func(b *testing.B) {
@@ -292,6 +292,73 @@ func BenchmarkConcurrentLogger(b *testing.B) {
 	b.Run("limited", func(b *testing.B) {
 		var group sync.WaitGroup
 		log := l.Limited(math.MaxInt)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
+}
+
+func BenchmarkConcurrentLoggerRealistic(b *testing.B) {
+	l := newLogger(zap.NewNop(), "")
+
+	b.Run("default", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Named("default")
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+	})
+
+	b.Run("sampled-every-4", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Sampled(4)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
+
+	b.Run("throttled-1-per-second", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Throttled(1 * time.Second)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
+
+	b.Run("limited-first-10", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Limited(10)
 		b.ResetTimer()
 		for i := runtime.NumCPU(); i > 0; i-- {
 			group.Add(1)
