@@ -18,6 +18,7 @@
 package logp
 
 import (
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -214,7 +215,7 @@ func BenchmarkLogger(b *testing.B) {
 	})
 
 	b.Run("sampled", func(b *testing.B) {
-		log := l.Sampled(10)
+		log := l.Sampled(1)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			log.Info("message")
@@ -222,7 +223,7 @@ func BenchmarkLogger(b *testing.B) {
 	})
 
 	b.Run("throttled", func(b *testing.B) {
-		log := l.Throttled(1 * time.Millisecond)
+		log := l.Throttled(1 * time.Nanosecond)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			log.Info("message")
@@ -230,7 +231,7 @@ func BenchmarkLogger(b *testing.B) {
 	})
 
 	b.Run("limited", func(b *testing.B) {
-		log := l.Limited(1000)
+		log := l.Limited(math.MaxInt)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			log.Info("message")
@@ -258,7 +259,7 @@ func BenchmarkConcurrentLogger(b *testing.B) {
 
 	b.Run("sampled", func(b *testing.B) {
 		var group sync.WaitGroup
-		log := l.Sampled(10)
+		log := l.Sampled(1)
 		b.ResetTimer()
 		for i := runtime.NumCPU(); i > 0; i-- {
 			group.Add(1)
@@ -274,7 +275,7 @@ func BenchmarkConcurrentLogger(b *testing.B) {
 
 	b.Run("throttled", func(b *testing.B) {
 		var group sync.WaitGroup
-		log := l.Throttled(1 * time.Millisecond)
+		log := l.Throttled(1 * time.Nanosecond)
 		b.ResetTimer()
 		for i := runtime.NumCPU(); i > 0; i-- {
 			group.Add(1)
@@ -290,7 +291,7 @@ func BenchmarkConcurrentLogger(b *testing.B) {
 
 	b.Run("limited", func(b *testing.B) {
 		var group sync.WaitGroup
-		log := l.Limited(1000)
+		log := l.Limited(math.MaxInt)
 		b.ResetTimer()
 		for i := runtime.NumCPU(); i > 0; i-- {
 			group.Add(1)
