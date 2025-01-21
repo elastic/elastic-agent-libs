@@ -371,4 +371,20 @@ func BenchmarkConcurrentLoggerRealistic(b *testing.B) {
 		}
 		group.Wait()
 	})
+
+	b.Run("sampled-1-out-of-2-limited-first-10-throttled-1-per-second", func(b *testing.B) {
+		var group sync.WaitGroup
+		log := l.Limited(10).Sampled(2).Throttled(1 * time.Second)
+		b.ResetTimer()
+		for i := runtime.NumCPU(); i > 0; i-- {
+			group.Add(1)
+			go func() {
+				for i := 0; i < b.N; i++ {
+					log.Info("message")
+				}
+				defer group.Done()
+			}()
+		}
+		group.Wait()
+	})
 }
