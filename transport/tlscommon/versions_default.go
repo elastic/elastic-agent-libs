@@ -15,8 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build go1.13
-
 package tlscommon
 
 import (
@@ -29,16 +27,18 @@ const (
 	TLSVersion11 TLSVersion = tls.VersionTLS11
 	TLSVersion12 TLSVersion = tls.VersionTLS12
 	TLSVersion13 TLSVersion = tls.VersionTLS13
+)
 
+var (
 	// TLSVersionMin is the min TLS version supported.
-	TLSVersionMin = TLSVersion10
+	TLSVersionMin = TLSVersion11
 
 	// TLSVersionMax is the max TLS version supported.
 	TLSVersionMax = TLSVersion13
 
 	// TLSVersionDefaultMin is the minimal default TLS version that is
 	// enabled by default. TLSVersionDefaultMin is >= TLSVersionMin
-	TLSVersionDefaultMin = TLSVersion11
+	TLSVersionDefaultMin = TLSVersion12
 
 	// TLSVersionDefaultMax is the max default TLS version that
 	// is enabled by default.
@@ -47,7 +47,6 @@ const (
 
 // TLSDefaultVersions list of versions of TLS we should support.
 var TLSDefaultVersions = []TLSVersion{
-	TLSVersion11,
 	TLSVersion12,
 	TLSVersion13,
 }
@@ -58,6 +57,20 @@ var tlsProtocolVersions = map[string]TLSVersion{
 	"TLSv1.1": TLSVersion11,
 	"TLSv1.2": TLSVersion12,
 	"TLSv1.3": TLSVersion13,
+}
+
+// SetInsecureDefaults is currently a nop as the default versions have not changed.
+//
+// This function is used to avoid a breaking change on previous releases.
+// We plan on the default minimum versions list to exclude TLS1.1, and not allow TLS1.0 in a future library update.
+func SetInsecureDefaults() {
+	TLSVersionMin = TLSVersion10
+	TLSVersionDefaultMin = TLSVersion11
+	TLSDefaultVersions = []TLSVersion{
+		TLSVersion11,
+		TLSVersion12,
+		TLSVersion13,
+	}
 }
 
 // Intended for ECS's tls.version_protocol_field, which does not include
