@@ -198,7 +198,7 @@ func TestTrustRootCA(t *testing.T) {
 	nonEmptyCertPool.AddCert(certs["wildcard"])
 	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
-	fingerprint := GetFingerprint(certs["ca"])
+	fingerprint := GetCertFingerprint(certs["ca"])
 
 	testCases := []struct {
 		name                 string
@@ -268,7 +268,7 @@ func TestTrustRootCA(t *testing.T) {
 
 func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 	testCerts := GenTestCerts(t)
-	fingerprint := GetFingerprint(testCerts["ca"])
+	fingerprint := GetCertFingerprint(testCerts["ca"])
 
 	testcases := map[string]struct {
 		verificationMode     TLSVerificationMode
@@ -684,12 +684,14 @@ func startTestServer(t *testing.T, serverAddr string, serverCerts []tls.Certific
 	return *serverURL
 }
 
-func GetFingerprint(cert *x509.Certificate) string {
+// GetCertFingerPrint takes a certificate and returns its HEX encoded SHA-256
+func GetCertFingerprint(cert *x509.Certificate) string {
 	caSHA256 := sha256.Sum256(cert.Raw)
 	return hex.EncodeToString(caSHA256[:])
 }
 
 func GenTestCerts(t *testing.T) map[string]*x509.Certificate {
+	t.Helper()
 	ca, err := genCA()
 	if err != nil {
 		t.Fatalf("cannot generate root CA: %s", err)
