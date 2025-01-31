@@ -26,12 +26,13 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMakeVerifyServerConnection(t *testing.T) {
-	testCerts := GenTestCerts(t)
+	testCerts := tlscommontest.GenTestCerts(t)
 
 	certPool := x509.NewCertPool()
 	certPool.AddCert(testCerts["ca"])
@@ -183,13 +184,13 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 }
 
 func TestTrustRootCA(t *testing.T) {
-	certs := GenTestCerts(t)
+	certs := tlscommontest.GenTestCerts(t)
 
 	nonEmptyCertPool := x509.NewCertPool()
 	nonEmptyCertPool.AddCert(certs["wildcard"])
 	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
-	fingerprint := GetCertFingerprint(certs["ca"])
+	fingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
 
 	testCases := []struct {
 		name                 string
@@ -258,8 +259,8 @@ func TestTrustRootCA(t *testing.T) {
 }
 
 func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
-	testCerts := GenTestCerts(t)
-	fingerprint := GetCertFingerprint(testCerts["ca"])
+	testCerts := tlscommontest.GenTestCerts(t)
+	fingerprint := tlscommontest.GetCertFingerprint(testCerts["ca"])
 
 	testcases := map[string]struct {
 		verificationMode     TLSVerificationMode
