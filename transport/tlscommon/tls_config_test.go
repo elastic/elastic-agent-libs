@@ -286,10 +286,18 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			expectedCallback:     true,
 			CATrustedFingerprint: fingerprint,
 		},
+		"CATrustedFingerprint and verification mode:VerifyFull and incorrect servername": {
+			verificationMode:     VerifyFull,
+			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
+			serverName:           "random",
+			expectedCallback:     true,
+			expectingError:       true,
+			CATrustedFingerprint: fingerprint,
+		},
 		"CATrustedFingerprint and verification mode:VerifyCertificate": {
 			verificationMode:     VerifyCertificate,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
-			serverName:           "localhost",
+			serverName:           "random", // Does not verify hostname
 			expectedCallback:     true,
 			CATrustedFingerprint: fingerprint,
 		},
@@ -323,6 +331,15 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			CATrustedFingerprint: "INVALID HEX ENCODING",
 			expectingError:       true,
 		},
+		"CATrustedFingerprint and verification mode:VerifyStrict with incorrect servername": {
+			verificationMode:     VerifyStrict,
+			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
+			serverName:           "random",
+			expectedCallback:     true,
+			expectingError:       true,
+			CATrustedFingerprint: fingerprint,
+			CASHA256:             []string{Fingerprint(testCerts["correct"])},
+		},
 		"invalid CATrustedFingerprint and verification mode:VerifyStrict returns error": {
 			verificationMode:     VerifyStrict,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
@@ -340,6 +357,7 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 				Verification:         test.verificationMode,
 				CATrustedFingerprint: test.CATrustedFingerprint,
 				CASha256:             test.CASHA256,
+				ServerName:           test.serverName,
 			}
 
 			verifier := makeVerifyConnection(cfg)
