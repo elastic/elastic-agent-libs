@@ -114,7 +114,7 @@ func TestLoggerRotateSymlink(t *testing.T) {
 
 	// The file rotation should have detected the destination is a symlink and rotated before writing.
 	rotatedFilename := filepath.Join(dir, fmt.Sprintf("%s-%s-1.ndjson", logname, time.Now().Format(file.DateFormat)))
-	AssertDirContents(t, dir, filepath.Base(privateFile), filepath.Base(guessedFilename), filepath.Base(rotatedFilename))
+	assertDirContents(t, dir, filepath.Base(privateFile), filepath.Base(guessedFilename), filepath.Base(rotatedFilename))
 
 	got, err := os.ReadFile(privateFile)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestLoggerRotateSymlink(t *testing.T) {
 	assert.Contains(t, string(got), logLine, "The rotated file should contain the log message")
 }
 
-func AssertDirContents(t *testing.T, dir string, files ...string) {
+func assertDirContents(t *testing.T, dir string, files ...string) {
 	t.Helper()
 
 	f, err := os.Open(dir)
