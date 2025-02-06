@@ -123,6 +123,9 @@ func TestLoggerRotateSymlink(t *testing.T) {
 	got, err = os.ReadFile(rotatedFilename)
 	require.NoError(t, err)
 	assert.Contains(t, string(got), logLine, "The rotated file should contain the log message")
+
+	// Prevent windows issues with cleaning up files still in use.
+	assert.NoError(t, L().Close())
 }
 
 func assertDirContents(t *testing.T, dir string, files ...string) {
