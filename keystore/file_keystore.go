@@ -89,8 +89,12 @@ func Factory(c *config.C, defaultPath string, strictPerms bool) (Keystore, error
 	if cfg.Path == "" {
 		cfg.Path = defaultPath
 	}
+	password, err := loadPassfile(cfg.PassfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("could not load keystore password: %w", err)
+	}
 
-	keystore, err := NewFileKeystoreWithStrictPerms(cfg.Path, strictPerms)
+	keystore, err := NewFileKeystoreWithPasswordAndStrictPerms(cfg.Path, password, strictPerms)
 	return keystore, err
 }
 

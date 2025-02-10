@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/config"
 )
 
 var keyValue = "output.elasticsearch.password"
@@ -368,4 +370,51 @@ func TestRandomBytes(t *testing.T) {
 
 	// unlikely to get 2 times the same results
 	require.False(t, bytes.Equal(v1, v2))
+}
+
+func TestFactory(t *testing.T) {
+	t.Run("no passfile_path", func(t *testing.T) {
+		path := GetTemporaryKeystoreFile(t)
+		cfg := config.MustNewConfigFrom(&Config{
+			Path: path,
+		})
+
+		store, err := Factory(cfg, path, false)
+		require.NoError(t, err)
+		writableKeystore, err := AsWritableKeystore(store)
+		require.NoError(t, err)
+
+		err = writableKeystore.Store("hello", []byte("world"))
+		require.NoError(t, err)
+		err = writableKeystore.Save()
+		require.NoError(t, err)
+	})
+	t.Run("with passfile_path", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.keystore")
+		passfilepath := filepath.Join(dir, "passfile")
+		f, err := os.Create(passfilepath)
+		require.NoError(t, err)
+		_, err = f.Write([]byte("Abcd1234"))
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+
+		cfg := config.MustNewConfigFrom(&Config{
+			Path:         path,
+			PassfilePath: passfilepath,
+		})
+
+		store, err := Factory(cfg, path, false)
+		require.NoError(t, err)
+		writableKeystore, err := AsWritableKeystore(store)
+		require.NoError(t, err)
+
+		err = writableKeystore.Store("hello", []byte("world"))
+		require.NoError(t, err)
+		err = writableKeystore.Save()
+		require.NoError(t, err)
+
+		_, err = NewFileKeystoreWithPassword(path, NewSecureString([]byte("wrongpassword")))
+		require.Error(t, err, "expected error due to wrong password")
+	})
 }

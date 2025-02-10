@@ -15,16 +15,35 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !requirefips
+
 package keystore
 
-// Config Define keystore configurable options
-type Config struct {
-	Path         string `config:"path"`
-	PassfilePath string `config:"passfile_path,omitempty"`
-}
+import (
+	"fmt"
+	"io"
+	"os"
+)
 
-func defaultConfig() Config {
-	return Config{
-		Path: "",
+// loadPassfile will read the path and return a SecureString.
+//
+// An empty path is allowed if not built with the requirefips tag.
+// If an empty pass is used, an empty (non-nil) SecureString is returned
+func loadPassfile(path string) (*SecureString, error) {
+	if path == "" {
+		return NewSecureString([]byte("")), nil
 	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open %q: %w", path, err)
+	}
+	defer f.Close()
+	p, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %q: %w", path, err)
+	}
+	if len(p) == 0 {
+		return nil, fmt.Errorf("passfile %q contains no bytes", path)
+	}
+	return NewSecureString(p), nil
 }
