@@ -475,3 +475,25 @@ func randomBytes(length int) ([]byte, error) {
 
 	return r, nil
 }
+
+// loadPassfile will read the path and return a SecureString.
+//
+// If an empty path is used, an empty (non-nil) SecureString is returned
+func loadPassfile(path string) (*SecureString, error) {
+	if path == "" {
+		return NewSecureString([]byte("")), nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open %q: %w", path, err)
+	}
+	defer f.Close()
+	p, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %q: %w", path, err)
+	}
+	if len(p) == 0 {
+		return nil, fmt.Errorf("passfile %q contains no bytes", path)
+	}
+	return NewSecureString(p), nil
+}
