@@ -18,7 +18,9 @@
 package keystore
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/go-ucfg"
@@ -37,7 +39,23 @@ var (
 
 	// ErrNotWritable is returned when the keystore is not writable
 	ErrNotListing = errors.New("the configured keystore is not listing")
+
+	// ErrKeystoreDisabled is returned on create, save, and store operations if built with the requirefips flag
+	ErrKeystoreDisabled = fmt.Errorf("keystore disabled in FIPS mode: %w", errors.ErrUnsupported)
 )
+
+const (
+	filePermission = 0600
+
+	// Encryption Related constants
+	iVLength        = 12
+	saltLength      = 64
+	iterationsCount = 10000
+	keyLength       = 32
+)
+
+// Version of the keystore format, will be added at the beginning of the file.
+var version = []byte("v1")
 
 // Keystore implement a way to securely saves and retrieves secrets to be used in the configuration
 // Currently all credentials are loaded upfront and are not lazy retrieved, we will eventually move
@@ -71,6 +89,12 @@ type WritableKeystore interface {
 type ListingKeystore interface {
 	// List returns the list of keys in the keystore, return an empty list if none is found.
 	List() ([]string, error)
+}
+
+// Packager defines a keystore that we can read the raw bytes and be packaged in an artifact.
+type Packager interface {
+	Package() ([]byte, error)
+	ConfiguredPath() string
 }
 
 // Use parse.NoopConfig to disable interpreting all parser characters when loading secrets.
@@ -117,4 +141,57 @@ func AsListingKeystore(store Keystore) (ListingKeystore, error) {
 		return nil, ErrNotListing
 	}
 	return w, nil
+}
+
+// Factory Create the right keystore with the configured options.
+func Factory(c *config.C, defaultPath string, strictPerms bool) (Keystore, error) {
+	cfg := defaultConfig()
+
+	if c == nil {
+		c = config.NewConfig()
+	}
+	err := c.Unpack(&cfg)
+
+	if err != nil {
+		return nil, fmt.Errorf("could not read keystore configuration, err: %w", err)
+	}
+
+	if cfg.Path == "" {
+		cfg.Path = defaultPath
+	}
+
+	keystore, err := NewFileKeystoreWithStrictPerms(cfg.Path, strictPerms)
+	return keystore, err
+}
+
+// NewFileKeystore returns an new File based keystore or an error, currently users cannot set their
+// own password on the keystore, the default password will be an empty string. When the keystore
+// is initialized the secrets are automatically loaded into memory.
+func NewFileKeystore(keystoreFile string) (Keystore, error) {
+	return NewFileKeystoreWithStrictPerms(keystoreFile, false)
+}
+
+// NewFileKeystore returns an new File based keystore or an error, currently users cannot set their
+// own password on the keystore, the default password will be an empty string. When the keystore
+// is initialized the secrets are automatically loaded into memory.
+func NewFileKeystoreWithStrictPerms(keystoreFile string, strictPerms bool) (Keystore, error) {
+	return NewFileKeystoreWithPasswordAndStrictPerms(keystoreFile, NewSecureString([]byte("")), strictPerms)
+}
+
+// NewFileKeystoreWithPassword return a new File based keystore or an error, allow to define what
+// password to use to create the keystore.
+func NewFileKeystoreWithPassword(keystoreFile string, password *SecureString) (Keystore, error) {
+	return NewFileKeystoreWithPasswordAndStrictPerms(keystoreFile, password, false)
+}
+
+// randomBytes return a slice of random bytes of the defined length
+func randomBytes(length int) ([]byte, error) {
+	r := make([]byte, length)
+	_, err := rand.Read(r)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
