@@ -493,6 +493,7 @@ func assertDirContents(t *testing.T, dir string, files ...string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
 
 	names, err := f.Readdirnames(-1)
 	if err != nil {
