@@ -15,21 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !requirefips
+
 package tlscommon
 
 import (
 	"crypto/tls"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/elastic/elastic-agent-libs/config"
-
-	ucfg "github.com/elastic/go-ucfg"
-	"github.com/elastic/go-ucfg/json"
 )
 
 const (
@@ -53,84 +51,6 @@ yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk
 sxSmbIUfc2SGJGCJD4I=
 -----END CERTIFICATE-----`
 )
-
-// test TLS config loading
-
-func load(yamlStr string) (*Config, error) {
-	var cfg Config
-	config, err := config.NewConfigWithYAML([]byte(yamlStr), "")
-	if err != nil {
-		return nil, err
-	}
-
-	if err = config.Unpack(&cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func mustLoad(t *testing.T, yamlStr string) *Config {
-	cfg, err := load(yamlStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
-}
-
-// copied from config.fromConfig
-func cfgConvert(in *ucfg.Config) *config.C {
-	return (*config.C)(in)
-}
-
-func loadJSON(jsonStr string) (*Config, error) {
-	var cfg Config
-	uc, err := json.NewConfig([]byte(jsonStr), ucfg.PathSep("."), ucfg.VarExp)
-	if err != nil {
-		return nil, err
-	}
-
-	c := cfgConvert(uc)
-
-	if err = c.Unpack(&cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func loadServerConfigJSON(jsonStr string) (*ServerConfig, error) {
-	var cfg ServerConfig
-	uc, err := json.NewConfig([]byte(jsonStr), ucfg.PathSep("."), ucfg.VarExp)
-	if err != nil {
-		return nil, err
-	}
-
-	c := cfgConvert(uc)
-
-	if err = c.Unpack(&cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func mustLoadServerConfigJSON(t *testing.T, jsonStr string) *ServerConfig {
-	t.Helper()
-	cfg, err := loadServerConfigJSON(jsonStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
-}
-
-func writeTestFile(t *testing.T, content string) string {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "")
-	require.NoError(t, err)
-	_, err = f.WriteString(content)
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
-	return f.Name()
-}
 
 func TestEmptyTlsConfig(t *testing.T) {
 	cfg, err := load("")
