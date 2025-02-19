@@ -10,7 +10,7 @@ add_bin_path
 with_go_junit_report
 
 tags=integration
-if [[ "$FIPS" == "true" ]]; then
+if [[ "${FIPS:-false}" == "true" ]]; then
     tags="${tags},requirefips"
 fi
 
