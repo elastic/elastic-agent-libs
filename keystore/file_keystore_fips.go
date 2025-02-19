@@ -40,7 +40,7 @@ func (*NopKeystore) Retrieve(key string) (*SecureString, error) {
 
 // Store returns ErrKeystoreDisabled
 func (*NopKeystore) Store(key string, value []byte) error {
-	return nil, ErrKeystoreDisabled
+	return ErrKeystoreDisabled
 }
 
 // Delete is a nop that returns nil

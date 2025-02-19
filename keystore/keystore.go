@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/go-ucfg"
@@ -187,7 +188,7 @@ func NewFileKeystoreWithPassword(keystoreFile string, password *SecureString) (K
 // randomBytes return a slice of random bytes of the defined length
 func randomBytes(length int) ([]byte, error) {
 	r := make([]byte, length)
-	_, err := rand.Read(r)
+	_, err := io.ReadFull(rand.Reader, r)
 
 	if err != nil {
 		return nil, err
