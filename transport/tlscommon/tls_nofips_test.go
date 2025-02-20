@@ -15,20 +15,86 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build requirefips
+//go:build !requirefips
 
 package tlscommon
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestFIPSCertifacteAndKeys tests that encrypted private keys fail in FIPS mode
-func TestFIPSCertificateAndKeys(t *testing.T) {
+func TestKeyPassphrase(t *testing.T) {
+	const passphrase = "Abcd1234!" // passphrase for testdata/ca.encrypted.key
+	t.Run("no passphrase", func(t *testing.T) {
+		_, err := LoadTLSConfig(mustLoad(t, `
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.encrypted.key
+    `))
+		assert.ErrorContains(t, err, "no PEM blocks") // ReadPEMFile will generate an internal "no passphrase available" error that is logged and the no PEM blocks error is returned instead
+	})
+
+	t.Run("wrong passphrase", func(t *testing.T) {
+		_, err := LoadTLSConfig(mustLoad(t, `
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.encrypted.key
+    key_passphrase: "abcd1234!"
+    `))
+		assert.ErrorContains(t, err, "no PEM blocks") // ReadPEMFile will fail decrypting with x509.IncorrectPasswordError that will be logged and a no PEM blocks error is returned instead
+	})
+
+	t.Run("passphrase value", func(t *testing.T) {
+		cfg, err := LoadTLSConfig(mustLoad(t, `
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.encrypted.key
+    key_passphrase: Abcd1234!
+    `))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(cfg.Certificates), "expected 1 certificate to be loaded")
+	})
+
+	t.Run("passphrase file", func(t *testing.T) {
+		fileName := writeTestFile(t, passphrase)
+		cfg, err := LoadTLSConfig(mustLoad(t, fmt.Sprintf(`
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.encrypted.key
+    key_passphrase_path: %s
+    `, fileName)))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(cfg.Certificates), "expected 1 certificate to be loaded")
+	})
+
+	t.Run("passphrase file empty", func(t *testing.T) {
+		fileName := writeTestFile(t, "")
+		_, err := LoadTLSConfig(mustLoad(t, fmt.Sprintf(`
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.encrypted.key
+    key_passphrase_path: %s
+    `, fileName)))
+		assert.ErrorContains(t, err, "no PEM blocks") // ReadPEMFile will generate an internal "no passphrase available" error that is logged and the no PEM blocks error is returned instead
+	})
+
+	t.Run("unencrypted key file with passphrase", func(t *testing.T) {
+		cfg, err := LoadTLSConfig(mustLoad(t, `
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.key
+    key_passphrase: Abcd1234!
+    `))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(cfg.Certificates), "expected 1 certificate to be loaded")
+	})
+}
+
+func TestCertificateAndKeys(t *testing.T) {
 	t.Run("embed encrypted PKCS#1 key", func(t *testing.T) {
 		// Create a dummy configuration and append the CA after.
 		cfg, err := load(`
@@ -102,8 +168,10 @@ aWowEutgPc3AMLhnIya1MfjmvmqWE/IiVWlD034Xe0djg4HxGh8hlOWBoHfkW62k
 		cfg.Certificate.Key = key
 		cfg.Certificate.Passphrase = "abcd1234"
 
-		_, err = LoadTLSConfig(cfg)
-		assert.ErrorIs(t, err, errors.ErrUnsupported)
+		tlsC, err := LoadTLSConfig(cfg)
+		assert.NoError(t, err)
+
+		assert.NotNil(t, tlsC)
 	})
 
 	t.Run("embed PKCS#8 key", func(t *testing.T) {
@@ -178,7 +246,9 @@ lQnRKskc+T5PeoAwdCtQ1RVCSXZNetXdPCj790BkNEt6
 		cfg.Certificate.Key = key
 		cfg.Certificate.Passphrase = "abcd1234"
 
-		_, err = LoadTLSConfig(cfg)
-		assert.ErrorIs(t, err, errors.ErrUnsupported)
+		tlsC, err := LoadTLSConfig(cfg)
+		assert.NoError(t, err)
+
+		assert.NotNil(t, tlsC)
 	})
 }
