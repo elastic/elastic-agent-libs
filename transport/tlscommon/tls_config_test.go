@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !requirefips
+
 package tlscommon
 
 import (
@@ -26,9 +28,10 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
 
 func TestMakeVerifyServerConnection(t *testing.T) {

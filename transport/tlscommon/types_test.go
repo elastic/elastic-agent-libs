@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !requirefips
+
 package tlscommon
 
 import (
@@ -22,9 +24,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/go-ucfg"
-	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
