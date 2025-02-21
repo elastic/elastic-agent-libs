@@ -18,6 +18,12 @@
 package tlscommon
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
 	"testing"
 
@@ -26,6 +32,7 @@ import (
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/go-ucfg"
 	"github.com/elastic/go-ucfg/json"
+	"github.com/elastic/pkcs8"
 )
 
 const (
@@ -125,4 +132,57 @@ func writeTestFile(t *testing.T, content string) string {
 	err = f.Close()
 	require.NoError(t, err)
 	return f.Name()
+}
+
+const (
+	blockTypePKCS1 int = iota
+	blockTypePKCS8
+	blockTypePKCS1Encrypted
+	blockTypePKCS8Encrypted
+)
+
+// Setup key+cert pair for the tests
+func makeKeyCertPair(t *testing.T, blockType int, password string) (string, string) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	var block *pem.Block
+	switch blockType {
+	case blockTypePKCS1:
+		block = &pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(key),
+		}
+	case blockTypePKCS8:
+		b, err := x509.MarshalPKCS8PrivateKey(key)
+		require.NoError(t, err)
+		block = &pem.Block{
+			Type:  "PRIVATE KEY",
+			Bytes: b,
+		}
+	case blockTypePKCS1Encrypted:
+		var err error
+		block, err = x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(key), []byte(password), x509.PEMCipherAES256)
+		require.NoError(t, err)
+	case blockTypePKCS8Encrypted:
+		//TODO: this uses an elastic implementation of pkcs8 as the stdlib does not support password protected pkcs8
+		b, err := pkcs8.MarshalPrivateKey(key, []byte(password), nil)
+		require.NoError(t, err)
+		block = &pem.Block{
+			Type:  "ENCRYPTED PRIVATE KEY",
+			Bytes: b,
+		}
+	}
+
+	keyPem := pem.EncodeToMemory(block)
+	tml := x509.Certificate{
+		SerialNumber: new(big.Int),
+		Subject:      pkix.Name{CommonName: "commonName"},
+	}
+	cert, err := x509.CreateCertificate(rand.Reader, &tml, &tml, &key.PublicKey, key)
+	require.NoError(t, err)
+	certPem := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert,
+	})
+	return string(keyPem), string(certPem)
 }
