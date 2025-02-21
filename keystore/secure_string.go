@@ -26,6 +26,12 @@ type SecureString struct {
 	value []byte
 }
 
+// Allow the original SecureString type to be correctly serialized to json.
+type serializableSecureString struct {
+	*SecureString
+	Value []byte `json:"value"`
+}
+
 // NewSecureString return a struct representing a secrets string.
 func NewSecureString(value []byte) *SecureString {
 	return &SecureString{
