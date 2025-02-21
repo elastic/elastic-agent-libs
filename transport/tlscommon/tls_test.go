@@ -313,44 +313,8 @@ func TestResolveCipherSuite(t *testing.T) {
 
 func TestPEMString(t *testing.T) {
 	t.Run("is PEM formatted String", func(t *testing.T) {
-		assert.True(t, IsPEMString(testCert))
-	})
-
-	// Well use `|` if you want to keep the newline, theses are required so the PEM document is valid.
-	t.Run("From the YAML/multiline", func(t *testing.T) {
-		cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-  - |
-    -----BEGIN CERTIFICATE-----
-    MIIDCjCCAfKgAwIBAgITJ706Mu2wJlKckpIvkWxEHvEyijANBgkqhkiG9w0BAQsF
-    ADAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwIBcNMTkwNzIyMTkyOTA0WhgPMjExOTA2
-    MjgxOTI5MDRaMBQxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcNAQEB
-    BQADggEPADCCAQoCggEBANce58Y/JykI58iyOXpxGfw0/gMvF0hUQAcUrSMxEO6n
-    fZRA49b4OV4SwWmA3395uL2eB2NB8y8qdQ9muXUdPBWE4l9rMZ6gmfu90N5B5uEl
-    94NcfBfYOKi1fJQ9i7WKhTjlRkMCgBkWPkUokvBZFRt8RtF7zI77BSEorHGQCk9t
-    /D7BS0GJyfVEhftbWcFEAG3VRcoMhF7kUzYwp+qESoriFRYLeDWv68ZOvG7eoWnP
-    PsvZStEVEimjvK5NSESEQa9xWyJOmlOKXhkdymtcUd/nXnx6UTCFgnkgzSdTWV41
-    CI6B6aJ9svCTI2QuoIq2HxX/ix7OvW1huVmcyHVxyUECAwEAAaNTMFEwHQYDVR0O
-    BBYEFPwN1OceFGm9v6ux8G+DZ3TUDYxqMB8GA1UdIwQYMBaAFPwN1OceFGm9v6ux
-    8G+DZ3TUDYxqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAG5D
-    874A4YI7YUwOVsVAdbWtgp1d0zKcPRR+r2OdSbTAV5/gcS3jgBJ3i1BN34JuDVFw
-    3DeJSYT3nxy2Y56lLnxDeF8CUTUtVQx3CuGkRg1ouGAHpO/6OqOhwLLorEmxi7tA
-    H2O8mtT0poX5AnOAhzVy7QW0D/k4WaoLyckM5hUa6RtvgvLxOwA0U+VGurCDoctu
-    8F4QOgTAWyh8EZIwaKCliFRSynDpv3JTUwtfZkxo6K6nce1RhCWFAsMvDZL8Dgc0
-    yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk
-    sxSmbIUfc2SGJGCJD4I=
-    -----END CERTIFICATE-----
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-		assert.NoError(t, err)
-		assert.True(t, IsPEMString(cfg.CAs[0]))
+		_, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		assert.True(t, IsPEMString(string(cert)))
 	})
 
 	t.Run("is not a PEM formatted String", func(t *testing.T) {
@@ -364,217 +328,99 @@ supported_protocols: null
 	})
 }
 
-func TestCertificate(t *testing.T) {
-	// Write certificate to a temporary file.
-	certFile := writeTestFile(t, testCert)
+func TestCertificateAuthorities(t *testing.T) {
+	t.Run("From configuration", func(t *testing.T) {
+		_, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.CAs = []string{cert}
 
-	t.Run("certificate authorities", func(t *testing.T) {
-		t.Run("From configuration", func(t *testing.T) {
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-  - |
-    -----BEGIN CERTIFICATE-----
-    MIIDCjCCAfKgAwIBAgITJ706Mu2wJlKckpIvkWxEHvEyijANBgkqhkiG9w0BAQsF
-    ADAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwIBcNMTkwNzIyMTkyOTA0WhgPMjExOTA2
-    MjgxOTI5MDRaMBQxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcNAQEB
-    BQADggEPADCCAQoCggEBANce58Y/JykI58iyOXpxGfw0/gMvF0hUQAcUrSMxEO6n
-    fZRA49b4OV4SwWmA3395uL2eB2NB8y8qdQ9muXUdPBWE4l9rMZ6gmfu90N5B5uEl
-    94NcfBfYOKi1fJQ9i7WKhTjlRkMCgBkWPkUokvBZFRt8RtF7zI77BSEorHGQCk9t
-    /D7BS0GJyfVEhftbWcFEAG3VRcoMhF7kUzYwp+qESoriFRYLeDWv68ZOvG7eoWnP
-    PsvZStEVEimjvK5NSESEQa9xWyJOmlOKXhkdymtcUd/nXnx6UTCFgnkgzSdTWV41
-    CI6B6aJ9svCTI2QuoIq2HxX/ix7OvW1huVmcyHVxyUECAwEAAaNTMFEwHQYDVR0O
-    BBYEFPwN1OceFGm9v6ux8G+DZ3TUDYxqMB8GA1UdIwQYMBaAFPwN1OceFGm9v6ux
-    8G+DZ3TUDYxqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAG5D
-    874A4YI7YUwOVsVAdbWtgp1d0zKcPRR+r2OdSbTAV5/gcS3jgBJ3i1BN34JuDVFw
-    3DeJSYT3nxy2Y56lLnxDeF8CUTUtVQx3CuGkRg1ouGAHpO/6OqOhwLLorEmxi7tA
-    H2O8mtT0poX5AnOAhzVy7QW0D/k4WaoLyckM5hUa6RtvgvLxOwA0U+VGurCDoctu
-    8F4QOgTAWyh8EZIwaKCliFRSynDpv3JTUwtfZkxo6K6nce1RhCWFAsMvDZL8Dgc0
-    yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk
-    sxSmbIUfc2SGJGCJD4I=
-    -----END CERTIFICATE-----
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			assert.NoError(t, err)
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
-			assert.NotNil(t, tlsC)
-		})
-
-		t.Run("From disk", func(t *testing.T) {
-			// Create a dummy configuration and append the CA after.
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			require.NoError(t, err)
-
-			cfg.CAs = []string{certFile}
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
-
-			assert.NotNil(t, tlsC)
-		})
-
-		t.Run("mixed from disk and embed", func(t *testing.T) {
-			// Create a dummy configuration and append the CA after.
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			require.NoError(t, err)
-
-			cfg.CAs = []string{certFile, testCert}
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
-
-			assert.NotNil(t, tlsC)
-		})
+		tlsC, err := LoadTLSConfig(cfg)
+		assert.NoError(t, err)
+		assert.NotNil(t, tlsC)
 	})
 
-	t.Run("Certificate and Private keys", func(t *testing.T) {
-		key := `
------BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDXHufGPycpCOfI
-sjl6cRn8NP4DLxdIVEAHFK0jMRDup32UQOPW+DleEsFpgN9/ebi9ngdjQfMvKnUP
-Zrl1HTwVhOJfazGeoJn7vdDeQebhJfeDXHwX2DiotXyUPYu1ioU45UZDAoAZFj5F
-KJLwWRUbfEbRe8yO+wUhKKxxkApPbfw+wUtBicn1RIX7W1nBRABt1UXKDIRe5FM2
-MKfqhEqK4hUWC3g1r+vGTrxu3qFpzz7L2UrRFRIpo7yuTUhEhEGvcVsiTppTil4Z
-HcprXFHf5158elEwhYJ5IM0nU1leNQiOgemifbLwkyNkLqCKth8V/4sezr1tYblZ
-nMh1cclBAgMBAAECggEBAKdP5jyOicqknoG9/G564RcDsDyRt64NuO7I6hBg7SZx
-Jn7UKWDdFuFP/RYtoabn6QOxkVVlydp5Typ3Xu7zmfOyss479Q/HIXxmmbkD0Kp0
-eRm2KN3y0b6FySsS40KDRjKGQCuGGlNotW3crMw6vOvvsLTlcKgUHF054UVCHoK/
-Piz7igkDU7NjvJeha53vXL4hIjb10UtJNaGPxIyFLYRZdRPyyBJX7Yt3w8dgz8WM
-epOPu0dq3bUrY3WQXcxKZo6sQjE1h7kdl4TNji5jaFlvD01Y8LnyG0oThOzf0tve
-Gaw+kuy17gTGZGMIfGVcdeb+SlioXMAAfOps+mNIwTECgYEA/gTO8W0hgYpOQJzn
-BpWkic3LAoBXWNpvsQkkC3uba8Fcps7iiEzotXGfwYcb5Ewf5O3Lrz1EwLj7GTW8
-VNhB3gb7bGOvuwI/6vYk2/dwo84bwW9qRWP5hqPhNZ2AWl8kxmZgHns6WTTxpkRU
-zrfZ5eUrBDWjRU2R8uppgRImsxMCgYEA2MxuL/C/Ko0d7XsSX1kM4JHJiGpQDvb5
-GUrlKjP/qVyUysNF92B9xAZZHxxfPWpdfGGBynhw7X6s+YeIoxTzFPZVV9hlkpAA
-5igma0n8ZpZEqzttjVdpOQZK8o/Oni/Q2S10WGftQOOGw5Is8+LY30XnLvHBJhO7
-TKMurJ4KCNsCgYAe5TDSVmaj3dGEtFC5EUxQ4nHVnQyCpxa8npL+vor5wSvmsfUF
-hO0s3GQE4sz2qHecnXuPldEd66HGwC1m2GKygYDk/v7prO1fQ47aHi9aDQB9N3Li
-e7Vmtdn3bm+lDjtn0h3Qt0YygWj+wwLZnazn9EaWHXv9OuEMfYxVgYKpdwKBgEze
-Zy8+WDm5IWRjn8cI5wT1DBT/RPWZYgcyxABrwXmGZwdhp3wnzU/kxFLAl5BKF22T
-kRZ+D+RVZvVutebE9c937BiilJkb0AXLNJwT9pdVLnHcN2LHHHronUhV7vetkop+
-kGMMLlY0lkLfoGq1AxpfSbIea9KZam6o6VKxEnPDAoGAFDCJm+ZtsJK9nE5GEMav
-NHy+PwkYsHhbrPl4dgStTNXLenJLIJ+Ke0Pcld4ZPfYdSyu/Tv4rNswZBNpNsW9K
-0NwJlyMBfayoPNcJKXrH/csJY7hbKviAHr1eYy9/8OL0dHf85FV+9uY5YndLcsDc
-nygO9KTJuUiBrLr0AHEnqko=
------END PRIVATE KEY-----
-`
+	t.Run("From disk", func(t *testing.T) {
+		// Create a dummy configuration and append the CA after.
+		_, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		certFile := writeTestFile(t, cert)
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.CAs = []string{certFile}
 
-		t.Run("embed", func(t *testing.T) {
-			// Create a dummy configuration and append the CA after.
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			require.NoError(t, err)
+		tlsC, err := LoadTLSConfig(cfg)
+		assert.NoError(t, err)
+		assert.NotNil(t, tlsC)
+	})
 
-			cfg.Certificate.Certificate = testCert
-			cfg.Certificate.Key = key
+	t.Run("mixed from disk and embed", func(t *testing.T) {
+		// Create a dummy configuration and append the CA after.
+		_, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		certFile := writeTestFile(t, cert)
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.CAs = []string{certFile, cert}
 
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
+		tlsC, err := LoadTLSConfig(cfg)
+		assert.NoError(t, err)
 
-			assert.NotNil(t, tlsC)
-		})
+		assert.NotNil(t, tlsC)
+	})
 
-		t.Run("embed small key", func(t *testing.T) {
-			// Create a dummy configuration and append the CA after.
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			require.NoError(t, err)
+}
 
-			certificate := `
------BEGIN CERTIFICATE-----
-MIIBmzCCAUCgAwIBAgIRAOQpDyaFimzmueynALHkFEcwCgYIKoZIzj0EAwIwJjEk
-MCIGA1UEChMbVEVTVCAtIEVsYXN0aWMgSW50ZWdyYXRpb25zMB4XDTIxMDIwMjE1
-NTkxMFoXDTQxMDEyODE1NTkxMFowJjEkMCIGA1UEChMbVEVTVCAtIEVsYXN0aWMg
-SW50ZWdyYXRpb25zMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBc7UEvBd+5SG
-Z6QQfgBaPh/VAlf7ovpa/wfSmbHfBhee+dTvdAO1p90lannCkZmc7OfWAlQ1eTgJ
-QW668CJwE6NPME0wDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMB
-MAwGA1UdEwEB/wQCMAAwGAYDVR0RBBEwD4INZWxhc3RpYy1hZ2VudDAKBggqhkjO
-PQQDAgNJADBGAiEAhpGWL4lxsdb3+hHv0y4ppw6B7IJJLCeCwHLyHt2Dkx4CIQD6
-OEU+yuHzbWa18JVkHafxwnpwQmxwZA3VNitM/AyGTQ==
------END CERTIFICATE-----
-`
-			key := `
------BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgFDQJ1CPLXrUbUFqj
-ED8dqsGuVQdcPK7CHpsCeTtAgQqhRANCAAQFztQS8F37lIZnpBB+AFo+H9UCV/ui
-+lr/B9KZsd8GF5751O90A7Wn3SVqecKRmZzs59YCVDV5OAlBbrrwInAT
------END PRIVATE KEY-----
-`
-			cfg.Certificate.Certificate = certificate
-			cfg.Certificate.Key = key
+// TestFIPSCertifacteAndKeys tests encrypted private keys
+func TestCertificateAndKeys(t *testing.T) {
+	t.Run("embed PKCS#1 key", func(t *testing.T) {
+		// Create a dummy configuration and append the CA after.
+		key, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.Certificate.Certificate = cert
+		cfg.Certificate.Key = key
 
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
+		tlsC, err := LoadTLSConfig(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, tlsC)
+	})
 
-			assert.NotNil(t, tlsC)
-		})
+	t.Run("embed PKCS#8 key", func(t *testing.T) {
+		// Create a dummy configuration and append the CA after.
+		key, cert := makeKeyCertPair(t, blockTypePKCS8, "")
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.Certificate.Certificate = cert
+		cfg.Certificate.Key = key
 
-		t.Run("From disk", func(t *testing.T) {
-			keyFile := writeTestFile(t, key)
-			// Create a dummy configuration and append the CA after.
-			cfg, err := load(`
-enabled: true
-verification_mode: null
-certificate: null
-key: null
-key_passphrase: null
-certificate_authorities:
-cipher_suites: null
-curve_types: null
-supported_protocols: null
-  `)
-			require.NoError(t, err)
+		tlsC, err := LoadTLSConfig(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, tlsC)
+	})
 
-			cfg.Certificate.Certificate = certFile
-			cfg.Certificate.Key = keyFile
+	t.Run("from disk PKCS#1 key", func(t *testing.T) {
+		// Create a dummy configuration and append the CA after.
+		key, cert := makeKeyCertPair(t, blockTypePKCS1, "")
+		cfg, err := load(`enabled: true`)
+		require.NoError(t, err)
+		cfg.Certificate.Certificate = writeTestFile(t, cert)
+		cfg.Certificate.Key = writeTestFile(t, key)
 
-			tlsC, err := LoadTLSConfig(cfg)
-			assert.NoError(t, err)
+		tlsC, err := LoadTLSConfig(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, tlsC)
+	})
+}
 
-			assert.NotNil(t, tlsC)
-		})
+func TestKeyPassphrase(t *testing.T) {
+
+	t.Run("unencrypted key file with passphrase", func(t *testing.T) {
+		cfg, err := LoadTLSConfig(mustLoad(t, `
+    enabled: true
+    certificate: testdata/ca.crt
+    key: testdata/ca.key
+    key_passphrase: Abcd1234!
+    `))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(cfg.Certificates), "expected 1 certificate to be loaded")
 	})
 }
