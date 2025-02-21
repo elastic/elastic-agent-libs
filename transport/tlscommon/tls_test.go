@@ -314,7 +314,7 @@ func TestResolveCipherSuite(t *testing.T) {
 func TestPEMString(t *testing.T) {
 	t.Run("is PEM formatted String", func(t *testing.T) {
 		_, cert := makeKeyCertPair(t, blockTypePKCS1, "")
-		assert.True(t, IsPEMString(string(cert)))
+		assert.True(t, IsPEMString(cert))
 	})
 
 	t.Run("is not a PEM formatted String", func(t *testing.T) {
