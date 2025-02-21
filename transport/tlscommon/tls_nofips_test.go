@@ -35,8 +35,8 @@ func TestNoFIPSCertificateAndKeys(t *testing.T) {
 		key, cert := makeKeyCertPair(t, blockTypePKCS1Encrypted, password)
 		cfg, err := load(`enabled: true`)
 		require.NoError(t, err)
-		cfg.Certificate.Certificate = string(cert)
-		cfg.Certificate.Key = string(key)
+		cfg.Certificate.Certificate = cert
+		cfg.Certificate.Key = key
 		cfg.Certificate.Passphrase = password
 
 		tlsC, err := LoadTLSConfig(cfg)
@@ -50,8 +50,8 @@ func TestNoFIPSCertificateAndKeys(t *testing.T) {
 		key, cert := makeKeyCertPair(t, blockTypePKCS8Encrypted, password)
 		cfg, err := load(`enabled: true`)
 		require.NoError(t, err)
-		cfg.Certificate.Certificate = string(cert)
-		cfg.Certificate.Key = string(key)
+		cfg.Certificate.Certificate = cert
+		cfg.Certificate.Key = key
 		cfg.Certificate.Passphrase = password
 
 		tlsC, err := LoadTLSConfig(cfg)
