@@ -47,7 +47,8 @@ linters:
     - noctx # noctx finds sending http request without context.Context
     - unconvert # Remove unnecessary type conversions
     - wastedassign # wastedassign finds wasted assignment statements.
-    - gomodguard # check for blocked dependencies
+    - gomodguard # check for blocked dependencies in go.mod
+    - depguard # check for blocked dependencies in Go files
 
 # all available settings of specific linters
 linters-settings:
@@ -83,7 +84,7 @@ linters-settings:
 
   gosimple:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.22.11"
+    go: "1.22.12"
 
   nakedret:
     # make an issue if func has more lines of code than this setting and it has naked returns; default is 30
@@ -115,21 +116,29 @@ linters-settings:
         - github.com/elastic/beats/v7:
             reason: "There must be no Beats dependency"
 
+  depguard:
+    rules:
+      main:
+        list-mode: lax
+        deny:
+          - pkg: "math/rand$"
+            desc: "superseded by math/rand/v2"
+
   staticcheck:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.22.11"
+    go: "1.22.12"
     # https://staticcheck.io/docs/options#checks
     checks: ["all"]
 
   stylecheck:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.22.11"
+    go: "1.22.12"
     # https://staticcheck.io/docs/options#checks
     checks: ["all"]
 
   unused:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.22.11"
+    go: "1.22.12"
 
   gosec:
     excludes:
