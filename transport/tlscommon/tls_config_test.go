@@ -194,7 +194,9 @@ func TestTrustRootCA(t *testing.T) {
 	nonEmptyCertPool.AddCert(certs["wildcard"])
 	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
-	fingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+	certfingerprint := tlscommontest.GetCertFingerprint(certs["correct"])
+	cafingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+
 	unknownAuthorityDigest := sha256.Sum256(certs["unknown_authority"].Raw)
 	unknownAuthoritySha256 := hex.EncodeToString(unknownAuthorityDigest[:])
 
@@ -203,34 +205,44 @@ func TestTrustRootCA(t *testing.T) {
 		rootCAs              *x509.CertPool
 		caTrustedFingerprint string
 		peerCerts            []*x509.Certificate
-		expectingWarning     string
+		expectingWarnings    []string
 		expectingError       bool
 		expectedRootCAsLen   int
 	}{
 		{
 			name:                 "RootCA cert matches the fingerprint and is added to cfg.RootCAs",
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
 			expectedRootCAsLen:   1,
 		},
 		{
 			name:                 "RootCA cert doesn't match the fingerprint and is not added to cfg.RootCAs",
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["unknown_authority"]},
-			expectingWarning:     "no CA certificate matches the fingerprints present in the chain. Found CA digests: [" + unknownAuthoritySha256 + "]",
+			expectingWarnings:    []string{"No Certificate Authority matches the fingerprints present in the server's certificate chain. Found CA digests: [" + unknownAuthoritySha256 + "]"},
 			expectedRootCAsLen:   0,
 		},
 		{
 			name:                 "Peer cert does not include a CA Certificate and is not added to cfg.RootCAs",
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"]},
-			expectingWarning:     "The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificates issuing certificate authority.",
+			expectingWarnings:    []string{"The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificate's issuing certificate authority."},
 			expectedRootCAsLen:   0,
+		},
+		{
+			name:                 "fingerprint matches peer cert instead of the CA Certificate and is not added to cfg.RootCAs",
+			caTrustedFingerprint: certfingerprint,
+			peerCerts:            []*x509.Certificate{certs["correct"]},
+			expectingWarnings: []string{
+				"Certificate matching 'ca_trusted_fingerprint' found, but it is not a CA certificate. 'ca_trusted_fingerprint' can only be used to trust CA certificates.",
+				"The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificate's issuing certificate authority.",
+			},
+			expectedRootCAsLen: 0,
 		},
 		{
 			name:                 "non empty CertPool has the RootCA added",
 			rootCAs:              nonEmptyCertPool,
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
 			expectedRootCAsLen:   3,
 		},
@@ -261,17 +273,19 @@ func TestTrustRootCA(t *testing.T) {
 				t.Fatalf("did not expect an error calling trustRootCA: %v", err)
 			}
 
-			if tc.expectingWarning != "" {
+			if len(tc.expectingWarnings) > 0 {
 				warnings := logp.ObserverLogs().FilterLevelExact(logp.WarnLevel.ZapLevel()).TakeAll()
 				if len(warnings) == 0 {
 					t.Fatal("expecting a warning message")
 				}
-				if len(warnings) > 1 {
-					t.Fatalf("expecting only one warning message, got %d", len(warnings))
+				if len(warnings) != len(tc.expectingWarnings) {
+					t.Fatalf("expecting %d warning messages, got %d", len(tc.expectingWarnings), len(warnings))
 				}
 
-				if got, expected := warnings[0].Message, tc.expectingWarning; got != expected {
-					t.Fatalf("expecting warning message to be '%s', got '%s'", expected, got)
+				for i, expectedWarning := range tc.expectingWarnings {
+					if got := warnings[i].Message; got != expectedWarning {
+						t.Fatalf("expecting warning message to be '%s', got '%s'", expectedWarning, got)
+					}
 				}
 			}
 
