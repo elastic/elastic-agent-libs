@@ -217,7 +217,7 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate) error {
 	if len(foundCADigests) == 0 {
 		logger.Warn("The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificate's issuing certificate authority.")
 	} else {
-		logger.Warnf("No Certificate Authority matches the fingerprints present in the server's certificate chain. Found CA digests: %v", foundCADigests)
+		logger.Warnf("The provided 'ca_trusted_fingerprint': '%s' does not match the fingerprint of any Certificate Authority present in the server's certificate chain. Found the following CA fingerprints instead: %v", cfg.CATrustedFingerprint, foundCADigests)
 	}
 
 	return nil

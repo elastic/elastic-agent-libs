@@ -219,7 +219,7 @@ func TestTrustRootCA(t *testing.T) {
 			name:                 "RootCA cert doesn't match the fingerprint and is not added to cfg.RootCAs",
 			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["unknown_authority"]},
-			expectingWarnings:    []string{"No Certificate Authority matches the fingerprints present in the server's certificate chain. Found CA digests: [" + unknownAuthoritySha256 + "]"},
+			expectingWarnings:    []string{"The provided 'ca_trusted_fingerprint': '" + cafingerprint + "' does not match the fingerprint of any Certificate Authority present in the server's certificate chain. Found the following CA fingerprints instead: [" + unknownAuthoritySha256 + "]"},
 			expectedRootCAsLen:   0,
 		},
 		{
@@ -262,7 +262,7 @@ func TestTrustRootCA(t *testing.T) {
 			}
 
 			// Capture the logs
-			logp.DevelopmentSetup(logp.ToObserverOutput())
+			_ = logp.DevelopmentSetup(logp.ToObserverOutput())
 
 			err := trustRootCA(&cfg, tc.peerCerts)
 			if tc.expectingError && err == nil {
