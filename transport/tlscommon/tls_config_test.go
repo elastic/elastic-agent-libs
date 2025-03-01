@@ -18,8 +18,10 @@
 package tlscommon
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/http"
@@ -29,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/elastic/elastic-agent-libs/logp"
 	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
 
@@ -192,12 +195,15 @@ func TestTrustRootCA(t *testing.T) {
 	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
 	fingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+	unknownAuthorityDigest := sha256.Sum256(certs["unknown_authority"].Raw)
+	unknownAuthoritySha256 := hex.EncodeToString(unknownAuthorityDigest[:])
 
 	testCases := []struct {
 		name                 string
 		rootCAs              *x509.CertPool
 		caTrustedFingerprint string
 		peerCerts            []*x509.Certificate
+		expectingWarning     string
 		expectingError       bool
 		expectedRootCAsLen   int
 	}{
@@ -208,9 +214,17 @@ func TestTrustRootCA(t *testing.T) {
 			expectedRootCAsLen:   1,
 		},
 		{
-			name:                 "RootCA cert doesn not matche the fingerprint and is not added to cfg.RootCAs",
+			name:                 "RootCA cert doesn't match the fingerprint and is not added to cfg.RootCAs",
 			caTrustedFingerprint: fingerprint,
-			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
+			peerCerts:            []*x509.Certificate{certs["correct"], certs["unknown_authority"]},
+			expectingWarning:     "no CA certificate matches the fingerprints present in the chain. Found CA digests: [" + unknownAuthoritySha256 + "]",
+			expectedRootCAsLen:   0,
+		},
+		{
+			name:                 "Peer cert does not include a CA Certificate and is not added to cfg.RootCAs",
+			caTrustedFingerprint: fingerprint,
+			peerCerts:            []*x509.Certificate{certs["correct"]},
+			expectingWarning:     "The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificates issuing certificate authority.",
 			expectedRootCAsLen:   0,
 		},
 		{
@@ -221,7 +235,7 @@ func TestTrustRootCA(t *testing.T) {
 			expectedRootCAsLen:   3,
 		},
 		{
-			name:                 "invalis HEX encoding",
+			name:                 "invalid HEX encoding",
 			caTrustedFingerprint: "INVALID ENCODING",
 			expectedRootCAsLen:   0,
 			expectingError:       true,
@@ -234,6 +248,10 @@ func TestTrustRootCA(t *testing.T) {
 				RootCAs:              tc.rootCAs,
 				CATrustedFingerprint: tc.caTrustedFingerprint,
 			}
+
+			// Capture the logs
+			logp.DevelopmentSetup(logp.ToObserverOutput())
+
 			err := trustRootCA(&cfg, tc.peerCerts)
 			if tc.expectingError && err == nil {
 				t.Fatal("expecting an error when calling trustRootCA")
@@ -243,9 +261,27 @@ func TestTrustRootCA(t *testing.T) {
 				t.Fatalf("did not expect an error calling trustRootCA: %v", err)
 			}
 
-			if tc.expectedRootCAsLen != 0 {
+			if tc.expectingWarning != "" {
+				warnings := logp.ObserverLogs().FilterLevelExact(logp.WarnLevel.ZapLevel()).TakeAll()
+				if len(warnings) == 0 {
+					t.Fatal("expecting a warning message")
+				}
+				if len(warnings) > 1 {
+					t.Fatalf("expecting only one warning message, got %d", len(warnings))
+				}
+
+				if got, expected := warnings[0].Message, tc.expectingWarning; got != expected {
+					t.Fatalf("expecting warning message to be '%s', got '%s'", expected, got)
+				}
+			}
+
+			if tc.expectedRootCAsLen == 0 {
+				if cfg.RootCAs != nil {
+					t.Fatal("cfg.RootCAs should be nil")
+				}
+			} else {
 				if cfg.RootCAs == nil {
-					t.Fatal("cfg.RootCAs cannot be nil")
+					t.Fatal("cfg.RootCAs should not be nil")
 				}
 
 				// we want to know the number of certificates in the CertPool (RootCAs), as it is not
