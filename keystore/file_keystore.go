@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/base64"
@@ -31,8 +32,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-
-	"golang.org/x/crypto/pbkdf2"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/file"
@@ -81,7 +80,6 @@ func Factory(c *config.C, defaultPath string, strictPerms bool) (Keystore, error
 		c = config.NewConfig()
 	}
 	err := c.Unpack(&cfg)
-
 	if err != nil {
 		return nil, fmt.Errorf("could not read keystore configuration, err: %w", err)
 	}
@@ -330,7 +328,6 @@ func (k *FileKeystore) encrypt(reader io.Reader) (io.Reader, error) {
 	// randomly generate the salt and the initialization vector, this information will be saved
 	// on disk in the file as part of the header
 	iv, err := randomBytes(iVLength)
-
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +339,10 @@ func (k *FileKeystore) encrypt(reader io.Reader) (io.Reader, error) {
 
 	// Stretch the user provided key
 	password, _ := k.password.Get()
-	passwordBytes := k.hashPassword(password, salt)
+	passwordBytes, err := k.hashPassword(password, salt)
+	if err != nil {
+		return nil, err
+	}
 
 	// Select AES-256: because len(passwordBytes) == 32 bytes
 	block, err := aes.NewCipher(passwordBytes)
@@ -388,7 +388,10 @@ func (k *FileKeystore) decrypt(reader io.Reader) (io.Reader, error) {
 	encodedBytes := data[saltLength+iVLength:]
 
 	password, _ := k.password.Get()
-	passwordBytes := k.hashPassword(password, salt)
+	passwordBytes, err := k.hashPassword(password, salt)
+	if err != nil {
+		return nil, err
+	}
 
 	block, err := aes.NewCipher(passwordBytes)
 	if err != nil {
@@ -456,15 +459,14 @@ func (k *FileKeystore) ConfiguredPath() string {
 	return k.Path
 }
 
-func (k *FileKeystore) hashPassword(password, salt []byte) []byte {
-	return pbkdf2.Key(password, salt, iterationsCount, keyLength, sha512.New)
+func (k *FileKeystore) hashPassword(password, salt []byte) ([]byte, error) {
+	return pbkdf2.Key(sha512.New, string(password), salt, iterationsCount, keyLength)
 }
 
 // randomBytes return a slice of random bytes of the defined length
 func randomBytes(length int) ([]byte, error) {
 	r := make([]byte, length)
 	_, err := rand.Read(r)
-
 	if err != nil {
 		return nil, err
 	}
