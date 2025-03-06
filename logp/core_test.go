@@ -707,7 +707,13 @@ func TestConfigureWithCore(t *testing.T) {
 		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 		zapcore.AddSync(&b),
 		zapcore.InfoLevel)
-	err := ConfigureWithCore(Config{}, core)
+
+	config := Config{
+		WithFields: map[string]any{
+			"component": "elastic-agent",
+		},
+	}
+	err := ConfigureWithCore(config, core)
 	if err != nil {
 		t.Fatalf("Unexpected err: %s", err)
 	}
@@ -725,6 +731,16 @@ func TestConfigureWithCore(t *testing.T) {
 	}
 	if val != testMsg {
 		t.Fatalf("expected msg of '%s', got '%s'", testMsg, val)
+	}
+
+	// test `with_fields` works correctly
+	expectedMsg := "elastic-agent"
+	val, prs = r["component"]
+	if !prs {
+		t.Fatalf("expected 'component' field not present in '%s'", b.String())
+	}
+	if val != expectedMsg {
+		t.Fatalf("expected msg of '%s', got '%s'", expectedMsg, val)
 	}
 
 	val, prs = r["level"]
