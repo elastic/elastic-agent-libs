@@ -709,7 +709,7 @@ func TestConfigureWithCore(t *testing.T) {
 		zapcore.InfoLevel)
 
 	config := Config{
-		WithFields: map[string]any{
+		withFields: map[string]any{
 			"component": "elastic-agent",
 		},
 	}

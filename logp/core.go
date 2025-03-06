@@ -165,9 +165,9 @@ func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 
 	level = zap.NewAtomicLevelAt(loggerCfg.Level.ZapLevel())
 
-	if loggerCfg.WithFields != nil {
+	if loggerCfg.withFields != nil {
 		var fields = []zapcore.Field{}
-		for key, value := range loggerCfg.WithFields {
+		for key, value := range loggerCfg.withFields {
 			fields = append(fields, zap.Any(key, value))
 		}
 		core = core.With(fields)
