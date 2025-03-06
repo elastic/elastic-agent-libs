@@ -25,6 +25,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
 
 const verificationDefault = "verification_mode=full"
@@ -95,7 +97,7 @@ func Test_ServerConfig_DiagCerts(t *testing.T) {
 
 func makeCAs(t *testing.T) (tls.Certificate, []string) {
 	t.Helper()
-	ca, err := genCA()
+	ca, err := tlscommontest.GenCA()
 	require.NoError(t, err)
 	p := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
@@ -108,7 +110,7 @@ func makeCAs(t *testing.T) (tls.Certificate, []string) {
 
 func makeCertificateConfig(t *testing.T, ca tls.Certificate) CertificateConfig {
 	t.Helper()
-	crt, err := genSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
+	crt, err := tlscommontest.GenSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
 	require.NoError(t, err)
 	crtBytes := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",

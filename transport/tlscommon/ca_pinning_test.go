@@ -20,28 +20,20 @@ package tlscommon
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
-	"fmt"
-	"math/big"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/iobuf"
+	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
-
-var ser int64 = 1
 
 func TestCAPinning(t *testing.T) {
 	const (
@@ -92,10 +84,10 @@ func TestCAPinning(t *testing.T) {
 			t.Run(mode.String(), func(t *testing.T) {
 				msg := []byte("OK received message")
 
-				ca, err := genCA()
+				ca, err := tlscommontest.GenCA()
 				require.NoError(t, err)
 
-				serverCert, err := genSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
+				serverCert, err := tlscommontest.GenSignedCert(ca, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
 				require.NoError(t, err)
 
 				mux := http.NewServeMux()
@@ -170,13 +162,13 @@ func TestCAPinning(t *testing.T) {
 	t.Run("CA Root -> Intermediate -> Certificate and we receive the CA Root Pin", func(t *testing.T) {
 		msg := []byte("OK received message")
 
-		ca, err := genCA()
+		ca, err := tlscommontest.GenCA()
 		require.NoError(t, err)
 
-		intermediate, err := genSignedCert(ca, x509.KeyUsageDigitalSignature|x509.KeyUsageCertSign, true, "localhost", []string{"localhost"}, nil, false)
+		intermediate, err := tlscommontest.GenSignedCert(ca, x509.KeyUsageDigitalSignature|x509.KeyUsageCertSign, true, "localhost", []string{"localhost"}, nil, false)
 		require.NoError(t, err)
 
-		serverCert, err := genSignedCert(intermediate, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
+		serverCert, err := tlscommontest.GenSignedCert(intermediate, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
 		require.NoError(t, err)
 
 		mux := http.NewServeMux()
@@ -244,13 +236,13 @@ func TestCAPinning(t *testing.T) {
 	t.Run("When we have the wrong pin we refuse to connect", func(t *testing.T) {
 		msg := []byte("OK received message")
 
-		ca, err := genCA()
+		ca, err := tlscommontest.GenCA()
 		require.NoError(t, err)
 
-		intermediate, err := genSignedCert(ca, x509.KeyUsageDigitalSignature|x509.KeyUsageCertSign, true, "localhost", []string{"localhost"}, nil, false)
+		intermediate, err := tlscommontest.GenSignedCert(ca, x509.KeyUsageDigitalSignature|x509.KeyUsageCertSign, true, "localhost", []string{"localhost"}, nil, false)
 		require.NoError(t, err)
 
-		serverCert, err := genSignedCert(intermediate, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
+		serverCert, err := tlscommontest.GenSignedCert(intermediate, x509.KeyUsageDigitalSignature, false, "localhost", []string{"localhost"}, nil, false)
 		require.NoError(t, err)
 
 		mux := http.NewServeMux()
@@ -309,143 +301,4 @@ func TestCAPinning(t *testing.T) {
 		_, err = client.Do(req) //nolint: bodyclose // body cannot be closed because it is nil
 		require.Error(t, err)
 	})
-}
-
-func genCA() (tls.Certificate, error) {
-	ca := &x509.Certificate{
-		SerialNumber: serial(),
-		Subject: pkix.Name{
-			CommonName:    "localhost",
-			Organization:  []string{"TESTING"},
-			Country:       []string{"CANADA"},
-			Province:      []string{"QUEBEC"},
-			Locality:      []string{"MONTREAL"},
-			StreetAddress: []string{"testing road"},
-			PostalCode:    []string{"HOH OHO"},
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(1 * time.Hour),
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-	}
-
-	caKey, err := rsa.GenerateKey(rand.Reader, 2048) // less secure key for quicker testing.
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to generate RSA key: %w", err)
-	}
-
-	ca.SubjectKeyId = generateSubjectKeyID(&caKey.PublicKey)
-
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caKey.PublicKey, caKey)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to create certificate: %w", err)
-	}
-
-	leaf, err := x509.ParseCertificate(caBytes)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to parse certificate: %w", err)
-	}
-
-	return tls.Certificate{
-		Certificate: [][]byte{caBytes},
-		PrivateKey:  caKey,
-		Leaf:        leaf,
-	}, nil
-}
-
-// genSignedCert generates a CA and KeyPair and remove the need to depends on code of agent.
-func genSignedCert(
-	ca tls.Certificate,
-	keyUsage x509.KeyUsage,
-	isCA bool,
-	commonName string,
-	dnsNames []string,
-	ips []net.IP,
-	expired bool,
-) (tls.Certificate, error) {
-	if commonName == "" {
-		commonName = "You know, for search"
-	}
-
-	notBefore := time.Now()
-	notAfter := notBefore.Add(5 * time.Hour)
-
-	if expired {
-		notBefore = notBefore.Add(-42 * time.Hour)
-		notAfter = notAfter.Add(-42 * time.Hour)
-	}
-	// Create another Cert/key
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(2000),
-
-		// SNA - Subject Alternative Name fields
-		IPAddresses: ips,
-		DNSNames:    dnsNames,
-
-		Subject: pkix.Name{
-			CommonName:    commonName,
-			Organization:  []string{"TESTING"},
-			Country:       []string{"CANADA"},
-			Province:      []string{"QUEBEC"},
-			Locality:      []string{"MONTREAL"},
-			StreetAddress: []string{"testing road"},
-			PostalCode:    []string{"HOH OHO"},
-		},
-
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		IsCA:                  isCA,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:              keyUsage,
-		BasicConstraintsValid: true,
-	}
-
-	certKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to generate RSA key: %w", err)
-	}
-
-	if isCA {
-		cert.SubjectKeyId = generateSubjectKeyID(&certKey.PublicKey)
-	}
-
-	certBytes, err := x509.CreateCertificate(
-		rand.Reader,
-		cert,
-		ca.Leaf,
-		&certKey.PublicKey,
-		ca.PrivateKey,
-	)
-
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to create signed certificate: %w", err)
-	}
-
-	leaf, err := x509.ParseCertificate(certBytes)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("fail to parse the certificate: %w", err)
-	}
-
-	return tls.Certificate{
-		Certificate: [][]byte{certBytes},
-		PrivateKey:  certKey,
-		Leaf:        leaf,
-	}, nil
-}
-
-func serial() *big.Int {
-	ser = ser + 1
-	return big.NewInt(ser)
-}
-
-func generateSubjectKeyID(publicKey *rsa.PublicKey) []byte {
-	// SubjectKeyId generated using method 1 in RFC 7093, Section 2:
-	//   1) The keyIdentifier is composed of the leftmost 160-bits of the
-	//   SHA-256 hash of the value of the BIT STRING subjectPublicKey
-	//   (excluding the tag, length, and number of unused bits).
-	publicKeyBytes := x509.MarshalPKCS1PublicKey(publicKey)
-	h := sha256.Sum256(publicKeyBytes)
-	return h[:20]
 }

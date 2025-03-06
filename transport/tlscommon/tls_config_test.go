@@ -18,29 +18,25 @@
 package tlscommon
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
 
 func TestMakeVerifyServerConnection(t *testing.T) {
-	testCerts := GenTestCerts(t)
+	testCerts := tlscommontest.GenTestCerts(t)
 
 	certPool := x509.NewCertPool()
 	certPool.AddCert(testCerts["ca"])
@@ -192,43 +188,66 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 }
 
 func TestTrustRootCA(t *testing.T) {
-	certs := GenTestCerts(t)
+	certs := tlscommontest.GenTestCerts(t)
 
 	nonEmptyCertPool := x509.NewCertPool()
 	nonEmptyCertPool.AddCert(certs["wildcard"])
 	nonEmptyCertPool.AddCert(certs["unknown_authority"])
 
-	fingerprint := GetCertFingerprint(certs["ca"])
+	certfingerprint := tlscommontest.GetCertFingerprint(certs["correct"])
+	cafingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+
+	unknownAuthorityDigest := sha256.Sum256(certs["unknown_authority"].Raw)
+	unknownAuthoritySha256 := hex.EncodeToString(unknownAuthorityDigest[:])
 
 	testCases := []struct {
 		name                 string
 		rootCAs              *x509.CertPool
 		caTrustedFingerprint string
 		peerCerts            []*x509.Certificate
+		expectingWarnings    []string
 		expectingError       bool
 		expectedRootCAsLen   int
 	}{
 		{
 			name:                 "RootCA cert matches the fingerprint and is added to cfg.RootCAs",
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
 			expectedRootCAsLen:   1,
 		},
 		{
-			name:                 "RootCA cert doesn not matche the fingerprint and is not added to cfg.RootCAs",
-			caTrustedFingerprint: fingerprint,
-			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
+			name:                 "RootCA cert doesn't match the fingerprint and is not added to cfg.RootCAs",
+			caTrustedFingerprint: cafingerprint,
+			peerCerts:            []*x509.Certificate{certs["correct"], certs["unknown_authority"]},
+			expectingWarnings:    []string{"The provided 'ca_trusted_fingerprint': '" + cafingerprint + "' does not match the fingerprint of any Certificate Authority present in the server's certificate chain. Found the following CA fingerprints instead: [" + unknownAuthoritySha256 + "]"},
 			expectedRootCAsLen:   0,
+		},
+		{
+			name:                 "Peer cert does not include a CA Certificate and is not added to cfg.RootCAs",
+			caTrustedFingerprint: cafingerprint,
+			peerCerts:            []*x509.Certificate{certs["correct"]},
+			expectingWarnings:    []string{"The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificate's issuing certificate authority."},
+			expectedRootCAsLen:   0,
+		},
+		{
+			name:                 "fingerprint matches peer cert instead of the CA Certificate and is not added to cfg.RootCAs",
+			caTrustedFingerprint: certfingerprint,
+			peerCerts:            []*x509.Certificate{certs["correct"]},
+			expectingWarnings: []string{
+				"Certificate matching 'ca_trusted_fingerprint' found, but it is not a CA certificate. 'ca_trusted_fingerprint' can only be used to trust CA certificates.",
+				"The remote server's certificate is presented without its certificate chain. Using 'ca_trusted_fingerprint' requires that the server presents a certificate chain that includes the certificate's issuing certificate authority.",
+			},
+			expectedRootCAsLen: 0,
 		},
 		{
 			name:                 "non empty CertPool has the RootCA added",
 			rootCAs:              nonEmptyCertPool,
-			caTrustedFingerprint: fingerprint,
+			caTrustedFingerprint: cafingerprint,
 			peerCerts:            []*x509.Certificate{certs["correct"], certs["ca"]},
 			expectedRootCAsLen:   3,
 		},
 		{
-			name:                 "invalis HEX encoding",
+			name:                 "invalid HEX encoding",
 			caTrustedFingerprint: "INVALID ENCODING",
 			expectedRootCAsLen:   0,
 			expectingError:       true,
@@ -241,6 +260,10 @@ func TestTrustRootCA(t *testing.T) {
 				RootCAs:              tc.rootCAs,
 				CATrustedFingerprint: tc.caTrustedFingerprint,
 			}
+
+			// Capture the logs
+			_ = logp.DevelopmentSetup(logp.ToObserverOutput())
+
 			err := trustRootCA(&cfg, tc.peerCerts)
 			if tc.expectingError && err == nil {
 				t.Fatal("expecting an error when calling trustRootCA")
@@ -250,9 +273,29 @@ func TestTrustRootCA(t *testing.T) {
 				t.Fatalf("did not expect an error calling trustRootCA: %v", err)
 			}
 
-			if tc.expectedRootCAsLen != 0 {
+			if len(tc.expectingWarnings) > 0 {
+				warnings := logp.ObserverLogs().FilterLevelExact(logp.WarnLevel.ZapLevel()).TakeAll()
+				if len(warnings) == 0 {
+					t.Fatal("expecting a warning message")
+				}
+				if len(warnings) != len(tc.expectingWarnings) {
+					t.Fatalf("expecting %d warning messages, got %d", len(tc.expectingWarnings), len(warnings))
+				}
+
+				for i, expectedWarning := range tc.expectingWarnings {
+					if got := warnings[i].Message; got != expectedWarning {
+						t.Fatalf("expecting warning message to be '%s', got '%s'", expectedWarning, got)
+					}
+				}
+			}
+
+			if tc.expectedRootCAsLen == 0 {
+				if cfg.RootCAs != nil {
+					t.Fatal("cfg.RootCAs should be nil")
+				}
+			} else {
 				if cfg.RootCAs == nil {
-					t.Fatal("cfg.RootCAs cannot be nil")
+					t.Fatal("cfg.RootCAs should not be nil")
 				}
 
 				// we want to know the number of certificates in the CertPool (RootCAs), as it is not
@@ -267,8 +310,8 @@ func TestTrustRootCA(t *testing.T) {
 }
 
 func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
-	testCerts := GenTestCerts(t)
-	fingerprint := GetCertFingerprint(testCerts["ca"])
+	testCerts := tlscommontest.GenTestCerts(t)
+	fingerprint := tlscommontest.GetCertFingerprint(testCerts["ca"])
 
 	testcases := map[string]struct {
 		verificationMode     TLSVerificationMode
@@ -399,7 +442,7 @@ func TestMakeVerifyServerConnectionForIPs(t *testing.T) {
 		},
 	}
 
-	ca, err := genCA()
+	ca, err := tlscommontest.GenCA()
 	if err != nil {
 		t.Fatalf("cannot generate CA certificate: %s", err)
 	}
@@ -409,7 +452,7 @@ func TestMakeVerifyServerConnectionForIPs(t *testing.T) {
 
 	for name, test := range testcases {
 		t.Run(name, func(t *testing.T) {
-			peerCerts, err := genSignedCert(
+			peerCerts, err := tlscommontest.GenSignedCert(
 				ca,
 				x509.KeyUsageCertSign,
 				false,
@@ -581,7 +624,7 @@ func TestVerificationMode(t *testing.T) {
 			ignoreCerts:      true,
 		},
 	}
-	caCert, err := genCA()
+	caCert, err := tlscommontest.GenCA()
 	if err != nil {
 		t.Fatalf("could not generate root CA certificate: %s", err)
 	}
@@ -591,7 +634,7 @@ func TestVerificationMode(t *testing.T) {
 
 	for name, test := range testcases {
 		t.Run(name, func(t *testing.T) {
-			certs, err := genSignedCert(caCert, x509.KeyUsageCertSign, false, test.commonName, test.dnsNames, test.ips, false)
+			certs, err := tlscommontest.GenSignedCert(caCert, x509.KeyUsageCertSign, false, test.commonName, test.dnsNames, test.ips, false)
 			if err != nil {
 				t.Fatalf("could not generate certificates: %s", err)
 			}
@@ -682,126 +725,4 @@ func startTestServer(t *testing.T, serverAddr string, serverCerts []tls.Certific
 	}()
 
 	return *serverURL
-}
-
-// GetCertFingerPrint takes a certificate and returns its HEX encoded SHA-256
-func GetCertFingerprint(cert *x509.Certificate) string {
-	caSHA256 := sha256.Sum256(cert.Raw)
-	return hex.EncodeToString(caSHA256[:])
-}
-
-func GenTestCerts(t *testing.T) map[string]*x509.Certificate {
-	t.Helper()
-	ca, err := genCA()
-	if err != nil {
-		t.Fatalf("cannot generate root CA: %s", err)
-	}
-
-	unknownCA, err := genCA()
-	if err != nil {
-		t.Fatalf("cannot generate second root CA: %s", err)
-	}
-
-	certs := map[string]*x509.Certificate{
-		"ca": ca.Leaf,
-	}
-
-	certData := map[string]struct {
-		ca       tls.Certificate
-		keyUsage x509.KeyUsage
-		isCA     bool
-		dnsNames []string
-		ips      []net.IP
-		expired  bool
-	}{
-		"wildcard": {
-			ca:       ca,
-			keyUsage: x509.KeyUsageDigitalSignature,
-			isCA:     false,
-			dnsNames: []string{"*.example.com"},
-		},
-		"correct": {
-			ca:       ca,
-			keyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-			isCA:     false,
-			dnsNames: []string{"localhost"},
-			// IPV4 and IPV6
-			ips: []net.IP{{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-		},
-		"unknown_authority": {
-			ca:       unknownCA,
-			keyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-			isCA:     false,
-			dnsNames: []string{"localhost"},
-			// IPV4 and IPV6
-			ips: []net.IP{{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-		},
-		"expired": {
-			ca:       ca,
-			keyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-			isCA:     false,
-			dnsNames: []string{"localhost"},
-			// IPV4 and IPV6
-			ips:     []net.IP{{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-			expired: true,
-		},
-	}
-
-	tmpDir := t.TempDir()
-	for certName, data := range certData {
-		cert, err := genSignedCert(
-			data.ca,
-			data.keyUsage,
-			data.isCA,
-			certName,
-			data.dnsNames,
-			data.ips,
-			data.expired,
-		)
-		if err != nil {
-			t.Fatalf("could not generate certificate '%s': %s", certName, err)
-		}
-		certs[certName] = cert.Leaf
-
-		// We write the certificate to disk, so if the test fails the certs can
-		// be inspected/reused
-		certPEM := new(bytes.Buffer)
-		err = pem.Encode(certPEM, &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Leaf.Raw,
-		})
-		require.NoErrorf(t, err, "failed to encode certificste to PEM")
-
-		serverCertFile, err := os.Create(filepath.Join(tmpDir, certName+".crt"))
-		if err != nil {
-			t.Fatalf("creating file to write server certificate: %v", err)
-		}
-		if _, err := serverCertFile.Write(certPEM.Bytes()); err != nil {
-			t.Fatalf("writing server certificate: %v", err)
-		}
-
-		if err := serverCertFile.Close(); err != nil {
-			t.Fatalf("could not close certificate file: %s", err)
-		}
-	}
-
-	t.Cleanup(func() {
-		if t.Failed() {
-			finalDir := filepath.Join(os.TempDir(), cleanStr(t.Name())+strconv.Itoa(rand.Int()))
-			if err := os.Rename(tmpDir, finalDir); err != nil {
-				t.Fatalf("could not rename directory with certificates: %s", err)
-			}
-
-			t.Logf("certificates persisted on: '%s'", finalDir)
-		}
-	})
-
-	return certs
-}
-
-var cleanRegExp = regexp.MustCompile(`[^a-zA-Z0-9]`)
-
-// cleanStr replaces all characters that do not match 'a-zA-Z0-9' by '_'
-func cleanStr(path string) string {
-	return cleanRegExp.ReplaceAllString(path, "_")
 }
