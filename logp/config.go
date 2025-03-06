@@ -38,7 +38,7 @@ type Config struct {
 	Files   FileConfig    `config:"files"`
 	Metrics MetricsConfig `config:"metrics"`
 
-	withFields map[string]any `config:"with_fields" yaml:"with_fields"`
+	WithFields map[string]any `config:"with_fields" yaml:"with_fields"`
 
 	environment Environment
 	addCaller   bool // Adds package and line number info to messages.
