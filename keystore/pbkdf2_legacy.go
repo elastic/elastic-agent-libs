@@ -28,4 +28,3 @@ import (
 func (k *FileKeystore) hashPassword(password string, salt []byte) ([]byte, error) {
 	return pbkdf2.Key([]byte(password), salt, iterationsCount, keyLength, sha512.New), nil
 }
-
