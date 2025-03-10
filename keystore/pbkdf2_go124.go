@@ -15,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build requirefips
+//go:build go1.24
 
-package tlscommon
+package keystore
 
-var (
-	// TLSVersionMin is the min TLS version supported.
-	TLSVersionMin = TLSVersion12
+import (
+	"crypto/pbkdf2"
+	"crypto/sha512"
 )
 
-func SetInsecureDefaults() {
-	// noop, use secure defaults in fips
+func (k *FileKeystore) hashPassword(password string, salt []byte) ([]byte, error) {
+	return pbkdf2.Key(sha512.New, password, salt, iterationsCount, keyLength)
 }

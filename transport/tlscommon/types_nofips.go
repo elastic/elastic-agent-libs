@@ -15,15 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build requirefips
+//go:build !requirefips
 
 package tlscommon
 
-var (
-	// TLSVersionMin is the min TLS version supported.
-	TLSVersionMin = TLSVersion12
-)
-
-func SetInsecureDefaults() {
-	// noop, use secure defaults in fips
+func init() {
+	// all tls cipher suites are supported
+	for cipherName, i := range tlsCipherSuites {
+		supportedCipherSuites[i] = cipherName
+	}
 }

@@ -19,11 +19,22 @@
 
 package tlscommon
 
-var (
-	// TLSVersionMin is the min TLS version supported.
-	TLSVersionMin = TLSVersion12
-)
+import "crypto/tls"
 
-func SetInsecureDefaults() {
-	// noop, use secure defaults in fips
+func init() {
+	// try to stick to NIST SP 800-52 Rev.2
+	// avoid CBC mode
+	// avoid go insecure cipher suites
+	// pick ciphers with NIST-approved algorithms
+	for cipherName, i := range tlsCipherSuites {
+		switch uint16(i) {
+		case tls.TLS_AES_128_GCM_SHA256,
+			tls.TLS_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:
+			supportedCipherSuites[i] = cipherName
+		}
+	}
 }
