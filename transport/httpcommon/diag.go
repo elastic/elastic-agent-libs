@@ -192,7 +192,7 @@ func diagError(err error) string {
 			return fmt.Sprintf("%v:  caused by missing mTLS client cert.", uErr)
 		}
 		if strings.Contains(errString, "remote error: tls: expired certificate") {
-			return fmt.Sprintf("%v: caused by expired mTLS client cert..", uErr)
+			return fmt.Sprintf("%v: caused by expired mTLS client cert.", uErr)
 		}
 		if strings.Contains(errString, "remote error: tls: bad certificate") {
 			return fmt.Sprintf("%v: caused by invalid mTLS client cert, does the server trust the CA used for the client cert?.", uErr)
