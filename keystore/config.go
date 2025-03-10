@@ -19,7 +19,8 @@ package keystore
 
 // Config Define keystore configurable options
 type Config struct {
-	Path string `config:"path"`
+	Path         string `config:"path"`
+	PassfilePath string `config:"passfile_path,omitempty"`
 }
 
 func defaultConfig() Config {
