@@ -202,6 +202,40 @@ func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 	return nil
 }
 
+func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error) {
+	var (
+		sink zapcore.Core
+	)
+
+	if loggerCfg.WithFields != nil {
+		fields := make([]zapcore.Field, 0, len(loggerCfg.WithFields))
+		for key, value := range loggerCfg.WithFields {
+			fields = append(fields, zap.Any(key, value))
+		}
+		core = core.With(fields)
+	}
+
+	sink = wrappedCore(core)
+
+	// Enabled selectors when debug is enabled.
+	selectors := make(map[string]struct{}, len(loggerCfg.Selectors))
+	if loggerCfg.Level.Enabled(DebugLevel) && len(loggerCfg.Selectors) > 0 {
+		for _, sel := range loggerCfg.Selectors {
+			selectors[strings.TrimSpace(sel)] = struct{}{}
+		}
+
+		// Default to all enabled if no selectors are specified.
+		if len(selectors) == 0 {
+			selectors["*"] = struct{}{}
+		}
+
+		sink = selectiveWrapper(sink, selectors)
+	}
+
+	root := zap.New(sink, makeOptions(loggerCfg)...)
+	return newLogger(root, ""), nil
+}
+
 // ConfigureWithTypedOutput configures the global logger to use typed outputs.
 //
 // If a log entry matches the defined key/value, this entry is logged using the
@@ -254,6 +288,36 @@ func ConfigureWithTypedOutput(defaultLoggerCfg, typedLoggerCfg Config, key, valu
 		observedLogs: observedLogs,
 	})
 	return nil
+}
+
+func ConfigureWithTypedOutputLocal(defaultLoggerCfg, typedLoggerCfg Config, key, value string, outputs ...zapcore.Core) (*Logger, error) {
+	sink, level, _, selectors, err := createSink(defaultLoggerCfg, outputs...)
+	if err != nil {
+		return nil, err
+	}
+
+	var typedCore zapcore.Core
+	if defaultLoggerCfg.toObserver {
+		typedCore = sink
+	} else {
+		typedCore, err = createLogOutput(typedLoggerCfg, level)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not create typed logger output: %w", err)
+	}
+
+	sink = &typedLoggerCore{
+		defaultCore: sink,
+		typedCore:   typedCore,
+		key:         key,
+		value:       value,
+	}
+
+	sink = selectiveWrapper(sink, selectors)
+
+	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
+	logger := newLogger(root, "")
+	return logger, nil
 }
 
 func createLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error) {

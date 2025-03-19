@@ -112,6 +112,41 @@ func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, k
 	return logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
 }
 
+func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) (*logp.Logger, error) {
+	config := logp.DefaultConfig(environment)
+	config.Beat = beatName
+	if cfg != nil {
+		if err := cfg.Unpack(&config); err != nil {
+			return nil, err
+		}
+	}
+
+	applyFlags(&config)
+
+	typedLogpConfig := logp.DefaultEventConfig(environment)
+	defaultName := typedLogpConfig.Files.Name
+	typedLogpConfig.Beat = beatName
+	if typedCfg != nil {
+		if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
+			return nil, fmt.Errorf("cannot unpack typed output config: %w", err)
+		}
+	}
+
+	// Make sure we're always running on the same log level
+	typedLogpConfig.Level = config.Level
+	typedLogpConfig.Selectors = config.Selectors
+
+	// If the name has not been configured, make it {beatName}-events-data
+	if typedLogpConfig.Files.Name == defaultName {
+		typedLogpConfig.Files.Name = beatName + "-events-data"
+	}
+
+	// We also initialize global logger so that we do not have no-op for loggers that depend on global config
+	// This should eventually be removed
+	logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
+
+	return logp.ConfigureWithTypedOutputLocal(config, typedLogpConfig, logKey, kind, outputs...)
+}
 func applyFlags(cfg *logp.Config) {
 	if toStderr {
 		cfg.ToStderr = true
