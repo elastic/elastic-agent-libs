@@ -141,10 +141,6 @@ func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logK
 		typedLogpConfig.Files.Name = beatName + "-events-data"
 	}
 
-	// We also initialize global logger so that we do not have no-op for loggers that depend on global config
-	// This should eventually be removed
-	logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
-
 	return logp.ConfigureWithTypedOutputLocal(config, typedLogpConfig, logKey, kind, outputs...)
 }
 func applyFlags(cfg *logp.Config) {
