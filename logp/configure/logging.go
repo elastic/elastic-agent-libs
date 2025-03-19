@@ -79,6 +79,7 @@ func LoggingWithOutputs(beatName string, cfg *config.C, outputs ...zapcore.Core)
 	return logp.ConfigureWithOutputs(config, outputs...)
 }
 
+// Deprecated (moving towards localized loggers): Use logp.LoggingWithTypedOutputsLocal.
 // LoggingWithTypedOutputs applies some defaults then calls ConfigureWithTypedOutputs
 func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) error {
 	config := logp.DefaultConfig(environment)
@@ -112,6 +113,7 @@ func LoggingWithTypedOutputs(beatName string, cfg, typedCfg *config.C, logKey, k
 	return logp.ConfigureWithTypedOutput(config, typedLogpConfig, logKey, kind, outputs...)
 }
 
+// LoggingWithTypedOutputs applies some defaults and returns a logger instance
 func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) (*logp.Logger, error) {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
@@ -143,6 +145,7 @@ func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logK
 
 	return logp.ConfigureWithTypedOutputLocal(config, typedLogpConfig, logKey, kind, outputs...)
 }
+
 func applyFlags(cfg *logp.Config) {
 	if toStderr {
 		cfg.ToStderr = true
