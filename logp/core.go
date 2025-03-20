@@ -151,13 +151,14 @@ func ConfigureWithOutputs(defaultLoggerCfg Config, outputs ...zapcore.Core) erro
 	return nil
 }
 
-// Deprecated (moving towards localized loggers): Use logp.ConfigureWithCoreLocal.
 // ConfigureWithCore configures the global logger to use the passed in
 // core.  It is assumed that an output has already been defined with
 // the core and a new one should not be created.  The loggerCfg is
 // only used to set selectors and level.  This is useful if a part of
 // your code uses logp but the log output is already handled.  Normal
 // use cases should use Configure or ConfigureWithOutput.
+//
+// Deprecated: Prefer using localized loggers. Use logp.ConfigureWithCoreLocal.
 func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 	var (
 		sink  zapcore.Core
@@ -241,7 +242,6 @@ func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error
 	return newLogger(root, ""), nil
 }
 
-// Deprecated (moving towards localized loggers): Use logp.ConfigureWithTypedOutputLocal.
 // ConfigureWithTypedOutput configures the global logger to use typed outputs.
 //
 // If a log entry matches the defined key/value, this entry is logged using the
@@ -259,6 +259,8 @@ func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error
 //
 // If `defaultLoggerCfg.toObserver` is true, then `typedLoggerCfg` is ignored
 // and a single sink is used so all logs can be observed.
+//
+// Deprecated: Prefer using localized loggers. Use logp.ConfigureWithTypedOutputLocal.
 func ConfigureWithTypedOutput(defaultLoggerCfg, typedLoggerCfg Config, key, value string, outputs ...zapcore.Core) error {
 	sink, level, observedLogs, selectors, err := createSink(defaultLoggerCfg, outputs...)
 	if err != nil {
