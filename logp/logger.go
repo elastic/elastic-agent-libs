@@ -53,12 +53,34 @@ func NewLogger(selector string, options ...LogOption) *Logger {
 	return newLogger(loadLogger().rootLogger, selector, options...)
 }
 
+// NewProductionLogger returns a production suitable logp.Logger
+func NewProductionLogger(selector string, options ...LogOption) (*Logger, error) {
+	log, err := zap.NewProduction(options...)
+	log = log.Named(selector)
+	if err != nil {
+		return nil, err
+	}
+	return &Logger{log, log.Sugar()}, nil
+}
+
+// NewProductionLogger returns a development suitable logp.Logger
+func NewDevelopmentLogger(selector string, options ...LogOption) (*Logger, error) {
+	log, err := zap.NewDevelopment(options...)
+	log = log.Named(selector)
+	if err != nil {
+		return nil, err
+	}
+	return &Logger{log, log.Sugar()}, nil
+}
+
 // NewInMemory returns a new in-memory logger along with the buffer to which it
 // logs. It's goroutine safe, but operating directly on the returned buffer is not.
 // This logger is primary intended for short and simple use-cases such as printing
 // the full logs only when an operation fails.
 // encCfg configures the log format, use logp.ConsoleEncoderConfig for console
 // format, logp.JSONEncoderConfig for JSON or any other valid zapcore.EncoderConfig.
+//
+// Deprecated: Prefer using localized loggers. Use logp.NewInMemoryLocal.
 func NewInMemory(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes.Buffer) {
 	buff := bytes.Buffer{}
 
@@ -73,6 +95,34 @@ func NewInMemory(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes
 	ecszap.ECSCompatibleEncoderConfig(ConsoleEncoderConfig())
 
 	logger := NewLogger(
+		selector,
+		zap.WrapCore(func(in zapcore.Core) zapcore.Core {
+			return core
+		}))
+
+	return logger, &buff
+}
+
+// NewInMemory returns a new in-memory logger along with the buffer to which it
+// logs. It's goroutine safe, but operating directly on the returned buffer is not.
+// This logger is primary intended for short and simple use-cases such as printing
+// the full logs only when an operation fails.
+// encCfg configures the log format, use logp.ConsoleEncoderConfig for console
+// format, logp.JSONEncoderConfig for JSON or any other valid zapcore.EncoderConfig.
+func NewInMemoryLocal(selector string, encCfg zapcore.EncoderConfig) (*Logger, *bytes.Buffer) {
+	buff := bytes.Buffer{}
+
+	encoderConfig := ecszap.ECSCompatibleEncoderConfig(encCfg)
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoder := zapcore.NewConsoleEncoder(encoderConfig)
+
+	core := zapcore.NewCore(
+		encoder,
+		zapcore.Lock(zapcore.AddSync(&buff)),
+		zap.NewAtomicLevelAt(zap.DebugLevel))
+	ecszap.ECSCompatibleEncoderConfig(ConsoleEncoderConfig())
+
+	logger, _ := NewDevelopmentLogger(
 		selector,
 		zap.WrapCore(func(in zapcore.Core) zapcore.Core {
 			return core
