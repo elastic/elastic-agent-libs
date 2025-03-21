@@ -76,7 +76,7 @@ func NewDevelopmentLogger(selector string, options ...LogOption) (*Logger, error
 	return &Logger{log, log.Sugar()}, nil
 }
 
-// NewProductionLogger returns a development suitable logp.Logger
+// NewTestingLogger returns a testing suitable logp.Logger
 func NewTestingLogger(t *testing.T, selector string, options ...LogTestOption) *Logger {
 	log := zaptest.NewLogger(t, options...)
 	log = log.Named(selector)
