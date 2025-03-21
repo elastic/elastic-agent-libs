@@ -365,6 +365,8 @@ func createLogOutput(cfg Config, enab zapcore.LevelEnabler) (zapcore.Core, error
 
 // DevelopmentSetup configures the logger in development mode at debug level.
 // By default the output goes to stderr.
+//
+// Deprecated: Prefer using localized loggers. Use logp.NewDevelopmentLogger.
 func DevelopmentSetup(options ...Option) error {
 	cfg := Config{
 		Level:       DebugLevel,
@@ -380,6 +382,8 @@ func DevelopmentSetup(options ...Option) error {
 
 // TestingSetup configures logging by calling DevelopmentSetup if and only if
 // verbose testing is enabled (as in 'go test -v').
+//
+// Deprecated: Prefer using localized loggers. Use logp.NewTestingLogger.
 func TestingSetup(options ...Option) error {
 	// Use the flag to avoid a dependency on the testing package.
 	f := flag.Lookup("test.v")
