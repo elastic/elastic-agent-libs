@@ -136,3 +136,14 @@ func (cfg Config) LogFilename() string {
 	}
 	return name
 }
+
+// LogFilename returns the base filename to which logs will be written for
+// the "files" log output. If another log output is used, or `logging.files.name`
+// is unspecified, then the beat name will be returned.
+func (cfg Config) LogFilenameLocal() string {
+	name := cfg.Beat + "-local"
+	if cfg.Files.Name != "" {
+		name = cfg.Files.Name + "-local"
+	}
+	return name
+}
