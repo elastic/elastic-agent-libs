@@ -210,8 +210,11 @@ func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 // only used to set selectors and level.
 func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error) {
 	var (
-		sink zapcore.Core
+		sink  zapcore.Core
+		level zap.AtomicLevel
 	)
+
+	level = zap.NewAtomicLevelAt(loggerCfg.Level.ZapLevel())
 
 	if loggerCfg.WithFields != nil {
 		fields := make([]zapcore.Field, 0, len(loggerCfg.WithFields))
@@ -239,6 +242,15 @@ func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error
 	}
 
 	root := zap.New(sink, makeOptions(loggerCfg)...)
+	// TODO: Remove this when there is no more global logger dependency
+	storeLogger(&coreLogger{
+		selectors:    selectors,
+		rootLogger:   root,
+		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
+		logger:       newLogger(root, ""),
+		level:        level,
+		observedLogs: nil,
+	})
 	return newLogger(root, ""), nil
 }
 
@@ -336,7 +348,7 @@ func ConfigureWithTypedOutputLocal(defaultLoggerCfg, typedLoggerCfg Config, key,
 
 	root := zap.New(sink, makeOptions(defaultLoggerCfg)...)
 
-	// TODO: Remove when there is no more any global logger dependency
+	// TODO: Remove this when there is no more global logger dependency
 	storeLogger(&coreLogger{
 		selectors:    selectors,
 		rootLogger:   root,
