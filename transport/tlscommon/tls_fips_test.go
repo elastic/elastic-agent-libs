@@ -21,6 +21,8 @@ package tlscommon
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +31,9 @@ import (
 
 // TestFIPSCertifacteAndKeys tests that encrypted private keys fail in FIPS mode
 func TestFIPSCertificateAndKeys(t *testing.T) {
+	if checkGODEBUG() {
+		t.Skip("GODEBUG=fips140=only detected, avoiding panics")
+	}
 	t.Run("embed encrypted PKCS#1 key", func(t *testing.T) {
 		// Create a dummy configuration and append the CA after.
 		password := "abcd1234"
@@ -57,4 +62,17 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 		_, err = LoadTLSConfig(cfg)
 		assert.ErrorIs(t, err, errors.ErrUnsupported)
 	})
+}
+
+// checkGODEBUG returns true if the GODEBUG env var contains fips140=only
+func checkGODEBUG() bool {
+	// NOTE: This only checks env var; at the time of writing fips140 can only be set via env
+	// other GODEBUG settings can be set via embedded comments or in go.mod, we may need to account for this in the future.
+	ss := strings.Split(os.Getenv("GODEBUG"), ",")
+	for _, s := range ss {
+		if s == "fips140=only" {
+			return true
+		}
+	}
+	return false
 }
