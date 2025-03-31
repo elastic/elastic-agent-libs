@@ -12,6 +12,7 @@ with_go_junit_report
 echo "--- Go Test fips140=only"
 set +e
 GODEBUG=fips140=only go test -tags=integration,requirefips -json -race -v ./... > test-fips-report.json
+exit_code=$?
 set -e
 
 # Create Junit report for junit annotation plugin
