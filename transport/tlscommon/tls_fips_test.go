@@ -31,10 +31,11 @@ import (
 
 // TestFIPSCertifacteAndKeys tests that encrypted private keys fail in FIPS mode
 func TestFIPSCertificateAndKeys(t *testing.T) {
-	if checkGODEBUG() {
-		t.Skip("GODEBUG=fips140=only detected, avoiding panics")
-	}
 	t.Run("embed encrypted PKCS#1 key", func(t *testing.T) {
+		if checkGODEBUG() {
+			t.Skip("GODEBUG=fips140=only detected, avoiding panics")
+			// panics are caused by MD5 usage within pkcs#1 encryption
+		}
 		// Create a dummy configuration and append the CA after.
 		password := "abcd1234"
 		key, cert := makeKeyCertPair(t, blockTypePKCS1Encrypted, password)
@@ -51,7 +52,7 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 
 	t.Run("embed encrypted PKCS#8 key", func(t *testing.T) {
 		// Create a dummy configuration and append the CA after.
-		password := "abcd1234"
+		password := "abcdefg1234567"
 		key, cert := makeKeyCertPair(t, blockTypePKCS8Encrypted, password)
 		cfg, err := load(`enabled: true`)
 		require.NoError(t, err)
