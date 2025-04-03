@@ -27,17 +27,13 @@ import (
 func UserAgent(binaryNameCapitalized string, version, commit, buildTime string, additionalComments ...string) string {
 	var builder strings.Builder
 	builder.WriteString("Elastic-" + binaryNameCapitalized + "/" + version + " ")
-	uaValues := []string{
-		runtime.GOOS,
-		runtime.GOARCH,
-		commit,
-		buildTime,
-	}
+	var uaValues []string
 	for _, val := range additionalComments {
 		if val != "" {
 			uaValues = append(uaValues, val)
 		}
 	}
+	uaValues = append(uaValues, runtime.GOOS, runtime.GOARCH, commit, buildTime)
 	builder.WriteByte('(')
 	builder.WriteString(strings.Join(uaValues, "; "))
 	builder.WriteByte(')')
