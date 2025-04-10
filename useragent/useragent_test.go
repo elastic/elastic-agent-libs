@@ -37,3 +37,11 @@ func TestUserAgent(t *testing.T) {
 	ua2 := UserAgent("FakeBeat", v, commit, buildTime, "integration_name/1.2.3")
 	assert.Regexp(t, regexp.MustCompile(`; integration_name\/1\.2\.3\)$`), ua2)
 }
+
+func TestUserAgentLite(t *testing.T) {
+	ua := UserAgentLite("FakeBeat", v)
+	assert.Regexp(t, regexp.MustCompile(`^Elastic-FakeBeat`), ua)
+
+	ua2 := UserAgentLite("FakeBeat", v, "integration_name/1.2.3")
+	assert.Regexp(t, regexp.MustCompile(`; integration_name\/1\.2\.3\)$`), ua2)
+}
