@@ -72,3 +72,14 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 		assert.ErrorIs(t, err, errors.ErrUnsupported)
 	})
 }
+
+func TestLoadCertificateRSA1024(t *testing.T) {
+	config := CertificateConfig{
+		Certificate: "testdata/rsa_1024.cert.pem",
+		Key:         "testdata/rsa_1024.key.pem",
+	}
+	cert, err := LoadCertificate(&config)
+	require.Nil(t, cert)
+	require.Error(t, err)
+	require.Equal(t, "certificate is using an RSA key of < 2048 bits", err.Error())
+}

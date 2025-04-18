@@ -73,6 +73,11 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 		return nil, err
 	}
 
+	if err := validateCertificateKeyLength(cert); err != nil {
+		log.Errorf("failed validating certificate key length: %+v", err)
+		return nil, err
+	}
+
 	// Do not log the key if it was provided as a string in the configuration to avoid
 	// leaking private keys in the debug logs. Log when the key is a file path.
 	if IsPEMString(key) {

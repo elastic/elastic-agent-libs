@@ -128,3 +128,13 @@ func TestEncryptedKeyPassphrase(t *testing.T) {
 		assert.ErrorContains(t, err, "no PEM blocks") // ReadPEMFile will generate an internal "no passphrase available" error that is logged and the no PEM blocks error is returned instead
 	})
 }
+
+func TestLoadCertificateRSA1024(t *testing.T) {
+	config := CertificateConfig{
+		Certificate: "testdata/rsa_1024.cert.pem",
+		Key:         "testdata/rsa_1024.key.pem",
+	}
+	cert, err := LoadCertificate(&config)
+	require.NotNil(t, cert)
+	require.NoError(t, err)
+}
