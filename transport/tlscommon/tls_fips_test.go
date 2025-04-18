@@ -20,6 +20,7 @@
 package tlscommon
 
 import (
+	_ "embed"
 	"errors"
 	"io"
 	"os"
@@ -29,6 +30,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+//go:embed testdata/rsa_1024.cert.pem
+var rsa1024CertPEM string
+
+//go:embed testdata/rsa_1024.key.pem
+var rsa1024KeyPem string
 
 // TestFIPSCertifacteAndKeys tests that encrypted private keys fail in FIPS mode
 func TestFIPSCertificateAndKeys(t *testing.T) {
@@ -74,12 +81,23 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 }
 
 func TestLoadCertificateRSA1024(t *testing.T) {
-	config := CertificateConfig{
-		Certificate: "testdata/rsa_1024.cert.pem",
-		Key:         "testdata/rsa_1024.key.pem",
+	cases := map[string]CertificateConfig{
+		"from_file": CertificateConfig{
+			Certificate: "testdata/rsa_1024.cert.pem",
+			Key:         "testdata/rsa_1024.key.pem",
+		},
+		"from_string": CertificateConfig{
+			Certificate: rsa1024CertPEM,
+			Key:         rsa1024KeyPem,
+		},
 	}
-	cert, err := LoadCertificate(&config)
-	require.Nil(t, cert)
-	require.Error(t, err)
-	require.Equal(t, "certificate is using an RSA key of < 2048 bits", err.Error())
+
+	for name, config := range cases {
+		t.Run(name, func(t *testing.T) {
+			cert, err := LoadCertificate(&config)
+			require.Nil(t, cert)
+			require.Error(t, err)
+			require.Equal(t, "certificate is using an RSA key of < 2048 bits", err.Error())
+		})
+	}
 }
