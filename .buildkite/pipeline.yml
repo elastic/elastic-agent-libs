@@ -31,7 +31,8 @@ steps:
     env:
       FIPS: "true"
     agents:
-      image: golang:${GO_VERSION}
+      # TODO replace with GO_VERSION once it's 1.24
+      image: golang:1.24
       cpu: "8"
       memory: "4G"
     artifact_paths:
