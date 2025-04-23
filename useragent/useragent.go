@@ -44,17 +44,14 @@ func UserAgent(binaryNameCapitalized string, version, commit, buildTime string, 
 	return builder.String()
 }
 
-func UserAgentLite(binaryNameCapitalized string, version string, additionalComments ...string) string {
+func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mode string, unprivileged string) string {
 	var builder strings.Builder
 	builder.WriteString("Elastic-" + binaryNameCapitalized + "/" + version + " ")
 	uaValues := []string{
 		runtime.GOOS,
 		runtime.GOARCH,
-	}
-	for _, val := range additionalComments {
-		if val != "" {
-			uaValues = append(uaValues, val)
-		}
+		mode,
+		unprivileged,
 	}
 	builder.WriteByte('(')
 	builder.WriteString(strings.Join(uaValues, "; "))
