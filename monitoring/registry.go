@@ -124,6 +124,13 @@ func (r *Registry) GetRegistry(name string) *Registry {
 	return reg
 }
 
+func (r *Registry) GetOrCreateRegistry(name string, opts ...Option) *Registry {
+	if reg := r.GetRegistry(name); reg != nil {
+		return reg
+	}
+	return r.NewRegistry(name, opts...)
+}
+
 // Remove removes a variable or a sub-registry by name
 func (r *Registry) Remove(name string) {
 	r.removeNames(strings.Split(name, "."))
