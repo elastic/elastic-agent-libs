@@ -67,7 +67,7 @@ func NewFromConfig(log *logp.Logger, mux *http.ServeMux, cfg Config) (*Server, e
 // new creates the server from a config struct
 func new(log *logp.Logger, mux *http.ServeMux, cfg Config) (*Server, error) {
 	srv := &http.Server{ReadHeaderTimeout: cfg.Timeout}
-	l, err := makeListener(cfg)
+	l, err := makeListener(log, cfg)
 	if err != nil {
 		return nil, err
 	}
