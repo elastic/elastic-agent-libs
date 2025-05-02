@@ -25,10 +25,9 @@ import (
 	"net"
 
 	"github.com/elastic/elastic-agent-libs/api/npipe"
-	"github.com/elastic/elastic-agent-libs/logp"
 )
 
-func makeListener(_ *logp.Logger, cfg Config) (net.Listener, error) {
+func makeListener(cfg Config) (net.Listener, error) {
 	if len(cfg.User) > 0 && len(cfg.SecurityDescriptor) > 0 {
 		return nil, errors.New("user and security_descriptor are mutually exclusive, define only one of them")
 	}

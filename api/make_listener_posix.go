@@ -26,10 +26,9 @@ import (
 	"os"
 
 	"github.com/elastic/elastic-agent-libs/api/npipe"
-	"github.com/elastic/elastic-agent-libs/logp"
 )
 
-func makeListener(log *logp.Logger, cfg Config) (net.Listener, error) {
+func makeListener(cfg Config) (net.Listener, error) {
 	if len(cfg.User) > 0 {
 		return nil, errors.New("specifying a user is not supported under this platform")
 	}
@@ -48,11 +47,8 @@ func makeListener(log *logp.Logger, cfg Config) (net.Listener, error) {
 	}
 
 	if network == unixNetwork {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			log.Debugf("stat %q failed: %v", path, err)
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return nil, fmt.Errorf("cannot remove existing unix socket file at location %s: %w", path, err)
-			}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("cannot remove existing unix socket file at location %s: %w", path, err)
 		}
 	}
 
