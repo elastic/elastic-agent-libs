@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoggerOutputEnvrionment(t *testing.T) {
+func TestLoggerOutputEnvironment(t *testing.T) {
 	testCases := []struct {
 		name        string
 		cfg         *config.C
