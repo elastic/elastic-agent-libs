@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build go1.24
+//go:build go1.24 && !requirefips
 
 package keystore
 

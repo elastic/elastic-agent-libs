@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//go:build !requirefips
+
 package keystore
 
 import (
@@ -238,6 +240,25 @@ func TestGetConfig(t *testing.T) {
 	require.Equal(t, port, "hello")
 }
 
+func TestShouldRaiseAndErrorWhenVersionDontMatch(t *testing.T) {
+	temporaryPath := GetTemporaryKeystoreFile(t)
+	defer os.Remove(temporaryPath)
+
+	badVersion := `v2D/EQwnDNO7yZsjsRFVWGgbkZudhPxVhBkaQAVud66+tK4HRdfPrNrNNgSmhioDGrQ0z/VZpvbw68gb0G
+	G2QHxlP5s4HGRU/GQge3Nsnx0+kDIcb/37gPN1D1TOPHSiRrzzPn2vInmgaLUfEgBgoa9tuXLZEKdh3JPh/q`
+
+	f, err := os.OpenFile(temporaryPath, os.O_CREATE|os.O_WRONLY, 0600)
+	require.NoError(t, err)
+	_, _ = f.WriteString(badVersion)
+	err = f.Close()
+	require.NoError(t, err)
+
+	_, err = NewFileKeystoreWithPassword(temporaryPath, NewSecureString([]byte("")))
+	if assert.Error(t, err, "Expect version check error") {
+		assert.Equal(t, err, fmt.Errorf("keystore format doesn't match expected version: 'v1' got 'v2'"))
+	}
+}
+
 func TestMissingEncryptedBlock(t *testing.T) {
 	temporaryPath := GetTemporaryKeystoreFile(t)
 	defer os.Remove(temporaryPath)
@@ -349,4 +370,20 @@ func TestRandomBytes(t *testing.T) {
 
 	// unlikely to get 2 times the same results
 	require.False(t, bytes.Equal(v1, v2))
+}
+
+func TestOpensV1(t *testing.T) {
+	ks, err := NewFileKeystoreWithPassword(filepath.Join("testdata", "keystore.v1"), NewSecureString([]byte("")))
+	require.NoError(t, err)
+	ls, err := AsListingKeystore(ks)
+	require.NoError(t, err)
+	keys, err := ls.List()
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Equal(t, keys[0], "key")
+}
+
+func TestFailsToOpenV2(t *testing.T) {
+	_, err := NewFileKeystoreWithPassword(filepath.Join("testdata", "keystore.v2"), NewSecureString([]byte("")))
+	require.Error(t, err)
 }
