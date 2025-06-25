@@ -263,10 +263,12 @@ func ConfigureOTelCore(beatName string, logCfg, typedCfg *config.C, typedMsg str
 	loggerConfig := DefaultConfig(DefaultEnvironment)
 	loggerConfig.ToFiles = false
 	loggerConfig.ToStderr = true
+	loggerConfig.Beat = beatName
 
 	typedConfig := DefaultEventConfig(DefaultEnvironment)
 	typedConfig.ToFiles = false
 	typedConfig.ToStderr = true
+	typedConfig.Beat = beatName
 
 	if logCfg != nil {
 		if err := logCfg.Unpack(&loggerConfig); err != nil {
