@@ -132,7 +132,7 @@ func (client *Client) CreatePolicy(ctx context.Context, request AgentPolicy) (r 
 		return r, fmt.Errorf("unable to marshal create policy request into JSON: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost, fleetAgentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, fleetAgentPoliciesAPI, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return r, fmt.Errorf("error calling create policy API: %w", err)
 	}
@@ -166,7 +166,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 			fmt.Errorf("unable to marshal DownloadSource into JSON: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(
+	resp, err := client.SendWithContext(
 		ctx,
 		http.MethodPost,
 		fleetAgentDownloadSourcesAPI,
@@ -207,7 +207,7 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 // GetPolicy returns the policy with 'policy_id' id.
 func (client *Client) GetPolicy(ctx context.Context, id string) (r PolicyResponse, err error) {
 	apiURL := fmt.Sprintf(fleetAgentPolicyAPI, id)
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
+	resp, err := client.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
 	if err != nil {
 		return r, fmt.Errorf("error calling get policy API: %w", err)
 	}
@@ -225,7 +225,7 @@ func (client *Client) UpdatePolicy(ctx context.Context, id string, request Agent
 	}
 
 	apiURL := fmt.Sprintf(fleetAgentPolicyAPI, id)
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPut, apiURL, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPut, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return r, fmt.Errorf("error calling update policy API: %w", err)
 	}
@@ -248,7 +248,7 @@ func (client *Client) DeletePolicy(ctx context.Context, id string) error {
 		return fmt.Errorf("unable to marshal delete policy request into JSON: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost, fleetAgentsDeleteAPI, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, fleetAgentsDeleteAPI, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return fmt.Errorf("error calling delete policy API: %w", err)
 	}
@@ -290,7 +290,7 @@ func (client *Client) CreateEnrollmentAPIKey(ctx context.Context, request Create
 		return r, fmt.Errorf("unable to marshal create enrollment API key request into JSON: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost, fleetEnrollmentAPIKeysAPI, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, fleetEnrollmentAPIKeysAPI, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return r, fmt.Errorf("error calling create enrollment API key API: %w", err)
 	}
@@ -361,7 +361,7 @@ type ListAgentsResponse struct {
 
 // ListAgents returns a list of agents known to Kibana
 func (client *Client) ListAgents(ctx context.Context, _ ListAgentsRequest) (r ListAgentsResponse, err error) {
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, fleetAgentsAPI, nil, nil, nil)
+	resp, err := client.SendWithContext(ctx, http.MethodGet, fleetAgentsAPI, nil, nil, nil)
 	if err != nil {
 		return r, fmt.Errorf("error calling list agents API: %w", err)
 	}
@@ -381,7 +381,7 @@ type GetAgentResponse AgentExisting
 func (client *Client) GetAgent(ctx context.Context, request GetAgentRequest) (r GetAgentResponse, err error) {
 	apiURL := fmt.Sprintf(fleetAgentAPI, request.ID)
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
+	resp, err := client.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
 	if err != nil {
 		return r, fmt.Errorf("error calling get agent API: %w", err)
 	}
@@ -417,7 +417,7 @@ func (client *Client) UnEnrollAgent(ctx context.Context, request UnEnrollAgentRe
 	}
 	apiURL := fmt.Sprintf(fleetUnEnrollAgentAPI, request.ID)
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return r, fmt.Errorf("error calling unenroll agent API: %w", err)
 	}
@@ -446,7 +446,7 @@ func (client *Client) UpgradeAgent(ctx context.Context, request UpgradeAgentRequ
 	}
 
 	apiURL := fmt.Sprintf(fleetUpgradeAgentAPI, request.ID)
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return r, fmt.Errorf("error calling upgrade agent API: %w", err)
 	}
@@ -499,7 +499,7 @@ type FleetServerHostsResponse struct {
 
 // ListFleetServerHosts returns a list of fleet server hosts
 func (client *Client) ListFleetServerHosts(ctx context.Context, _ ListFleetServerHostsRequest) (r ListFleetServerHostsResponse, err error) {
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, fleetFleetServerHostsAPI, nil, nil, nil)
+	resp, err := client.SendWithContext(ctx, http.MethodGet, fleetFleetServerHostsAPI, nil, nil, nil)
 	if err != nil {
 		return r, fmt.Errorf("error calling list fleet server hosts API: %w", err)
 	}
@@ -517,7 +517,7 @@ func (client *Client) CreateFleetServerHosts(ctx context.Context, req ListFleetS
 		return FleetServerHostsResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodPost,
+	resp, err := client.SendWithContext(ctx, http.MethodPost,
 		fleetFleetServerHostsAPI,
 		nil, nil, bytes.NewReader(bs))
 	if err != nil {
@@ -539,7 +539,7 @@ type GetFleetServerHostResponse FleetServerHost
 func (client *Client) GetFleetServerHost(ctx context.Context, request GetFleetServerHostRequest) (r GetFleetServerHostResponse, err error) {
 	apiURL := fleetFleetServerHostsAPI + "/" + request.ID
 
-	resp, err := client.Connection.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
+	resp, err := client.SendWithContext(ctx, http.MethodGet, apiURL, nil, nil, nil)
 	if err != nil {
 		return r, fmt.Errorf("error calling get fleet server hosts API: %w", err)
 	}
@@ -604,7 +604,7 @@ func (client *Client) InstallFleetPackage(ctx context.Context, req PackagePolicy
 		return r, fmt.Errorf("marshalling request json: %w", err)
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx,
+	resp, err := client.SendWithContext(ctx,
 		http.MethodPost,
 		fleetPackagePoliciesAPI,
 		nil,
@@ -628,7 +628,7 @@ func (client *Client) DeleteFleetPackage(ctx context.Context, packagePolicyID st
 		return r, err
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx,
+	resp, err := client.SendWithContext(ctx,
 		http.MethodDelete,
 		u,
 		nil,
@@ -686,7 +686,7 @@ func (client *Client) CreateFleetProxy(ctx context.Context, req ProxiesRequest) 
 		return ProxiesResponse{}, fmt.Errorf("could not marshal ListFleetServerHostsRequest: %w", err)
 	}
 
-	r, err := client.Connection.SendWithContext(ctx, http.MethodPost,
+	r, err := client.SendWithContext(ctx, http.MethodPost,
 		fleetProxiesAPI, nil, nil,
 		bytes.NewReader(bs),
 	)
@@ -727,7 +727,7 @@ func (client *Client) GetPolicyUninstallTokens(ctx context.Context, policyID str
 	q.Add("page", "1")
 	q.Add("perPage", "1000")
 
-	resp, err := client.Connection.SendWithContext(ctx,
+	resp, err := client.SendWithContext(ctx,
 		http.MethodGet,
 		fleetUninstallTokensAPI,
 		q,
@@ -763,7 +763,7 @@ func (client *Client) GetUninstallToken(ctx context.Context, tokenID string) (r 
 		return r, err
 	}
 
-	resp, err := client.Connection.SendWithContext(ctx,
+	resp, err := client.SendWithContext(ctx,
 		http.MethodGet,
 		u,
 		nil,
