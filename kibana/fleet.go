@@ -342,6 +342,7 @@ type AgentUpgradeDetails struct {
 		DownloadRate    details.DownloadRate `json:"download_rate"`
 		FailedState     string               `json:"failed_state"`
 		ErrorMsg        string               `json:"error_msg"`
+		Reason          string               `json:"reason"`
 	} `json:"metadata"`
 }
 
