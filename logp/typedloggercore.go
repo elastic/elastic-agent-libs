@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -57,6 +59,7 @@ type typedLoggerCore struct {
 	defaultCore zapcore.Core
 	value       string
 	key         string
+	message     string
 }
 
 func (t *typedLoggerCore) Enabled(l zapcore.Level) bool {
@@ -94,6 +97,11 @@ func (t *typedLoggerCore) Sync() error {
 
 func (t *typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 	for _, f := range fields {
+		if t.message != "" {
+			if strings.Contains(e.Message, t.message) {
+				fields = append(fields, zap.String(t.key, t.value))
+			}
+		}
 		if f.Key == t.key {
 			if f.String == t.value {
 				return t.typedCore.Write(e, fields)
