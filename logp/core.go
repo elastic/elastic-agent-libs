@@ -209,12 +209,7 @@ func ConfigureWithCore(loggerCfg Config, core zapcore.Core) error {
 // the core and a new one should not be created.  The loggerCfg is
 // only used to set selectors and level.
 func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error) {
-	var (
-		sink  zapcore.Core
-		level zap.AtomicLevel
-	)
-
-	level = zap.NewAtomicLevelAt(loggerCfg.Level.ZapLevel())
+	var sink zapcore.Core
 
 	if loggerCfg.WithFields != nil {
 		fields := make([]zapcore.Field, 0, len(loggerCfg.WithFields))
@@ -248,10 +243,25 @@ func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error
 		rootLogger:   root,
 		globalLogger: root.WithOptions(zap.AddCallerSkip(1)),
 		logger:       newLogger(root, ""),
-		level:        level,
+		level:        zap.NewAtomicLevelAt(loggerCfg.Level.ZapLevel()),
 		observedLogs: nil,
 	})
 	return newLogger(root, ""), nil
+}
+
+// ConfigureEventLoggingOTel takes a list log messages expected to contain sensitive data
+// and ensures they are logged using typed logger
+func ConfigureEventLoggingOTel(typedMsg []string, core zapcore.Core) *Logger {
+	sink := &typedLoggerCore{
+		defaultCore: core,
+		typedCore:   core,
+		key:         TypeKey,
+		value:       EventType,
+		message:     typedMsg,
+	}
+
+	root := zap.New(sink)
+	return newLogger(root, "")
 }
 
 // ConfigureWithTypedOutput configures the global logger to use typed outputs.
