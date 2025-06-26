@@ -59,7 +59,7 @@ type typedLoggerCore struct {
 	defaultCore zapcore.Core
 	value       string
 	key         string
-	message     string
+	message     []string
 }
 
 func (t *typedLoggerCore) Enabled(l zapcore.Level) bool {
@@ -72,6 +72,7 @@ func (t *typedLoggerCore) With(fields []zapcore.Field) zapcore.Core {
 		typedCore:   t.typedCore.With(fields),
 		key:         t.key,
 		value:       t.value,
+		message:     t.message,
 	}
 	return &newCore
 }
@@ -96,12 +97,15 @@ func (t *typedLoggerCore) Sync() error {
 }
 
 func (t *typedLoggerCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
-	for _, f := range fields {
-		if t.message != "" {
-			if strings.Contains(e.Message, t.message) {
+	if len(t.message) != 0 {
+		for _, msg := range t.message {
+			if strings.Contains(e.Message, msg) {
 				fields = append(fields, zap.String(t.key, t.value))
 			}
 		}
+	}
+
+	for _, f := range fields {
 		if f.Key == t.key {
 			if f.String == t.value {
 				return t.typedCore.Write(e, fields)
