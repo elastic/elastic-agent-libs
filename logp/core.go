@@ -251,7 +251,7 @@ func ConfigureWithCoreLocal(loggerCfg Config, core zapcore.Core) (*Logger, error
 
 // ConfigureEventLoggingOTel takes a list log messages expected to contain sensitive data
 // and ensures they are logged using typed logger
-func ConfigureEventLoggingOTel(typedMsg []string, core zapcore.Core) (*Logger, error) {
+func ConfigureEventLoggingOTel(typedMsg []string, core zapcore.Core) *Logger {
 	sink := &typedLoggerCore{
 		defaultCore: core,
 		typedCore:   core,
@@ -261,7 +261,7 @@ func ConfigureEventLoggingOTel(typedMsg []string, core zapcore.Core) (*Logger, e
 	}
 
 	root := zap.New(sink)
-	return newLogger(root, ""), nil
+	return newLogger(root, "")
 }
 
 // ConfigureWithTypedOutput configures the global logger to use typed outputs.
