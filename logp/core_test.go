@@ -389,7 +389,7 @@ func TestTypedLoggerCore(t *testing.T) {
 		{
 			name:             "info level typed logger containing sensitive message",
 			entry:            zapcore.Entry{Level: zapcore.InfoLevel, Message: "use typed logger"},
-			field:            strField("log.type", "sensitive"),
+			field:            skipField(),
 			expectedTypedLog: `{"level":"info","msg":"use typed logger","log.type":"sensitive"}`,
 		},
 		{
@@ -427,7 +427,7 @@ func TestTypedLoggerCore(t *testing.T) {
 		typedCore:   typedCore,
 		key:         "log.type",
 		value:       "sensitive",
-		message:     []string{"sensitive data"},
+		message:     []string{"typed logger"},
 	}
 
 	for _, tc := range testCases {
