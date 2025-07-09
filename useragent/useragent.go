@@ -25,8 +25,10 @@ import (
 type AgentManagementMode int
 
 const (
+	// AgentManagementModeUnknown indicates that the management mode is unknown.
+	AgentManagementModeUnknown AgentManagementMode = iota
 	// AgentManagementModeUnmanaged indicates that the beat is not running under agent.
-	AgentManagementModeUnmanaged AgentManagementMode = iota
+	AgentManagementModeUnmanaged
 	// AgentManagementModeManaged indicates that the beat is running under agent managed by Fleet.
 	AgentManagementModeManaged
 	// AgentManagementModeStandalone indicates that the beat is running under agent in standalone mode.
@@ -35,12 +37,14 @@ const (
 
 func (m AgentManagementMode) String() string {
 	switch m {
+	case AgentManagementModeUnmanaged:
+		return "Unmanaged"
 	case AgentManagementModeManaged:
 		return "Managed"
 	case AgentManagementModeStandalone:
 		return "Standalone"
 	default:
-		return "Unmanaged"
+		return "Unknown"
 	}
 }
 
@@ -63,7 +67,7 @@ func (m AgentUnprivilegedMode) String() string {
 	case AgentUnprivilegedModePrivileged:
 		return "Privileged"
 	default:
-		return "Privilege Unknown"
+		return "Unknown"
 	}
 }
 
@@ -95,7 +99,9 @@ func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mo
 	uaValues := []string{
 		runtime.GOOS,
 		runtime.GOARCH,
-		mode.String(),
+	}
+	if mode != AgentManagementModeUnknown {
+		uaValues = append(uaValues, mode.String())
 	}
 	if unprivileged != AgentUnprivilegedModeUnknown {
 		uaValues = append(uaValues, unprivileged.String())
