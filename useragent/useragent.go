@@ -26,9 +26,11 @@ import (
 type AgentManagementMode int
 
 const (
-	// AgentManagementModeManaged indicates that the beat is managed by Fleet.
-	AgentManagementModeManaged AgentManagementMode = iota
-	// AgentManagementModeStandalone indicates that the beat is running in standalone mode.
+	// AgentManagementModeUnmanaged indicates that the beat is not running under agent.
+	AgentManagementModeUnmanaged AgentManagementMode = iota
+	// AgentManagementModeManaged indicates that the beat is running under agent managed by Fleet.
+	AgentManagementModeManaged
+	// AgentManagementModeStandalone indicates that the beat is running under agent in standalone mode.
 	AgentManagementModeStandalone
 )
 
@@ -39,25 +41,31 @@ func (m AgentManagementMode) String() string {
 	case AgentManagementModeStandalone:
 		return "Standalone"
 	default:
-		return "Unknown"
+		return "Unmanaged"
 	}
 }
 
 // AgentUnprivilegedMode indicates whether the beat is running in unprivileged mode.
-type AgentUnprivilegedMode bool
+type AgentUnprivilegedMode int8
 
 const (
+	// AgentUnprivilegedModeUnknown indicates privilege mode is unknown.
+	AgentUnprivilegedModeUnknown AgentUnprivilegedMode = iota
 	// AgentUnprivilegedModeUnprivileged indicates that the beat is running in unprivileged mode.
-	AgentUnprivilegedModeUnprivileged AgentUnprivilegedMode = true
+	AgentUnprivilegedModeUnprivileged
 	// AgentUnprivilegedModePrivileged indicates that the beat is running in privileged mode.
-	AgentUnprivilegedModePrivileged AgentUnprivilegedMode = false
+	AgentUnprivilegedModePrivileged
 )
 
 func (m AgentUnprivilegedMode) String() string {
-	if m {
+	switch m {
+	case AgentUnprivilegedModeUnprivileged:
 		return "Unprivileged"
+	case AgentUnprivilegedModePrivileged:
+		return "Privileged"
+	default:
+		return "Privilege Unknown"
 	}
-	return "Privileged"
 }
 
 // UserAgent takes the capitalized name of the current beat and returns
@@ -89,7 +97,9 @@ func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mo
 		runtime.GOOS,
 		runtime.GOARCH,
 		mode.String(),
-		unprivileged.String(),
+	}
+	if unprivileged != AgentUnprivilegedModeUnknown {
+		uaValues = append(uaValues, unprivileged.String())
 	}
 	builder.WriteByte('(')
 	builder.WriteString(strings.Join(uaValues, "; "))
