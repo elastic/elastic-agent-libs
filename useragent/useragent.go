@@ -18,7 +18,6 @@
 package useragent
 
 import (
-	"errors"
 	"runtime"
 	"strings"
 )
@@ -90,7 +89,7 @@ func UserAgent(binaryNameCapitalized string, version, commit, buildTime string, 
 	return builder.String()
 }
 
-func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mode AgentManagementMode, unprivileged AgentUnprivilegedMode) (string, error) {
+func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mode AgentManagementMode, unprivileged AgentUnprivilegedMode) string {
 	var builder strings.Builder
 	builder.WriteString("Elastic-" + binaryNameCapitalized + "/" + version + " ")
 	uaValues := []string{
@@ -105,10 +104,5 @@ func UserAgentWithBeatTelemetry(binaryNameCapitalized string, version string, mo
 	builder.WriteString(strings.Join(uaValues, "; "))
 	builder.WriteByte(')')
 
-	// Ensure the user agent string does not exceed 100 characters
-	userAgent := builder.String()
-	if len(userAgent) > 100 {
-		return userAgent, errors.New("user agent string exceeds 100 characters")
-	}
-	return userAgent, nil
+	return builder.String()
 }
