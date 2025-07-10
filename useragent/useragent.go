@@ -27,12 +27,12 @@ type AgentManagementMode int
 const (
 	// AgentManagementModeUnknown indicates that the management mode is unknown.
 	AgentManagementModeUnknown AgentManagementMode = iota
-	// AgentManagementModeUnmanaged indicates that the beat is not running under agent.
-	AgentManagementModeUnmanaged
-	// AgentManagementModeManaged indicates that the beat is running under agent managed by Fleet.
-	AgentManagementModeManaged
-	// AgentManagementModeStandalone indicates that the beat is running under agent in standalone mode.
+	// AgentManagementModeStandalone indicates that the beat is not running under agent.
 	AgentManagementModeStandalone
+	// AgentManagementModeUnmanaged indicates that the beat is running under agent but not managed by Fleet.
+	AgentManagementModeUnmanaged
+	// AgentManagementModeManaged indicates that the beat is running under agent and managed by Fleet.
+	AgentManagementModeManaged
 )
 
 func (m AgentManagementMode) String() string {
