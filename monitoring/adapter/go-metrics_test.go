@@ -116,8 +116,8 @@ func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
 	monReg := monitoring.NewRegistry()
 	histogramSample := metrics.NewUniformSample(10)
 	clearedHistogramSample := metrics.NewUniformSample(10)
-	NewGoMetrics(monReg, "original", Accept).Register("histogram", metrics.NewHistogram(histogramSample))
-	NewGoMetrics(monReg, "cleared", Accept).Register("histogram", NewClearOnVisitHistogram(clearedHistogramSample))
+	_ = NewGoMetrics(monReg, "original", Accept).Register("histogram", metrics.NewHistogram(histogramSample))
+	_ = NewGoMetrics(monReg, "cleared", Accept).Register("histogram", NewClearOnVisitHistogram(clearedHistogramSample))
 	dataPoints := [...]int{2, 4, 8, 4, 2}
 	dataPointsMedian := 4.0
 	for _, i := range dataPoints {
@@ -125,7 +125,7 @@ func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
 		clearedHistogramSample.Update(int64(i))
 	}
 
-	pre_snapshot := []struct {
+	preSnapshot := []struct {
 		expected any
 		actual   any
 		msg      string
@@ -152,7 +152,7 @@ func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
 		},
 	}
 
-	for _, tc := range pre_snapshot {
+	for _, tc := range preSnapshot {
 		require.Equal(t, tc.expected, tc.actual, tc.msg)
 	}
 
@@ -163,7 +163,7 @@ func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
 	// clearedHistogramSample have been reset to zero, but the
 	// snapshot reports the values before the clear
 
-	post_snapshot := []struct {
+	postSnapshot := []struct {
 		expected any
 		actual   any
 		msg      string
@@ -210,7 +210,7 @@ func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
 		},
 	}
 
-	for _, tc := range post_snapshot {
+	for _, tc := range postSnapshot {
 		require.Equal(t, tc.expected, tc.actual, tc.msg)
 	}
 }

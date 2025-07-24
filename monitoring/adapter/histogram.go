@@ -78,7 +78,7 @@ func (h *ClearOnVisitHistogram) Sample() metrics.Sample {
 
 // Snapshot returns a read-only copy of the histogram.
 func (h *ClearOnVisitHistogram) Snapshot() metrics.Histogram {
-	return &ClearOnVisitHistogramSnapshot{sample: h.sample.Snapshot().(*metrics.SampleSnapshot)}
+	return &ClearOnVisitHistogramSnapshot{sample: h.sample.Snapshot().(*metrics.SampleSnapshot)} //nolint:errcheck // codepath depends on panic
 }
 
 // StdDev returns the standard deviation of the values in the sample.
