@@ -63,7 +63,7 @@ func GetGoMetrics(parent *monitoring.Registry, name string, filters ...MetricFil
 	if v == nil {
 		return NewGoMetrics(parent, name, filters...)
 	}
-	return newGoMetrics(v.(*monitoring.Registry), filters...)
+	return newGoMetrics(v.(*monitoring.Registry), filters...) //nolint:errcheck //code depends on panic
 }
 
 // NewGoMetrics creates and registers a new GoMetricsRegistry with the parent
