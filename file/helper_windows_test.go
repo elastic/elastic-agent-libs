@@ -18,11 +18,12 @@
 package file
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestSafeFileRotate creates two files, dest and src, and calls
