@@ -18,11 +18,18 @@
 package file
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
+const renameRetryDuration = 2 * time.Second
+const renameRetryInterval = 100 * time.Millisecond
+
 // SafeFileRotate safely rotates an existing file under path and replaces it with the tempfile
+// The final rename in the implementation is retried multiple times, up to renameRetryDuration, in
+// case the file is locked by another process (e.g. an AntiVirus scanner).
 func SafeFileRotate(path, tempfile string) error {
 	old := path + ".old"
 	var e error
@@ -37,7 +44,7 @@ func SafeFileRotate(path, tempfile string) error {
 	// ignore error in case path doesn't exist
 	_ = os.Rename(path, old)
 
-	if e = os.Rename(tempfile, path); e != nil {
+	if e = retryingRename(tempfile, path, renameRetryDuration); e != nil {
 		return e
 	}
 
@@ -60,6 +67,25 @@ func SyncParent(path string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// retryingRename attempts to rename a file from src to dst, retrying
+// every renameRetryInterval until the retryFor duration has elapsed.
+func retryingRename(src, dst string, retryFor time.Duration) error {
+	var err error
+	for start := time.Now(); time.Since(start) < retryFor; time.Sleep(renameRetryInterval) {
+		err = os.Rename(src, dst)
+		if err == nil {
+			// Rename succeeded; no more retries needed
+			return nil
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to rename %s to %s after %v: %w", src, dst, retryFor, err)
 	}
 
 	return nil
