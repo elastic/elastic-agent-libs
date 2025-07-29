@@ -45,6 +45,7 @@ func TestSafeFileRotate(t *testing.T) {
 
 	// Open handle on dest file for 1.5 seconds
 	destFile, err := os.Open(dest)
+	require.NoError(t, err)
 	time.AfterFunc(1500*time.Millisecond, func() {
 		destFile.Close() // Close the handle after 1.5 seconds
 	})
