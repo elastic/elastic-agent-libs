@@ -223,7 +223,7 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate) error {
 	return nil
 }
 
-func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.ConnectionState) error {
+func makeVerifyConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
 	serverName := cfg.ServerName
 
 	switch cfg.Verification {
