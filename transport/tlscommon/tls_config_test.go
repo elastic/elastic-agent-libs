@@ -30,6 +30,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 	"github.com/elastic/elastic-agent-libs/logp/logptest"
@@ -263,9 +266,12 @@ func TestTrustRootCA(t *testing.T) {
 			}
 
 			// Capture the logs
-			_ = logp.DevelopmentSetup(logp.ToObserverOutput())
+			observedCore, observedLogs := observer.New(zapcore.DebugLevel)
+			logger := logptest.NewTestingLogger(t, "test", zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+				return observedCore
+			}))
 
-			err := trustRootCA(&cfg, tc.peerCerts, logptest.NewTestingLogger(t, ""))
+			err := trustRootCA(&cfg, tc.peerCerts, logger)
 			if tc.expectingError && err == nil {
 				t.Fatal("expecting an error when calling trustRootCA")
 			}
@@ -275,7 +281,7 @@ func TestTrustRootCA(t *testing.T) {
 			}
 
 			if len(tc.expectingWarnings) > 0 {
-				warnings := logp.ObserverLogs().FilterLevelExact(logp.WarnLevel.ZapLevel()).TakeAll()
+				warnings := observedLogs.FilterLevelExact(logp.WarnLevel.ZapLevel()).TakeAll()
 				if len(warnings) == 0 {
 					t.Fatal("expecting a warning message")
 				}
