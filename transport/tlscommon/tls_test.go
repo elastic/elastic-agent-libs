@@ -156,7 +156,7 @@ key: mykey.pem
 		err := config.Unpack(&c)
 		require.NoError(t, err)
 		c.Certificate = CertificateConfig{} // prevent reading non-existent files
-		tmp, err := LoadTLSServerConfig(&c)
+		tmp, err := LoadTLSServerConfig(&c, logptest.NewTestingLogger(t, ""))
 		require.NoError(t, err)
 
 		cfg := tmp.BuildModuleClientConfig("")
@@ -187,7 +187,7 @@ key: mykey.pem
 		require.NoError(t, err)
 		c.Certificate = CertificateConfig{} // prevent reading non-existent files
 		require.NoError(t, err)
-		tmp, err := LoadTLSServerConfig(&c)
+		tmp, err := LoadTLSServerConfig(&c, logptest.NewTestingLogger(t, ""))
 		require.NoError(t, err)
 
 		cfg := tmp.BuildModuleClientConfig("")
@@ -233,7 +233,7 @@ func TestApplyWithServerConfig(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tmp, err := LoadTLSServerConfig(&c)
+	tmp, err := LoadTLSServerConfig(&c, logptest.NewTestingLogger(t, ""))
 	if !assert.NoError(t, err) {
 		return
 	}
