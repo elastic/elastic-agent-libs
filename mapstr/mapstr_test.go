@@ -385,7 +385,7 @@ func incrementMapstrValues(m M) {
 		case int:
 			m[k] = v + 1
 		case M:
-			incrementMapstrValues(m[k].(M))
+			incrementMapstrValues(v)
 		case []M:
 			for _, c := range v {
 				incrementMapstrValues(c)
