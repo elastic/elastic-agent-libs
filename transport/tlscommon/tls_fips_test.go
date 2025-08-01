@@ -69,7 +69,7 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 		cfg.Certificate.Key = key
 		cfg.Certificate.Passphrase = password
 
-		_, err = LoadTLSConfig(cfg)
+		_, err = LoadTLSConfig(cfg, logptest.NewTestingLogger(t, ""))
 		assert.ErrorIs(t, err, errors.ErrUnsupported)
 	})
 }
