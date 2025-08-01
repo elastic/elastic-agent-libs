@@ -89,7 +89,7 @@ func NewDevelopmentLogger(selector string, options ...LogOption) (*Logger, error
 }
 
 func NewZapLogger(log *zap.Logger) (*Logger, error) {
-	return &Logger{log, log.Sugar()}, nil
+	return &Logger{logger, logger.Sugar(), make(map[string]struct{})}, nil
 }
 
 // NewInMemory returns a new in-memory logger along with the buffer to which it
