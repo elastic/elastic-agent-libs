@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/elastic/elastic-agent-libs/logp"
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 	"github.com/elastic/elastic-agent-libs/transport/tlscommontest"
 )
 
@@ -264,7 +265,7 @@ func TestTrustRootCA(t *testing.T) {
 			// Capture the logs
 			_ = logp.DevelopmentSetup(logp.ToObserverOutput())
 
-			err := trustRootCA(&cfg, tc.peerCerts)
+			err := trustRootCA(&cfg, tc.peerCerts, logptest.NewTestingLogger(t, ""))
 			if tc.expectingError && err == nil {
 				t.Fatal("expecting an error when calling trustRootCA")
 			}
@@ -385,7 +386,7 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 				CASha256:             test.CASHA256,
 			}
 
-			verifier := makeVerifyConnection(cfg)
+			verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
 			if test.expectedCallback {
 				require.NotNil(t, verifier, "makeVerifyConnection returned a nil verifier")
 			} else {
@@ -469,7 +470,7 @@ func TestMakeVerifyServerConnectionForIPs(t *testing.T) {
 				Verification: test.verificationMode,
 				ServerName:   test.serverName,
 			}
-			verifier := makeVerifyConnection(cfg)
+			verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
 
 			err = verifier(tls.ConnectionState{
 				PeerCertificates: []*x509.Certificate{peerCerts.Leaf},
