@@ -25,24 +25,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/elastic-agent-libs/logp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 )
 
 func TestCloseConnectionError(t *testing.T) {
-	// observe all logs
-	if err := logp.DevelopmentSetup(logp.ToObserverOutput()); err != nil {
-		t.Fatalf("cannot initialise logger on development mode: %+v", err)
-	}
-
 	// Set up a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"status": "ok"}`)
 	}))
 	defer server.Close()
 
-	logger := logp.NewLogger("test")
+	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
+	logger := logptest.NewTestingLogger(t, "test", zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return observedCore
+	}))
 	// Set IdleConnTimeout to 2 seconds and a custom dialer
 	transport := &http.Transport{
 		IdleConnTimeout: 2 * time.Second,
@@ -70,7 +72,7 @@ func TestCloseConnectionError(t *testing.T) {
 	_, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
 
-	logs := logp.ObserverLogs().FilterMessageSnippet("Error reading from connection:").TakeAll()
+	logs := observedLogs.FilterMessageSnippet("Error reading from connection:").TakeAll()
 	assert.Equal(t, 0, len(logs), "did not ignore use of closed connection error")
 
 }

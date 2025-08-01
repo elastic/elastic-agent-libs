@@ -21,20 +21,15 @@ import (
 	"testing"
 
 	"github.com/elastic/elastic-agent-libs/logp"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
 // NewTestingLogger returns a testing suitable logp.Logger.
 func NewTestingLogger(t testing.TB, selector string, options ...logp.LogOption) *logp.Logger {
-	log := zaptest.NewLogger(t)
+	log := zaptest.NewLogger(t, zaptest.WrapOptions(options...))
 	log = log.Named(selector)
-	wrapCore := zap.WrapCore(func(zapcore.Core) zapcore.Core {
-		return log.Core()
-	})
-	options = append([]logp.LogOption{wrapCore}, options...)
-	logger, err := logp.NewDevelopmentLogger(selector, options...)
+
+	logger, err := logp.NewZapLogger(log)
 	if err != nil {
 		t.Fatal(err)
 	}
