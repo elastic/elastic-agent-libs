@@ -651,7 +651,7 @@ func TestVerificationMode(t *testing.T) {
 				Verification: test.verificationMode,
 				RootCAs:      certPool,
 				ServerName:   test.hostname,
-				Logger:       logptest.NewTestingLogger(t, ""),
+				logger:       logptest.NewTestingLogger(t, ""),
 			}
 
 			if test.ignoreCerts {
