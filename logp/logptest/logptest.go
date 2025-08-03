@@ -21,7 +21,10 @@ import (
 	"testing"
 
 	"github.com/elastic/elastic-agent-libs/logp"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // NewTestingLogger returns a testing suitable logp.Logger.
@@ -34,4 +37,14 @@ func NewTestingLogger(t testing.TB, selector string, options ...logp.LogOption) 
 		t.Fatal(err)
 	}
 	return logger
+}
+
+// NewTestingLogger returns a testing suitable logp.Logger.
+func NewTestingLoggerWithObserver(t testing.TB, selector string) (*logp.Logger, *observer.ObservedLogs) {
+	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
+	logger := NewTestingLogger(t, selector, zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return observedCore
+	}))
+
+	return logger, observedLogs
 }

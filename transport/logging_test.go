@@ -27,9 +27,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/elastic/elastic-agent-libs/logp/logptest"
 )
@@ -41,10 +38,7 @@ func TestCloseConnectionError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
-	logger := logptest.NewTestingLogger(t, "test", zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return observedCore
-	}))
+	logger, observedLogs := logptest.NewTestingLoggerWithObserver(t, "test")
 	// Set IdleConnTimeout to 2 seconds and a custom dialer
 	transport := &http.Transport{
 		IdleConnTimeout: 2 * time.Second,

@@ -977,10 +977,7 @@ func TestMapStrJSONLog(t *testing.T) {
 	}
 	expectedJSON := string(data)
 
-	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
-	logger := logptest.NewTestingLogger(t, "test", zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return observedCore
-	}))
+	logger, observedLogs := logptest.NewTestingLoggerWithObserver(t, "test")
 
 	logger.Infow("msg", "m", m)
 	logs := observedLogs.TakeAll()
