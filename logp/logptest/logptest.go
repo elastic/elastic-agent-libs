@@ -39,7 +39,7 @@ func NewTestingLogger(t testing.TB, selector string, options ...logp.LogOption) 
 	return logger
 }
 
-// NewTestingLogger returns a testing suitable logp.Logger.
+// NewTestingLoggerWithObserver returns a testing suitable logp.Logger and an observer
 func NewTestingLoggerWithObserver(t testing.TB, selector string) (*logp.Logger, *observer.ObservedLogs) {
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	logger := NewTestingLogger(t, selector, zap.WrapCore(func(core zapcore.Core) zapcore.Core {
