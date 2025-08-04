@@ -88,7 +88,7 @@ func NewDevelopmentLogger(selector string, options ...LogOption) (*Logger, error
 	return &Logger{logger, logger.Sugar(), make(map[string]struct{})}, nil
 }
 
-// NewNopLogger returns a logger based on the provided zap logger
+// NewZapLogger returns a logger based on the provided zap logger
 func NewZapLogger(logger *zap.Logger) (*Logger, error) {
 	return &Logger{logger, logger.Sugar(), make(map[string]struct{})}, nil
 }
