@@ -27,13 +27,15 @@ import (
 )
 
 type FileWatcher struct {
+	logger   *logp.Logger
 	files    []string
 	lastScan time.Time
 	lastHash uint64
 }
 
-func New(files ...string) *FileWatcher {
+func New(logger *logp.Logger, files ...string) *FileWatcher {
 	return &FileWatcher{
+		logger:   logger,
 		lastScan: time.Time{},
 		lastHash: 0,
 		files:    files,
@@ -57,7 +59,7 @@ func (f *FileWatcher) Scan() ([]string, bool, error) {
 	for _, path := range f.files {
 		info, err := os.Stat(path)
 		if err != nil {
-			logp.Err("Error getting stats for file: %s", path)
+			f.logger.Error("Error getting stats for file: %s", path)
 			continue
 		}
 
