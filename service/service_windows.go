@@ -131,7 +131,7 @@ func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 		logger.Error("IsAnInteractiveSession: %v", err)
 		return
 	}
-	logger.Debug("service", "Windows is interactive: %v", isInteractive)
+	logger.Debugf("service", "Windows is interactive: %v", isInteractive)
 
 	run := svc.Run
 	if isInteractive {
@@ -164,7 +164,7 @@ func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 		return
 	}
 
-	logger.Error("Windows service setup failed: %+v", err)
+	logger.Errorf("Windows service setup failed: %+v", err)
 }
 
 // WaitExecutionDone returns only after stop was reported to service manager.
