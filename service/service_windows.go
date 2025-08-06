@@ -131,7 +131,7 @@ func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 		logger.Errorf("IsAnInteractiveSession: %v", err)
 		return
 	}
-	logger.Debugf("service", "Windows is interactive: %v", isInteractive)
+	logger.Named("service")..Debugf("Windows is interactive: %v", isInteractive)
 
 	run := svc.Run
 	if isInteractive {
