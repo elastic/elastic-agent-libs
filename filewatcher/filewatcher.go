@@ -59,7 +59,7 @@ func (f *FileWatcher) Scan() ([]string, bool, error) {
 	for _, path := range f.files {
 		info, err := os.Stat(path)
 		if err != nil {
-			f.logger.Error("Error getting stats for file: %s", path)
+			f.logger.Errorf("Error getting stats for file: %s", path)
 			continue
 		}
 
