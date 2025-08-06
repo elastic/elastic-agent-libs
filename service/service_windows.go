@@ -128,7 +128,7 @@ func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 	//nolint:staticcheck // keep using the deprecated method in order to maintain the existing behavior
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
-		logger.Error("IsAnInteractiveSession: %v", err)
+		logger.Errorf("IsAnInteractiveSession: %v", err)
 		return
 	}
 	logger.Debugf("service", "Windows is interactive: %v", isInteractive)
