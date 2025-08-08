@@ -43,6 +43,9 @@ type Int struct{ i atomic.Int64 }
 // variable will be available via expvars package as well, but can not be removed
 // anymore.
 func NewInt(r *Registry, name string, opts ...Option) *Int {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Int)
@@ -77,6 +80,9 @@ type Uint struct{ u atomic.Uint64 }
 // variable will be available via expvars package as well, but can not be removed
 // anymore.
 func NewUint(r *Registry, name string, opts ...Option) *Uint {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Uint)
@@ -114,6 +120,9 @@ type Float struct{ f atomic.Uint64 }
 // variable will be available via expvars package as well, but can not be removed
 // anymore.
 func NewFloat(r *Registry, name string, opts ...Option) *Float {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Float)
@@ -155,6 +164,9 @@ type Bool struct{ f atomic.Bool }
 // variable will be available via expvars package as well, but can not be removed
 // anymore.
 func NewBool(r *Registry, name string, opts ...Option) *Bool {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Bool)
@@ -188,6 +200,9 @@ type String struct {
 // variable will be available via expvars package as well, but can not be removed
 // anymore.
 func NewString(r *Registry, name string, opts ...Option) *String {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*String)
@@ -239,6 +254,9 @@ type Func struct {
 }
 
 func NewFunc(r *Registry, name string, f func(Mode, Visitor), opts ...Option) *Func {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Func)
@@ -282,6 +300,9 @@ type Timestamp struct {
 
 // NewTimestamp creates and registers a new timestamp variable.
 func NewTimestamp(r *Registry, name string, opts ...Option) *Timestamp {
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+
 	existingVar, r := setupMetric(r, name, opts)
 	if existingVar != nil {
 		cast, ok := existingVar.(*Timestamp)
