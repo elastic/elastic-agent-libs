@@ -83,7 +83,7 @@ func (r *Registry) doVisit(mode Mode, vs Visitor) {
 		}
 
 		vs.OnKey(key)
-		v.Var.Visit(mode, vs)
+		v.Visit(mode, vs)
 	}
 }
 
