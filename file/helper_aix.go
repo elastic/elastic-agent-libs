@@ -24,7 +24,7 @@ import (
 
 // SafeFileRotate safely rotates an existing file under path and replaces it with the tempfile
 func SafeFileRotate(path, tempfile string, opts ...RotateOpt) error {
-	options := rotateOpts{enableRetries: false}
+	options := rotateOpts{}
 	for _, opt := range opts {
 		opt(&options)
 	}
