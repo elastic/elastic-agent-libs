@@ -20,11 +20,20 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"time"
 )
+
+const windowsRenameRetryInterval = 50 * time.Millisecond
+const windowsRenameRetryDuration = 2 * time.Second
 
 // SafeFileRotate safely rotates an existing file under path and replaces it with the tempfile
 func SafeFileRotate(path, tempfile string, opts ...RotateOpt) error {
-	options := rotateOpts{}
+	// On Windows, retry the rename operation by default. This is useful in cases where
+	// path, the destination file, may be locked or in use.
+	options := rotateOpts{
+		renameRetryDuration: windowsRenameRetryDuration,
+		renameRetryInterval: windowsRenameRetryInterval,
+	}
 	for _, opt := range opts {
 		opt(&options)
 	}
