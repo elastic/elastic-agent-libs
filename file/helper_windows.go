@@ -24,7 +24,9 @@ import (
 
 // SafeFileRotate safely rotates an existing file under path and replaces it with the tempfile
 func SafeFileRotate(path, tempfile string, opts ...RotateOpt) error {
-	options := rotateOpts{}
+	// Enable retries by default on Windows. This is useful in cases where path, the destination
+	// file may be locked or in use.
+	options := rotateOpts{enableRetries: true}
 	for _, opt := range opts {
 		opt(&options)
 	}
