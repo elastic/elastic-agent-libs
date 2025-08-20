@@ -52,7 +52,7 @@ func TestSafeFileRotate(t *testing.T) {
 	defer destFile.Close()
 
 	// Try to replace dest with new
-	err = SafeFileRotate(dest, src)
+	err = SafeFileRotate(dest, src, WithRenameRetries(2*time.Second, 100*time.Millisecond))
 	require.NoError(t, err)
 
 	// Check that dest file has been replaced with new file
