@@ -23,29 +23,29 @@ import (
 	"time"
 )
 
-type RotateOpts struct {
-	RenameRetryDuration time.Duration
-	RenameRetryInterval time.Duration
+type rotateOpts struct {
+	renameRetryDuration time.Duration
+	renameRetryInterval time.Duration
 }
 
-type RotateOpt func(*RotateOpts)
+type RotateOpt func(*rotateOpts)
 
 func WithRenameRetries(duration, interval time.Duration) RotateOpt {
-	return func(opts *RotateOpts) {
-		opts.RenameRetryDuration = duration
-		opts.RenameRetryInterval = interval
+	return func(opts *rotateOpts) {
+		opts.renameRetryDuration = duration
+		opts.renameRetryInterval = interval
 	}
 }
 
-func rename(src, dst string, options RotateOpts) error {
-	if options.RenameRetryDuration == 0 && options.RenameRetryInterval == 0 {
+func rename(src, dst string, options rotateOpts) error {
+	if options.renameRetryDuration == 0 && options.renameRetryInterval == 0 {
 		return os.Rename(src, dst)
 	}
 
 	// Attempt rename with retries every options.RenameRetryInterval until options.RenameRetryDuration
 	// has elapsed. This is useful in cases where the destination file may be locked or in use.
 	var err error
-	for start := time.Now(); time.Since(start) < options.RenameRetryDuration; time.Sleep(options.RenameRetryInterval) {
+	for start := time.Now(); time.Since(start) < options.renameRetryDuration; time.Sleep(options.renameRetryInterval) {
 		err = os.Rename(src, dst)
 		if err == nil {
 			// Rename succeeded; no more retries needed
@@ -54,7 +54,7 @@ func rename(src, dst string, options RotateOpts) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to rename %s to %s after %v: %w", src, dst, options.RenameRetryDuration, err)
+		return fmt.Errorf("failed to rename %s to %s after %v: %w", src, dst, options.renameRetryDuration, err)
 	}
 
 	return nil
