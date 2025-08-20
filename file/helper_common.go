@@ -42,14 +42,8 @@ func rename(src, dst string, options RotateOpts) error {
 		return os.Rename(src, dst)
 	}
 
-	return retryingRename(src, dst, options.RenameRetryDuration, options.RenameRetryInterval)
-}
-
-// retryingRename attempts to rename a file from src to dst, retrying
-// every retryInterval until the retryDuration duration has elapsed.
-func retryingRename(src, dst string, retryDuration, retryInterval time.Duration) error {
 	var err error
-	for start := time.Now(); time.Since(start) < retryDuration; time.Sleep(retryInterval) {
+	for start := time.Now(); time.Since(start) < options.RenameRetryDuration; time.Sleep(options.RenameRetryInterval) {
 		err = os.Rename(src, dst)
 		if err == nil {
 			// Rename succeeded; no more retries needed
@@ -58,7 +52,7 @@ func retryingRename(src, dst string, retryDuration, retryInterval time.Duration)
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to rename %s to %s after %v: %w", src, dst, retryDuration, err)
+		return fmt.Errorf("failed to rename %s to %s after %v: %w", src, dst, options.RenameRetryDuration, err)
 	}
 
 	return nil
