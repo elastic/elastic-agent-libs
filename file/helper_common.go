@@ -42,6 +42,8 @@ func rename(src, dst string, options RotateOpts) error {
 		return os.Rename(src, dst)
 	}
 
+	// Attempt rename with retries every options.RenameRetryInterval until options.RenameRetryDuration
+	// has elapsed. This is useful in cases where the destination file may be locked or in use.
 	var err error
 	for start := time.Now(); time.Since(start) < options.RenameRetryDuration; time.Sleep(options.RenameRetryInterval) {
 		err = os.Rename(src, dst)
