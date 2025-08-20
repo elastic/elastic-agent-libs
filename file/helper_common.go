@@ -38,7 +38,8 @@ func WithRenameRetries(duration, interval time.Duration) RotateOpt {
 }
 
 func rename(src, dst string, options rotateOpts) error {
-	if options.renameRetryDuration == 0 && options.renameRetryInterval == 0 {
+	// Perform a regular (non-retrying) rename unless all retry options are specified.
+	if options.renameRetryDuration == 0 || options.renameRetryInterval == 0 {
 		return os.Rename(src, dst)
 	}
 
