@@ -65,7 +65,7 @@ func TestTLSDialer(
 			tlsConfig = lastTLSConfig
 		}
 		if tlsConfig == nil {
-			// if tlsconfig is nil, configure passed logger on tls
+			// if tlsconfig is nil, set provided logger
 			if config == nil {
 				tlsConfig = config.BuildModuleClientConfig(host, tlscommon.WithLogger(logger))
 			} else {
