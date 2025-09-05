@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"go.elastic.co/apm/module/apmhttp/v2"
-	"golang.org/x/net/http2"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -76,7 +75,6 @@ type (
 
 	extraSettings struct {
 		logger *logp.Logger
-		http2  bool
 	}
 
 	dialerOption interface {
@@ -248,14 +246,7 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 	}
 
 	var rt http.RoundTripper
-	if extra.http2 {
-		rt, err = settings.http2RoundTripper(tls, dialer, tlsDialer, opts...)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		rt = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
-	}
+	rt = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
 
 	for _, opt := range opts {
 		if rtOpt, ok := opt.(roundTripperOption); ok {
@@ -289,21 +280,6 @@ func (settings *HTTPTransportSettings) httpRoundTripper(
 	}
 
 	return t
-}
-
-func (settings *HTTPTransportSettings) http2RoundTripper(
-	tls *tlscommon.TLSConfig,
-	dialer, tlsDialer transport.Dialer,
-	opts ...TransportOption,
-) (*http2.Transport, error) {
-	t1 := settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
-	t2, err := http2.ConfigureTransports(t1)
-	if err != nil {
-		return nil, err
-	}
-
-	t2.AllowHTTP = true
-	return t2, nil
 }
 
 // Client creates a new http.Client with configured Transport. The transport is
@@ -354,13 +330,6 @@ func WithIOStats(stats transport.IOStatser) TransportOption {
 func WithTransportFunc(fn func(*http.Transport)) TransportOption {
 	return transportOptFunc(func(_ *HTTPTransportSettings, t *http.Transport) {
 		fn(t)
-	})
-}
-
-// WithHTTP2Only will ensure that a HTTP 2 only roundtripper is created.
-func WithHTTP2Only(b bool) TransportOption {
-	return extraOptionFunc(func(settings *extraSettings) {
-		settings.http2 = b
 	})
 }
 
