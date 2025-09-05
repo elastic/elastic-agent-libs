@@ -54,8 +54,7 @@ type Config struct {
 	Stats   IOStatser
 }
 
-// Deprecated: use  NewClientWithOptions
-func NewClient(c Config, network, host string, defaultPort int, logger *logp.Logger) (*Client, error) {
+func NewClient(c Config, network, host string, defaultPort int) (*Client, error) {
 	// do some sanity checks regarding network and Config matching +
 	// address being parseable
 	switch network {
@@ -69,41 +68,15 @@ func NewClient(c Config, network, host string, defaultPort int, logger *logp.Log
 		return nil, fmt.Errorf("unsupported network type %v", network)
 	}
 
-	dialer, err := MakeDialer(c, logger)
+	dialer, err := MakeDialer(c)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewClientWithDialer(dialer, c, network, host, defaultPort, logger)
+	return NewClientWithDialer(dialer, c, network, host, defaultPort)
 }
 
-func NewClientWithOptions(c Config, opts ClientOptions) (*Client, error) {
-	// do some sanity checks regarding network and Config matching +
-	// address being parseable
-	switch opts.Network {
-	case "tcp", "tcp4", "tcp6":
-	case "udp", "udp4", "udp6":
-		if c.TLS == nil && c.Proxy == nil {
-			break
-		}
-		fallthrough
-	default:
-		return nil, fmt.Errorf("unsupported network type %v", opts.Network)
-	}
-
-	if opts.Logger == nil {
-		opts.Logger = logp.NewNopLogger()
-	}
-
-	dialer, err := MakeDialer(c, opts.Logger)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewClientWithDialer(dialer, c, opts.Network, opts.Host, opts.defaultPort, opts.Logger)
-}
-
-func NewClientWithDialer(d Dialer, c Config, network, host string, defaultPort int, logger *logp.Logger) (*Client, error) {
+func NewClientWithDialer(d Dialer, c Config, network, host string, defaultPort int) (*Client, error) {
 	// check address being parseable
 	host = fullAddress(host, defaultPort)
 	_, _, err := net.SplitHostPort(host)
@@ -112,7 +85,7 @@ func NewClientWithDialer(d Dialer, c Config, network, host string, defaultPort i
 	}
 
 	client := &Client{
-		log:     logger.Named(logSelector),
+		log:     logp.NewLogger(logSelector),
 		dialer:  d,
 		network: network,
 		host:    host,
@@ -264,7 +237,7 @@ func (c *Client) Test(d testing.Driver) {
 		} else {
 			d.Run("TLS", func(d testing.Driver) {
 				netDialer := NetDialer(c.config.Timeout)
-				tlsDialer := TestTLSDialer(d, netDialer, c.config.TLS, c.config.Timeout, c.log)
+				tlsDialer := TestTLSDialer(d, netDialer, c.config.TLS, c.config.Timeout)
 				_, err := tlsDialer.DialContext(context.Background(), "tcp", c.host)
 				d.Fatal("dial up", err)
 			})
