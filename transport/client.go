@@ -41,6 +41,12 @@ type Client struct {
 	mutex sync.Mutex
 }
 
+type ClientOptions struct {
+	Network     string
+	Host        string
+	defaultPort int
+	Logger      *logp.Logger
+}
 type Config struct {
 	Proxy   *ProxyConfig
 	TLS     *tlscommon.TLSConfig
@@ -48,6 +54,7 @@ type Config struct {
 	Stats   IOStatser
 }
 
+// Deprecated: use  NewClientWithOptions
 func NewClient(c Config, network, host string, defaultPort int, logger *logp.Logger) (*Client, error) {
 	// do some sanity checks regarding network and Config matching +
 	// address being parseable
@@ -68,6 +75,32 @@ func NewClient(c Config, network, host string, defaultPort int, logger *logp.Log
 	}
 
 	return NewClientWithDialer(dialer, c, network, host, defaultPort, logger)
+}
+
+func NewClientWithOptions(c Config, opts ClientOptions) (*Client, error) {
+	// do some sanity checks regarding network and Config matching +
+	// address being parseable
+	switch opts.Network {
+	case "tcp", "tcp4", "tcp6":
+	case "udp", "udp4", "udp6":
+		if c.TLS == nil && c.Proxy == nil {
+			break
+		}
+		fallthrough
+	default:
+		return nil, fmt.Errorf("unsupported network type %v", opts.Network)
+	}
+
+	if opts.Logger == nil {
+		opts.Logger = logp.NewNopLogger()
+	}
+
+	dialer, err := MakeDialer(c, opts.Logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewClientWithDialer(dialer, c, opts.Network, opts.Host, opts.defaultPort, opts.Logger)
 }
 
 func NewClientWithDialer(d Dialer, c Config, network, host string, defaultPort int, logger *logp.Logger) (*Client, error) {
