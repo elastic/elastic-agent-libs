@@ -231,7 +231,7 @@ func (m *TLSClientAuth) Unpack(in interface{}) error {
 	case uint64:
 		*m = TLSClientAuth(o) //nolint:gosec // o is much smaller than max int
 	case int64: // underlying type is int so we need both uint64 and int64 as options for TLSClientAuth
-		*m = TLSClientAuth(o) //nolint:gosec // o is much smaller than max int
+		*m = TLSClientAuth(o)
 	default:
 		return fmt.Errorf("client auth mode is an unknown type: %T", o)
 	}
@@ -320,7 +320,7 @@ func (r *TLSRenegotiationSupport) Unpack(i interface{}) error {
 
 		*r = t
 	case int64:
-		*r = TLSRenegotiationSupport(o) //nolint:gosec // o is much smaller than max int
+		*r = TLSRenegotiationSupport(o)
 	case uint64:
 		*r = TLSRenegotiationSupport(o) //nolint:gosec // o is much smaller than max int
 	default:
