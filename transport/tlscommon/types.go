@@ -98,10 +98,11 @@ func init() {
 
 var supportedCurveTypes = make(map[TLSCurveType]string, len(tlsCurveTypes))
 var tlsCurveTypes = map[string]TLSCurveType{
-	"P-256":  TLSCurveType(tls.CurveP256),
-	"P-384":  TLSCurveType(tls.CurveP384),
-	"P-521":  TLSCurveType(tls.CurveP521),
-	"X25519": TLSCurveType(tls.X25519),
+	"P-256":          TLSCurveType(tls.CurveP256),
+	"P-384":          TLSCurveType(tls.CurveP384),
+	"P-521":          TLSCurveType(tls.CurveP521),
+	"X25519":         TLSCurveType(tls.X25519),
+	"X25519MLKEM768": TLSCurveType(tls.X25519MLKEM768),
 }
 
 var tlsRenegotiationSupportTypes = map[string]TLSRenegotiationSupport{
