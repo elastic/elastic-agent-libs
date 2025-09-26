@@ -462,7 +462,7 @@ func Test_tlsCurveType_Unpack(t *testing.T) {
 		name   string
 		hasErr bool
 		in     interface{}
-		exp    tlsCurveType
+		exp    TLSCurveType
 	}{{
 		name:   "unknown string",
 		hasErr: true,
@@ -471,17 +471,17 @@ func Test_tlsCurveType_Unpack(t *testing.T) {
 		name:   "string",
 		hasErr: false,
 		in:     "P-256",
-		exp:    tlsCurveType(tls.CurveP256),
+		exp:    TLSCurveType(tls.CurveP256),
 	}, {
 		name:   "int64",
 		hasErr: false,
 		in:     int64(23),
-		exp:    tlsCurveType(tls.CurveP256),
+		exp:    TLSCurveType(tls.CurveP256),
 	}, {
 		name:   "uint64",
 		hasErr: false,
 		in:     uint64(23),
-		exp:    tlsCurveType(tls.CurveP256),
+		exp:    TLSCurveType(tls.CurveP256),
 	}, {
 		name:   "unknown type",
 		hasErr: true,
@@ -489,7 +489,7 @@ func Test_tlsCurveType_Unpack(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			v := new(tlsCurveType)
+			v := new(TLSCurveType)
 			err := v.Unpack(tc.in)
 			if tc.hasErr {
 				assert.Error(t, err)

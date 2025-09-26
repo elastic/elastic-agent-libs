@@ -96,12 +96,12 @@ func init() {
 	}
 }
 
-var supportedCurveTypes = make(map[tlsCurveType]string, len(tlsCurveTypes))
-var tlsCurveTypes = map[string]tlsCurveType{
-	"P-256":  tlsCurveType(tls.CurveP256),
-	"P-384":  tlsCurveType(tls.CurveP384),
-	"P-521":  tlsCurveType(tls.CurveP521),
-	"X25519": tlsCurveType(tls.X25519),
+var supportedCurveTypes = make(map[TLSCurveType]string, len(tlsCurveTypes))
+var tlsCurveTypes = map[string]TLSCurveType{
+	"P-256":  TLSCurveType(tls.CurveP256),
+	"P-384":  TLSCurveType(tls.CurveP384),
+	"P-521":  TLSCurveType(tls.CurveP521),
+	"X25519": TLSCurveType(tls.X25519),
 }
 
 var tlsRenegotiationSupportTypes = map[string]TLSRenegotiationSupport{
@@ -272,9 +272,9 @@ func (cs CipherSuite) String() string {
 	return unknownType
 }
 
-type tlsCurveType tls.CurveID
+type TLSCurveType tls.CurveID
 
-func (ct *tlsCurveType) Unpack(i interface{}) error {
+func (ct *TLSCurveType) Unpack(i interface{}) error {
 	switch o := i.(type) {
 	case string:
 		t, found := tlsCurveTypes[o]
@@ -284,16 +284,16 @@ func (ct *tlsCurveType) Unpack(i interface{}) error {
 
 		*ct = t
 	case int64:
-		*ct = tlsCurveType(o)
+		*ct = TLSCurveType(o)
 	case uint64:
-		*ct = tlsCurveType(o)
+		*ct = TLSCurveType(o)
 	default:
 		return fmt.Errorf("tls curve type is an unsupported input type: %T", o)
 	}
 	return nil
 }
 
-func (ct *tlsCurveType) Validate() error {
+func (ct *TLSCurveType) Validate() error {
 	if _, ok := supportedCurveTypes[*ct]; !ok {
 		return fmt.Errorf("unsupported curve type: %s", tls.CurveID(*ct).String())
 	}
