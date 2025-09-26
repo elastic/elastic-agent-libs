@@ -181,9 +181,9 @@ func (m *TLSVerificationMode) Unpack(in interface{}) error {
 		}
 		*m = mode
 	case int64:
-		*m = TLSVerificationMode(o)
+		*m = TLSVerificationMode(o) //nolint:gosec // o is much smaller than max uint8
 	case uint64:
-		*m = TLSVerificationMode(o)
+		*m = TLSVerificationMode(o) //nolint:gosec // o is much smaller than max uint8
 	default:
 		return fmt.Errorf("verification mode is an unknown type: %T", o)
 	}
@@ -229,9 +229,9 @@ func (m *TLSClientAuth) Unpack(in interface{}) error {
 
 		*m = mode
 	case uint64:
-		*m = TLSClientAuth(o)
+		*m = TLSClientAuth(o) //nolint:gosec // o is much smaller than max int
 	case int64: // underlying type is int so we need both uint64 and int64 as options for TLSClientAuth
-		*m = TLSClientAuth(o)
+		*m = TLSClientAuth(o) //nolint:gosec // o is much smaller than max int
 	default:
 		return fmt.Errorf("client auth mode is an unknown type: %T", o)
 	}
@@ -250,9 +250,9 @@ func (cs *CipherSuite) Unpack(i interface{}) error {
 
 		*cs = suite
 	case int64:
-		*cs = CipherSuite(o)
+		*cs = CipherSuite(o) //nolint:gosec // o is much smaller than max uint16
 	case uint64:
-		*cs = CipherSuite(o)
+		*cs = CipherSuite(o) //nolint:gosec // o is much smaller than max uint16
 	default:
 		return fmt.Errorf("cipher suite is an unknown type: %T", o)
 	}
@@ -285,9 +285,9 @@ func (ct *TLSCurveType) Unpack(i interface{}) error {
 
 		*ct = t
 	case int64:
-		*ct = TLSCurveType(o)
+		*ct = TLSCurveType(o) //nolint:gosec // o is much smaller than max uint16
 	case uint64:
-		*ct = TLSCurveType(o)
+		*ct = TLSCurveType(o) //nolint:gosec // o is much smaller than max uint16
 	default:
 		return fmt.Errorf("tls curve type is an unsupported input type: %T", o)
 	}
@@ -320,9 +320,9 @@ func (r *TLSRenegotiationSupport) Unpack(i interface{}) error {
 
 		*r = t
 	case int64:
-		*r = TLSRenegotiationSupport(o)
+		*r = TLSRenegotiationSupport(o) //nolint:gosec // o is much smaller than max int
 	case uint64:
-		*r = TLSRenegotiationSupport(o)
+		*r = TLSRenegotiationSupport(o) //nolint:gosec // o is much smaller than max int
 	default:
 		return fmt.Errorf("tls renegotation support is an unknown type: %T", o)
 	}
