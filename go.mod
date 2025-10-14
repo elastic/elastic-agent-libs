@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/Microsoft/go-winio v0.5.2
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/elastic/elastic-transport-go/v8 v8.6.0
 	github.com/elastic/go-elasticsearch/v8 v8.17.0
 	github.com/elastic/go-structform v0.0.9
@@ -11,6 +12,7 @@ require (
 	github.com/elastic/pkcs8 v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/gofrs/uuid/v5 v5.2.0
+	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/magefile/mage v1.13.0
 	github.com/mattn/go-colorable v0.1.12
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
@@ -37,7 +39,13 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gobuffalo/here v0.6.0 // indirect
 	github.com/google/licenseclassifier v0.0.0-20200402202327-879cb1424de0 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
+	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
+	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/markbates/pkger v0.17.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
