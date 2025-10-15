@@ -51,7 +51,7 @@ func TestProxy(t *testing.T) {
 
 	type setup struct {
 		fakeBackendServer      *httptest.Server
-		generateTestHttpClient func(t *testing.T, proxy *Proxy) *http.Client
+		generateTestHTTPClient func(t *testing.T, proxy *Proxy) *http.Client
 	}
 	type testRequest struct {
 		method string
@@ -73,7 +73,7 @@ func TestProxy(t *testing.T) {
 			name: "Basic scenario, no TLS",
 			setup: setup{
 				fakeBackendServer:      createFakeBackendServer(),
-				generateTestHttpClient: nil,
+				generateTestHTTPClient: nil,
 			},
 			proxyOptions:  nil,
 			proxyStartTLS: false,
@@ -94,7 +94,7 @@ func TestProxy(t *testing.T) {
 			name: "TLS scenario, server cert validation",
 			setup: setup{
 				fakeBackendServer: createFakeBackendServer(),
-				generateTestHttpClient: func(t *testing.T, proxy *Proxy) *http.Client {
+				generateTestHTTPClient: func(t *testing.T, proxy *Proxy) *http.Client {
 					proxyURL, err := url.Parse(proxy.URL)
 					require.NoErrorf(t, err, "failed to parse proxy URL %q", proxy.URL)
 
@@ -135,7 +135,7 @@ func TestProxy(t *testing.T) {
 			name: "mTLS scenario, client and server cert validation",
 			setup: setup{
 				fakeBackendServer: createFakeBackendServer(),
-				generateTestHttpClient: func(t *testing.T, proxy *Proxy) *http.Client {
+				generateTestHTTPClient: func(t *testing.T, proxy *Proxy) *http.Client {
 					proxyURL, err := url.Parse(proxy.URL)
 					require.NoErrorf(t, err, "failed to parse proxy URL %q", proxy.URL)
 
@@ -224,8 +224,8 @@ func TestProxy(t *testing.T) {
 			require.NoError(t, err, "error creating request")
 
 			var client *http.Client
-			if tt.setup.generateTestHttpClient != nil {
-				client = tt.setup.generateTestHttpClient(t, proxy)
+			if tt.setup.generateTestHTTPClient != nil {
+				client = tt.setup.generateTestHTTPClient(t, proxy)
 			} else {
 				// basic HTTP client using the proxy
 				client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
