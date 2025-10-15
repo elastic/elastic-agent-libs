@@ -244,7 +244,7 @@ func TestProxy(t *testing.T) {
 }
 
 func TestHTTPSProxy(t *testing.T) {
-	targetHost := "not-a-server.co"
+	targetHost := "not-a-server.example"
 	proxy, client, target := prepareMTLSProxyAndTargetServer(t, targetHost)
 	t.Cleanup(func() {
 		proxy.Close()
@@ -276,7 +276,7 @@ func TestHTTPSProxy(t *testing.T) {
 		},
 		{
 			name:   "request_failure",
-			target: "https://any.not.target.will.do",
+			target: "https://any.not.target.will.do.example",
 			assertFn: func(t *testing.T, got *http.Response, err error) {
 				assert.NoError(t, err, "request to an invalid host should not fail, but succeed with a HTTP error")
 				assert.Equal(t, http.StatusBadGateway, got.StatusCode)
