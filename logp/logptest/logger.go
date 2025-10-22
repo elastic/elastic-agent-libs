@@ -135,7 +135,7 @@ func (l *Logger) WaitLogsContains(s string, timeout time.Duration, msgAndArgs ..
 		msgAndArgs...)
 }
 
-// logContains searchs for str in the log file keeping track of the offset.
+// logContains searches for str in the log file keeping track of the offset.
 // It returns true if str is found in the logs. If there are any errors,
 // it returns false and the error
 func (l *Logger) logContains(str string) (bool, error) {
@@ -143,11 +143,11 @@ func (l *Logger) logContains(str string) (bool, error) {
 	// the logger writing to it.
 	f, err := os.Open(l.logFile.Name())
 	if err != nil {
-		return false, fmt.Errorf("cannot open log file for reading: %s", err)
+		return false, fmt.Errorf("cannot open log file for reading: %w", err)
 	}
 
 	if _, err := f.Seek(l.offset, io.SeekStart); err != nil {
-		return false, fmt.Errorf("cannot seek log file: %s", err)
+		return false, fmt.Errorf("cannot seek log file: %w", err)
 	}
 
 	r := bufio.NewReader(f)
@@ -158,7 +158,7 @@ func (l *Logger) logContains(str string) (bool, error) {
 
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
-				return false, fmt.Errorf("error reading log file '%s': %s", l.logFile.Name(), err)
+				return false, fmt.Errorf("error reading log file '%s': %w", l.logFile.Name(), err)
 			}
 			break
 		}
