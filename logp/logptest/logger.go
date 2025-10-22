@@ -136,6 +136,21 @@ func (l *Logger) WaitLogsContains(s string, timeout time.Duration, msgAndArgs ..
 }
 
 // logContains searches for str in the log file keeping track of the offset.
+// If there is any issue reading the log file, then t.Fatalf is called,
+// if str is not present in the logs, t.Fatalf is called.
+func (l *Logger) LogContains(str string) {
+	l.t.Helper()
+	found, err := l.logContains(str)
+	if err != nil {
+		l.t.Fatalf("cannot read log file: %s", err)
+	}
+
+	if !found {
+		l.t.Fatalf("'%s' not found in logs", str)
+	}
+}
+
+// logContains searches for str in the log file keeping track of the offset.
 // It returns true if str is found in the logs. If there are any errors,
 // it returns false and the error
 func (l *Logger) logContains(str string) (bool, error) {
