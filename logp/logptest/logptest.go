@@ -29,6 +29,9 @@ import (
 )
 
 // NewTestingLogger returns a testing suitable logp.Logger.
+// Deprecated: Use [NewFileLogger] instead, it provides a [logp.Logger],
+// methods to search in the logs and will keep a file with all the logs if
+// the test fails.
 func NewTestingLogger(t testing.TB, selector string, options ...logp.LogOption) *logp.Logger {
 	log := zaptest.NewLogger(t, zaptest.WrapOptions(options...))
 	log = log.Named(selector)

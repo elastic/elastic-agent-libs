@@ -45,7 +45,6 @@ import (
 //     when searching for logs
 type Logger struct {
 	*logp.Logger
-	t       *testing.T
 	logFile *os.File
 	offset  int64
 }
@@ -68,7 +67,6 @@ func NewFileLogger(t *testing.T) *Logger {
 	core := zapcore.NewCore(encoder, zapcore.AddSync(f), zap.DebugLevel)
 
 	tl := &Logger{
-		t:       t,
 		logFile: f,
 	}
 
@@ -115,12 +113,12 @@ func NewFileLogger(t *testing.T) *Logger {
 // subsequent call to WaitLogsContains will only check logs not yet evaluated.
 // msgAndArgs should be a format string and arguments that will be printed
 // if the logs are not found, providing additional context for debugging.
-func (l *Logger) WaitLogsContains(s string, timeout time.Duration, msgAndArgs ...any) {
-	l.t.Helper()
+func (l *Logger) WaitLogsContains(t *testing.T, s string, timeout time.Duration, msgAndArgs ...any) {
+	t.Helper()
 	require.EventuallyWithT(
-		l.t,
+		t,
 		func(c *assert.CollectT) {
-			found, err := l.logContains(s)
+			found, err := l.LogContains(s)
 			if err != nil {
 				c.Errorf("cannot check the log file: %s", err)
 				return
@@ -135,25 +133,25 @@ func (l *Logger) WaitLogsContains(s string, timeout time.Duration, msgAndArgs ..
 		msgAndArgs...)
 }
 
-// logContains searches for str in the log file keeping track of the offset.
-// If there is any issue reading the log file, then t.Fatalf is called,
-// if str is not present in the logs, t.Fatalf is called.
-func (l *Logger) LogContains(str string) {
-	l.t.Helper()
-	found, err := l.logContains(str)
+// RequireLogContains searches for str in the log file keeping track of the
+// offset. If there is any issue reading the log file, then t.Fatalf is called,
+// if str is not present in the logs, t.Errorf is called.
+func (l *Logger) RequireLogContains(t *testing.T, str string) {
+	t.Helper()
+	found, err := l.LogContains(str)
 	if err != nil {
-		l.t.Fatalf("cannot read log file: %s", err)
+		t.Fatalf("cannot read log file: %s", err)
 	}
 
 	if !found {
-		l.t.Fatalf("'%s' not found in logs", str)
+		t.Errorf("'%s' not found in logs", str)
 	}
 }
 
 // logContains searches for str in the log file keeping track of the offset.
 // It returns true if str is found in the logs. If there are any errors,
 // it returns false and the error
-func (l *Logger) logContains(str string) (bool, error) {
+func (l *Logger) LogContains(str string) (bool, error) {
 	// Open the file again so we can seek and not interfere with
 	// the logger writing to it.
 	f, err := os.Open(l.logFile.Name())
