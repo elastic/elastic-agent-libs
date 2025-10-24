@@ -51,15 +51,24 @@ type Logger struct {
 
 // NewFileLogger returns a logger that logs to a file and has methods
 // to search in the logs.
+// If dir is not an empty string, the log file will be generated on
+// this folder. This is useful to make CI collect the logs in case
+// a test fails. If dir is an empty string, the OS temporary folder
+// is used.
+//
 // The *logp.Logger is embedded into it, so [Logger] is a drop-in
 // replacement for a *logp.Logger, or the logger can be accessed via
 // [Logger.Logger]
-func NewFileLogger(t *testing.T) *Logger {
+func NewFileLogger(t *testing.T, dir string) *Logger {
 	encoderConfig := ecszap.ECSCompatibleEncoderConfig(zapcore.EncoderConfig{})
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoder := zapcore.NewJSONEncoder(encoderConfig)
 
-	f, err := os.CreateTemp("", "testing-logger-*.log")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("cannot create folder for logs: %s", err)
+	}
+
+	f, err := os.CreateTemp(dir, "testing-logger-*.log")
 	if err != nil {
 		t.Fatalf("cannot create log file: %s", err)
 	}
