@@ -59,10 +59,14 @@ type Logger struct {
 // The *logp.Logger is embedded into it, so [Logger] is a drop-in
 // replacement for a *logp.Logger, or the logger can be accessed via
 // [Logger.Logger]
-func NewFileLogger(t *testing.T, dir string) *Logger {
+func NewFileLogger(t testing.TB, dir string) *Logger {
 	encoderConfig := ecszap.ECSCompatibleEncoderConfig(zapcore.EncoderConfig{})
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoder := zapcore.NewJSONEncoder(encoderConfig)
+
+	if dir == "" {
+		dir = os.TempDir()
+	}
 
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("cannot create folder for logs: %s", err)
@@ -122,12 +126,12 @@ func NewFileLogger(t *testing.T, dir string) *Logger {
 // subsequent call to WaitLogsContains will only check logs not yet evaluated.
 // msgAndArgs should be a format string and arguments that will be printed
 // if the logs are not found, providing additional context for debugging.
-func (l *Logger) WaitLogsContains(t *testing.T, s string, timeout time.Duration, msgAndArgs ...any) {
+func (l *Logger) WaitLogsContains(t testing.TB, s string, timeout time.Duration, msgAndArgs ...any) {
 	t.Helper()
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			found, err := l.LogContains(s)
+			found, err := l.FindInLogs(s)
 			if err != nil {
 				c.Errorf("cannot check the log file: %s", err)
 				return
@@ -142,12 +146,12 @@ func (l *Logger) WaitLogsContains(t *testing.T, s string, timeout time.Duration,
 		msgAndArgs...)
 }
 
-// RequireLogContains searches for str in the log file keeping track of the
+// LogContains searches for str in the log file keeping track of the
 // offset. If there is any issue reading the log file, then t.Fatalf is called,
 // if str is not present in the logs, t.Errorf is called.
-func (l *Logger) RequireLogContains(t *testing.T, str string) {
+func (l *Logger) LogContains(t testing.TB, str string) {
 	t.Helper()
-	found, err := l.LogContains(str)
+	found, err := l.FindInLogs(str)
 	if err != nil {
 		t.Fatalf("cannot read log file: %s", err)
 	}
@@ -157,10 +161,10 @@ func (l *Logger) RequireLogContains(t *testing.T, str string) {
 	}
 }
 
-// logContains searches for str in the log file keeping track of the offset.
+// FindInLogs searches for str in the log file keeping track of the offset.
 // It returns true if str is found in the logs. If there are any errors,
 // it returns false and the error
-func (l *Logger) LogContains(str string) (bool, error) {
+func (l *Logger) FindInLogs(str string) (bool, error) {
 	// Open the file again so we can seek and not interfere with
 	// the logger writing to it.
 	f, err := os.Open(l.logFile.Name())
@@ -191,4 +195,9 @@ func (l *Logger) LogContains(str string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// ResetOffset resets the log file offset
+func (l *Logger) ResetOffset() {
+	l.offset = 0
 }
