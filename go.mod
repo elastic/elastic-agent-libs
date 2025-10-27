@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	github.com/Microsoft/go-winio v0.5.2
-	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/elastic/elastic-transport-go/v8 v8.6.0
 	github.com/elastic/go-elasticsearch/v8 v8.17.0
 	github.com/elastic/go-structform v0.0.9
