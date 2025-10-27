@@ -106,7 +106,7 @@ func assertLogFormat(t *testing.T, path string) {
 		}
 
 		if entry.LogLevel == "" {
-			t.Error("'log.level' cannot be emtpy")
+			t.Error("'log.level' cannot be empty")
 		}
 
 		if entry.Message == "" {
