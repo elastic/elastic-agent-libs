@@ -168,7 +168,7 @@ func TestLoggerFileIsKeptOnTestFailure(t *testing.T) {
 		"-test.v")
 	cmd.Env = append(cmd.Env, "INNER_TEST=1")
 
-	d, cmdErr := cmd.CombinedOutput()
+	out, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		// The test ran by cmd will fail and retrun 1 as the exit code. So we only
 		// print the error if the main test fails.
@@ -180,7 +180,7 @@ func TestLoggerFileIsKeptOnTestFailure(t *testing.T) {
 	}
 
 	var path string
-	sc := bufio.NewScanner(bytes.NewReader(d))
+	sc := bufio.NewScanner(bytes.NewReader(out))
 	for sc.Scan() {
 		txt := sc.Text()
 		// To extract the log file path we split txt in a way that the path
@@ -212,7 +212,6 @@ func TestLoggerFileIsKeptOnTestFailure(t *testing.T) {
 	defer f.Close()
 
 	lineCount := 0
-
 	for sc := bufio.NewScanner(f); sc.Scan(); {
 		lineCount++
 	}
