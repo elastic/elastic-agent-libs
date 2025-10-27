@@ -65,7 +65,7 @@ func TestNewFileLogger(t *testing.T) {
 	t.Run("ResetOffset", func(t *testing.T) {
 		logger.ResetOffset()
 
-		// We logged "foo" 3 time, so we should find it 3 times in a row.
+		// We logged "foo" 3 times, so we should find it 3 times in a row.
 		for range 3 {
 			found, err := logger.FindInLogs("foo")
 			if err != nil {
