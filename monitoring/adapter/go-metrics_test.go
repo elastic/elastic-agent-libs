@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/elastic/elastic-agent-libs/logp"
 	"github.com/elastic/elastic-agent-libs/monitoring"
 )
 
@@ -53,12 +54,12 @@ func TestGoMetricsAdapter(t *testing.T) {
 	}
 
 	monReg := monitoring.NewRegistry()
-	var reg metrics.Registry = GetGoMetrics(monReg, "test", filters...)
+	var reg metrics.Registry = GetGoMetrics(monReg, "test", logp.NewNopLogger(), filters...)
 
 	// register some metrics and check they're satisfying the go-metrics interface
 	// no matter if owned by monitoring or go-metrics
 	for name := range counters {
-		cnt, ok := reg.GetOrRegister(name, func() interface{} {
+		cnt, ok := reg.GetOrRegister(name, func() any {
 			return metrics.NewCounter()
 		}).(metrics.Counter)
 		require.True(t, ok)
@@ -66,7 +67,7 @@ func TestGoMetricsAdapter(t *testing.T) {
 	}
 
 	for name := range meters {
-		meter, ok := reg.GetOrRegister(name, func() interface{} {
+		meter, ok := reg.GetOrRegister(name, func() any {
 			return metrics.NewMeter()
 		}).(metrics.Meter)
 		require.True(t, ok)
@@ -100,14 +101,117 @@ func TestGoMetricsAdapter(t *testing.T) {
 	}
 
 	// check Each only returns metrics not registered with monitoring.Registry
-	reg.Each(func(name string, v interface{}) {
+	reg.Each(func(name string, v any) {
 		if strings.HasPrefix(name, "mon") {
 			t.Errorf("metric %v should not have been reported by each", name)
 		}
 	})
-	monReg.Do(monitoring.Full, func(name string, v interface{}) {
+	monReg.Do(monitoring.Full, func(name string, v any) {
 		if !strings.HasPrefix(name, "test.mon") {
 			t.Errorf("metric %v should not have been reported by each", name)
 		}
 	})
+}
+
+func TestGoMetricsHistogramClearOnVisit(t *testing.T) {
+	monReg := monitoring.NewRegistry()
+	histogramSample := metrics.NewUniformSample(10)
+	clearedHistogramSample := metrics.NewUniformSample(10)
+	_ = NewGoMetrics(monReg, "original", logp.NewNopLogger(), Accept).Register("histogram", metrics.NewHistogram(histogramSample))
+	_ = NewGoMetrics(monReg, "cleared", logp.NewNopLogger(), Accept).Register("histogram", NewClearOnVisitHistogram(clearedHistogramSample))
+	dataPoints := [...]int{2, 4, 8, 4, 2}
+	dataPointsMedian := 4.0
+	for _, i := range dataPoints {
+		histogramSample.Update(int64(i))
+		clearedHistogramSample.Update(int64(i))
+	}
+
+	preSnapshot := []struct {
+		expected any
+		actual   any
+		msg      string
+	}{
+		{
+			actual:   histogramSample.Count(),
+			expected: int64(len(dataPoints)),
+			msg:      "histogram sample count incorrect",
+		},
+		{
+			actual:   clearedHistogramSample.Count(),
+			expected: int64(len(dataPoints)),
+			msg:      "cleared histogram sample count incorrect",
+		},
+		{
+			actual:   histogramSample.Percentiles([]float64{0.5}),
+			expected: []float64{dataPointsMedian},
+			msg:      "histogram median incorrect",
+		},
+		{
+			actual:   clearedHistogramSample.Percentiles([]float64{0.5}),
+			expected: []float64{dataPointsMedian},
+			msg:      "cleared histogram median incorrect",
+		},
+	}
+
+	for _, tc := range preSnapshot {
+		require.Equal(t, tc.expected, tc.actual, tc.msg)
+	}
+
+	// collecting the snapshot triggers the visit of each histogram
+	flatSnapshot := monitoring.CollectFlatSnapshot(monReg, monitoring.Full, false)
+
+	// Check to make sure after the snapshot the samples in
+	// clearedHistogramSample have been reset to zero, but the
+	// snapshot reports the values before the clear
+
+	postSnapshot := []struct {
+		expected any
+		actual   any
+		msg      string
+	}{
+		{
+			actual:   histogramSample.Count(),
+			expected: int64(len(dataPoints)),
+			msg:      "histogram sample count incorrect",
+		},
+		{
+			actual:   clearedHistogramSample.Count(),
+			expected: int64(0),
+			msg:      "cleared histogram sample count incorrect",
+		},
+		{
+			actual:   histogramSample.Percentiles([]float64{0.5}),
+			expected: []float64{dataPointsMedian},
+			msg:      "histogram median incorrect",
+		},
+		{
+			actual:   clearedHistogramSample.Percentiles([]float64{0.5}),
+			expected: []float64{0},
+			msg:      "cleared histogram median incorrect",
+		},
+		{
+			actual:   flatSnapshot.Ints["original.histogram.count"],
+			expected: int64(len(dataPoints)),
+			msg:      "visited histogram count is wrong",
+		},
+		{
+			actual:   flatSnapshot.Ints["cleared.histogram.count"],
+			expected: int64(len(dataPoints)),
+			msg:      "visited cleared histogram count is wrong",
+		},
+		{
+			actual:   flatSnapshot.Floats["original.histogram.median"],
+			expected: float64(dataPointsMedian),
+			msg:      "visited histogram median is wrong",
+		},
+		{
+			actual:   flatSnapshot.Floats["cleared.histogram.median"],
+			expected: float64(dataPointsMedian),
+			msg:      "visited cleared histogram median is wrong",
+		},
+	}
+
+	for _, tc := range postSnapshot {
+		require.Equal(t, tc.expected, tc.actual, tc.msg)
+	}
 }
