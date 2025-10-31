@@ -33,7 +33,7 @@ import (
 
 func TestNewFileLogger(t *testing.T) {
 	logger := NewFileLogger(t, "")
-	logger.Logger = logger.Logger.Named("test-logger")
+	logger.Logger = logger.Named("test-logger")
 	logger.Debug("foo")
 
 	assertLogFormat(t, logger.logFile.Name())
