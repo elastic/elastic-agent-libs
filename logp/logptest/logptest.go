@@ -22,23 +22,19 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
-// NewTestingLogger returns a testing suitable logp.Logger that uses the
-// [testing.T] as the logger output.
+// NewTestingLogger Just calls [NewFileLogger], the log if is placed in the
+// the folder returned by [os.TempDir].
+//
+// DEPRECATED: The logger returned by [NewTestingLogger] can panic if it is
+// used after the test has ended. Use [NewFileLogger] instead.
 func NewTestingLogger(t testing.TB, selector string, options ...logp.LogOption) *logp.Logger {
-	log := zaptest.NewLogger(t, zaptest.WrapOptions(options...))
-	log = log.Named(selector)
-
-	logger, err := logp.NewZapLogger(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return logger
+	l := NewFileLogger(t, "")
+	return l.Logger
 }
 
 // NewTestingLoggerWithObserver returns a testing suitable logp.Logger that uses the
