@@ -32,19 +32,18 @@ import (
 )
 
 // LogFile wraps a *os.File and makes it more suitable for tests.
-// Key feature:
-//   - Methods to search and wait for substrings in lines are provided,
-//     they keep track of the offset, ensuring ordering when
-//     when searching.
+// Methods to search and wait for substrings in lines are provided,
+// they keep track of the offset, ensuring ordering when
+// when searching.
 type LogFile struct {
 	*os.File
 	offset int64
 }
 
 // NewLogFile returns a new LogFile which wraps a os.File meant to be used
-// for testing. Methods to search and wait for strings to appear are provided.
-// dir and pattern are passed directly to os.CreateTemp.
-// It is the callers responsibility to remove the file. To keep the file in
+// for testing. Methods to search and wait for strings in the file are
+// provided. 'dir' and 'pattern' are passed directly to os.CreateTemp.
+// It is the callers responsibility to remove the file. To keep the file
 // when the test fails, use [TempDir] to create a folder.
 func NewLogFile(t testing.TB, dir, pattern string) *LogFile {
 	f, err := os.CreateTemp(dir, pattern)
