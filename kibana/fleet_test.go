@@ -401,7 +401,7 @@ func TestFleetDownloadSource(t *testing.T) {
 		case http.MethodPut:
 			_, _ = w.Write(fleetUpdateDownloadSourceResponse)
 		default:
-			http.Error(w, http.StatusNotImplemented, "not implemented")
+			http.Error(w, "not implemented", http.StatusNotImplemented)
 		}
 	}
 	client, err := createTestServerAndClient(handler)
