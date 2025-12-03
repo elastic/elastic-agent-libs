@@ -82,7 +82,7 @@ func TestTempDirIsKeptOnTestFailure(t *testing.T) {
 	cmd.Env = append(
 		cmd.Env,
 		"INNER_TEST=1",
-		rootDir+"="+rootDir,
+		rootDirEnv+"="+rootDir,
 	)
 
 	out, cmdErr := cmd.CombinedOutput()
@@ -92,7 +92,7 @@ func TestTempDirIsKeptOnTestFailure(t *testing.T) {
 		defer func() {
 			if t.Failed() {
 				t.Errorf(
-					"the test process returned an error (this is expected in on a normal test execution): %s",
+					"the test process returned an error (this is expected on a normal test execution): %s",
 					cmdErr)
 				t.Logf("Output of the subprocess:\n%s\n", string(out))
 			}
