@@ -45,6 +45,7 @@ const (
 	fleetUninstallTokensAPI      = "/api/fleet/uninstall_tokens" //nolint:gosec // NOT the "Potential hardcoded credentials"
 	fleetUpgradeAgentAPI         = "/api/fleet/agents/%s/upgrade"
 	fleetAgentDownloadSourcesAPI = "/api/fleet/agent_download_sources"
+	fleetAgentDownloadSourceAPI  = "/api/fleet/agent_download_sources/%s"
 	fleetProxiesAPI              = "/api/fleet/proxies"
 )
 
@@ -83,6 +84,7 @@ type AgentPolicy struct {
 	Name string `json:"name"`
 	// Namespace of the policy. Required to create a policy.
 	Namespace          string                    `json:"namespace"`
+	AdvancedSettings   map[string]interface{}    `json:"advanced_settings,omitempty"`
 	Description        string                    `json:"description,omitempty"`
 	MonitoringEnabled  []MonitoringEnabledOption `json:"monitoring_enabled,omitempty"`
 	DataOutputID       string                    `json:"data_output_id,omitempty"`
@@ -112,6 +114,7 @@ type AgentPolicyUpdateRequest struct {
 	Name string `json:"name"`
 	// Namespace of the policy. Required in an update request.
 	Namespace          string                    `json:"namespace"`
+	AdvancedSettings   map[string]interface{}    `json:"advanced_settings,omitempty"`
 	Description        string                    `json:"description,omitempty"`
 	MonitoringEnabled  []MonitoringEnabledOption `json:"monitoring_enabled,omitempty"`
 	DataOutputID       string                    `json:"data_output_id,omitempty"`
@@ -192,6 +195,51 @@ func (client *Client) CreateDownloadSource(ctx context.Context, source DownloadS
 			"http.response.body.content", respBody)
 		return DownloadSourceResponse{},
 			fmt.Errorf("could not create download source, kibana returned %s. response body: %s: %w",
+				resp.Status, respBody, err)
+	}
+
+	body := DownloadSourceResponse{}
+	if err = json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return DownloadSourceResponse{},
+			fmt.Errorf("failed parsing download source response: %w", err)
+	}
+
+	return body, nil
+}
+
+func (client *Client) UpdateDownloadSource(ctx context.Context, id string, source DownloadSource) (DownloadSourceResponse, error) {
+	reqBody, err := json.Marshal(source)
+	if err != nil {
+		return DownloadSourceResponse{},
+			fmt.Errorf("unable to marshal DownloadSource into JSON: %w", err)
+	}
+
+	resp, err := client.SendWithContext(
+		ctx,
+		http.MethodPut,
+		fmt.Sprintf(fleetAgentDownloadSourceAPI, id),
+		nil,
+		nil,
+		bytes.NewReader(reqBody))
+	if err != nil {
+		return DownloadSourceResponse{},
+			fmt.Errorf("error calling Agent Binary Download Source API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var respBody string
+		if bs, err := io.ReadAll(resp.Body); err != nil {
+			respBody = "could not read response body"
+		} else {
+			respBody = string(bs)
+		}
+
+		client.log.Errorw(
+			"could not update download source, kibana returned "+resp.Status,
+			"http.response.body.content", respBody)
+		return DownloadSourceResponse{},
+			fmt.Errorf("could not update download source, kibana returned %s. response body: %s: %w",
 				resp.Status, respBody, err)
 	}
 
