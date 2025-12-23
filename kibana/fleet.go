@@ -326,7 +326,7 @@ func (client *Client) ReassignAgentToPolicy(ctx context.Context, agentID string,
 
 	apiURL := fmt.Sprintf(fleetAgentPolicyReassignAPI, agentID)
 
-	resp, err := client.SendWithContext(ctx, http.MethodPut, apiURL, nil, nil, bytes.NewReader(reqBody))
+	resp, err := client.SendWithContext(ctx, http.MethodPost, apiURL, nil, nil, bytes.NewReader(reqBody))
 	if err != nil {
 		return fmt.Errorf("error calling agent policy reassign API: %w", err)
 	}
