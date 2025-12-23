@@ -320,7 +320,6 @@ type AgentPolicyReassignRequest struct {
 func (client *Client) ReassignAgentToPolicy(ctx context.Context, agentID string, request AgentPolicyReassignRequest) error {
 	reqBody, err := json.Marshal(request)
 	if err != nil {
-
 		return fmt.Errorf("unable to marshal agent policy reassign request into JSON: %w", err)
 	}
 
