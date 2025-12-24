@@ -122,16 +122,16 @@ const couldNotConnect syscall.Errno = 1063
 // On non-windows platforms, the function does nothing. The
 // stopCallback function is called when the Stop/Shutdown
 // request is received.
-func ProcessWindowsControlEvents(stopCallback func()) {
+func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 	defer close(serviceInstance.executeFinished)
 
 	//nolint:staticcheck // keep using the deprecated method in order to maintain the existing behavior
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
-		logp.Err("IsAnInteractiveSession: %v", err)
+		logger.Errorf("IsAnInteractiveSession: %v", err)
 		return
 	}
-	logp.Debug("service", "Windows is interactive: %v", isInteractive)
+	logger.Named("service")..Debugf("Windows is interactive: %v", isInteractive)
 
 	run := svc.Run
 	if isInteractive {
@@ -160,11 +160,11 @@ func ProcessWindowsControlEvents(stopCallback func()) {
 			  If the program will be run as a console application for debugging purposes, structure it such that
 				service-specific code is not called when this error is returned."
 		*/
-		logp.Info("Attempted to register Windows service handlers, but this is not a service. No action necessary")
+		logger.Info("Attempted to register Windows service handlers, but this is not a service. No action necessary")
 		return
 	}
 
-	logp.Err("Windows service setup failed: %+v", err)
+	logger.Errorf("Windows service setup failed: %+v", err)
 }
 
 // WaitExecutionDone returns only after stop was reported to service manager.
