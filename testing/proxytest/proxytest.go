@@ -136,7 +136,7 @@ func WithRewriteFn(f func(u *url.URL)) Option {
 }
 
 // WithVerifyRequest calls f on the request before the proxy request is made.
-// If the verification returns an error, the proxy reutrns an HTTP 500 (for http proxy), or HTTP 502 (https)
+// If the verification returns an error, the proxy returns an HTTP 500 (for http proxy), or HTTP 502 (https)
 func WithVerifyRequest(f func(r *http.Request) error) Option {
 	return func(o *options) {
 		o.verifyRequest = f
