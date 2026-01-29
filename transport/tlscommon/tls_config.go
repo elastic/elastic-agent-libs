@@ -208,7 +208,7 @@ func (c *TLSConfig) BuildServerConfig(host string) *tls.Config {
 
 func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate, logger *logp.Logger) error {
 	logger = logger.Named("tls")
-	logger.Info("'ca_trusted_fingerprint' set, looking for matching fingerprints")
+	logger.Debug("'ca_trusted_fingerprint' set, looking for matching fingerprints")
 	fingerprint, err := hex.DecodeString(cfg.CATrustedFingerprint)
 	if err != nil {
 		return fmt.Errorf("decode 'ca_trusted_fingerprint': %w", err)
@@ -235,7 +235,7 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate, logger *logp.Log
 			continue
 		}
 
-		logger.Info("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
+		logger.Debug("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
 		if cfg.RootCAs == nil {
 			cfg.RootCAs = x509.NewCertPool()
 		}
