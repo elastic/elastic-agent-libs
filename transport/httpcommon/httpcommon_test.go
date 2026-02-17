@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -240,6 +241,57 @@ func BenchmarkReadAll(b *testing.B) {
 					})
 				})
 			}
+		})
+	}
+}
+
+func Test_HTTPTransportSettings_RoundTripper(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *HTTPTransportSettings
+		handler  http.Handler
+	}{{
+		name: "with basic auth",
+		settings: &HTTPTransportSettings{
+			Username: "test-user",
+			Password: "test-password",
+		},
+		handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			username, password, ok := req.BasicAuth()
+			if !ok || username != "test-user" || password != "test-password" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+	}, {
+		name: "with api key",
+		settings: &HTTPTransportSettings{
+			APIKey: "test-key",
+		},
+		handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if req.Header.Get("Authorization") != "ApiKey test-key" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rt, err := tc.settings.RoundTripper()
+			require.NoError(t, err)
+
+			server := httptest.NewServer(tc.handler)
+			defer server.Close()
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+			require.NoError(t, err)
+
+			resp, err := rt.RoundTrip(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
 		})
 	}
 }

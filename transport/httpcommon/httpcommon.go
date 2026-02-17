@@ -19,6 +19,7 @@ package httpcommon
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -45,6 +46,10 @@ type HTTPTransportSettings struct {
 
 	// Timeout configures the `(http.Transport).Timeout`.
 	Timeout time.Duration `config:"timeout" yaml:"timeout,omitempty" json:"timeout,omitempty"`
+
+	Username string `config:"username" yaml:"username,omitempty" json:"username,omitempty"`
+	Password string `config:"password" yaml:"password,omitempty" json:"password,omitempty"`
+	APIKey   string `config:"api_key" yaml:"api_key,omitempty" json:"api_key,omitempty"`
 
 	Proxy HTTPClientProxySettings `config:",inline" yaml:",inline"`
 
@@ -255,6 +260,12 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 		}
 	} else {
 		rt = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
+	}
+
+	if settings.Username != "" && settings.Password != "" {
+		opts = append(opts, WithHeaderRoundTripper(map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(settings.Username+":"+settings.Password))}))
+	} else if settings.APIKey != "" {
+		opts = append(opts, WithHeaderRoundTripper(map[string]string{"Authorization": "ApiKey " + settings.APIKey}))
 	}
 
 	for _, opt := range opts {
