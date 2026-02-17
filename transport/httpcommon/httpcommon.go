@@ -281,7 +281,7 @@ func (settings *HTTPTransportSettings) httpRoundTripper(
 	dialer, tlsDialer transport.Dialer,
 	opts ...TransportOption,
 ) *http.Transport {
-	t := http.DefaultTransport.(*http.Transport).Clone()
+	t := http.DefaultTransport.(*http.Transport).Clone() //nolint:errcheck // always an *http.Transport
 	t.DialContext = dialer.DialContext
 	t.DialTLSContext = tlsDialer.DialContext
 	t.TLSClientConfig = tls.ToConfig()
