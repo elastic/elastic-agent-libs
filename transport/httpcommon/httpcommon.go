@@ -44,12 +44,11 @@ type HTTPTransportSettings struct {
 	// TLS provides ssl/tls setup settings
 	TLS *tlscommon.Config `config:"ssl" yaml:"ssl,omitempty" json:"ssl,omitempty"`
 
+	// Auth provides option authorization header settings.
+	Auth *HTTPAuthorization `config:"auth" yaml:"auth,omitempty" json:"auth,omitempty"`
+
 	// Timeout configures the `(http.Transport).Timeout`.
 	Timeout time.Duration `config:"timeout" yaml:"timeout,omitempty" json:"timeout,omitempty"`
-
-	Username string `config:"username" yaml:"username,omitempty" json:"username,omitempty"`
-	Password string `config:"password" yaml:"password,omitempty" json:"password,omitempty"`
-	APIKey   string `config:"api_key" yaml:"api_key,omitempty" json:"api_key,omitempty"`
 
 	Proxy HTTPClientProxySettings `config:",inline" yaml:",inline"`
 
@@ -60,6 +59,31 @@ type HTTPTransportSettings struct {
 	//  - MaxIdleConns
 	//  - ResponseHeaderTimeout
 	//  - ConnectionTimeout (currently 'Timeout' is used for both)
+}
+
+// HTTPAuthorization provides authorization settings for HTTP clients.
+type HTTPAuthorization struct {
+	Headers []struct {
+		Key   string `config:"key" yaml:"key,omitempty" json:"key,omitempty"`
+		Value string `config:"value" yaml:"value,omitempty" json:"value,omitempty"`
+	} `config:"headers" yaml:"headers,omitempty" json:"headers,omitempty"`
+	Username string `config:"username" yaml:"username,omitempty" json:"username,omitempty"`
+	Password string `config:"password" yaml:"password,omitempty" json:"password,omitempty"`
+	APIKey   string `config:"api_key" yaml:"api_key,omitempty" json:"api_key,omitempty"`
+}
+
+// ToMap transforms returns a map representation of the HTTPAuthorization to use as headers.
+func (h *HTTPAuthorization) ToMap() map[string]string {
+	mp := make(map[string]string)
+	for _, header := range h.Headers {
+		mp[header.Key] = header.Value
+	}
+	if h.APIKey != "" {
+		mp["Authorization"] = "ApiKey " + h.APIKey
+	} else if h.Username != "" && h.Password != "" {
+		mp["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(h.Username+":"+h.Password))
+	}
+	return mp
 }
 
 // WithKeepaliveSettings options can be used to modify the Keepalive
@@ -262,10 +286,8 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 		rt = settings.httpRoundTripper(tls, dialer, tlsDialer, opts...)
 	}
 
-	if settings.Username != "" && settings.Password != "" {
-		opts = append(opts, WithHeaderRoundTripper(map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(settings.Username+":"+settings.Password))}))
-	} else if settings.APIKey != "" {
-		opts = append(opts, WithHeaderRoundTripper(map[string]string{"Authorization": "ApiKey " + settings.APIKey}))
+	if settings.Auth != nil {
+		opts = append(opts, WithHeaderRoundTripper(settings.Auth.ToMap()))
 	}
 
 	for _, opt := range opts {
