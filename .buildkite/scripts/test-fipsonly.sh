@@ -11,7 +11,7 @@ with_go_junit_report
 
 echo "--- Go Test fips140=only"
 set +e
-GODEBUG=fips140=only go test -tags=integration,requirefips -race -v ./... > test-fips-report.txt
+GODEBUG="fips140=only,tlsmlkem=0" go test -tags=integration,requirefips -race -v ./... > test-fips-report.txt
 exit_code=$?
 set -e
 
