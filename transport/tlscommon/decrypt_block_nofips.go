@@ -30,26 +30,6 @@ import (
 	"github.com/youmark/pkcs8"
 )
 
-func decryptPKCS1Key(block pem.Block, passphrase []byte) (pem.Block, error) {
-	if len(passphrase) == 0 {
-		return block, errors.New("no passphrase available")
-	}
-
-	// Note, decrypting pem might succeed even with wrong password, but
-	// only noise will be stored in buffer in this case.
-	buffer, err := x509.DecryptPEMBlock(&block, passphrase) //nolint: staticcheck // deprecated, we have to get rid of it
-	if err != nil {
-		return block, fmt.Errorf("failed to decrypt pem: %w", err)
-	}
-
-	// DEK-Info contains encryption info. Remove header to mark block as
-	// unencrypted.
-	delete(block.Headers, "DEK-Info")
-	block.Bytes = buffer
-
-	return block, nil
-}
-
 func decryptPKCS8Key(block pem.Block, passphrase []byte) (pem.Block, error) {
 	if len(passphrase) == 0 {
 		return block, errors.New("no passphrase available")

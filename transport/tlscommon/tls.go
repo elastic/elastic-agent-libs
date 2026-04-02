@@ -114,14 +114,11 @@ func ReadPEMFile(log *logp.Logger, s, passphrase string) ([]byte, error) {
 		}
 
 		switch {
-		case x509.IsEncryptedPEMBlock(block): //nolint: staticcheck // deprecated, we have to get rid of it
-			block, err := decryptPKCS1Key(*block, pass)
-			if err != nil {
-				log.Errorf("Dropping encrypted pem block with private key, block type '%s': %s", block.Type, err)
-				errs = errors.Join(errs, err)
-				continue
-			}
-			blocks = append(blocks, &block)
+		case x509.IsEncryptedPEMBlock(block): //nolint: staticcheck // deprecated PEM encryption is no longer supported
+			err = fmt.Errorf("encrypted PKCS#1 PEM keys are insecure and no longer supported; please convert the key to encrypted PKCS#8")
+			log.Errorf("Dropping encrypted pem block with private key, block type '%s': %s", block.Type, err)
+			errs = errors.Join(errs, err)
+			continue
 		case block.Type == "ENCRYPTED PRIVATE KEY":
 			block, err := decryptPKCS8Key(*block, pass)
 			if err != nil {
