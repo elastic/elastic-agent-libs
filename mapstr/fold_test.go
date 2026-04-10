@@ -71,7 +71,7 @@ func foldToJSON(t *testing.T, m M) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	v := sfjson.NewVisitor(&buf)
-	require.NoError(t, m.Fold(structform.EnsureExtVisitor(v).(structform.ExtVisitor)))
+	require.NoError(t, m.Fold(structform.EnsureExtVisitor(v)))
 	return buf.Bytes()
 }
 
@@ -95,7 +95,7 @@ func BenchmarkFold(b *testing.B) {
 
 	var buf bytes.Buffer
 	v := sfjson.NewVisitor(&buf)
-	ev := structform.EnsureExtVisitor(v).(structform.ExtVisitor)
+	ev := structform.EnsureExtVisitor(v)
 
 	b.Run("fold", func(b *testing.B) {
 		b.ReportAllocs()
