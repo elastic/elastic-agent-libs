@@ -22,6 +22,53 @@ import (
 	"github.com/elastic/go-structform/gotype"
 )
 
+func foldSlice(v structform.ExtVisitor, s []interface{}) error {
+	if err := v.OnArrayStart(len(s), structform.AnyType); err != nil {
+		return err
+	}
+	for _, val := range s {
+		switch x := val.(type) {
+		case string:
+			if err := v.OnString(x); err != nil {
+				return err
+			}
+		case int:
+			if err := v.OnInt(x); err != nil {
+				return err
+			}
+		case int64:
+			if err := v.OnInt64(x); err != nil {
+				return err
+			}
+		case float64:
+			if err := v.OnFloat64(x); err != nil {
+				return err
+			}
+		case bool:
+			if err := v.OnBool(x); err != nil {
+				return err
+			}
+		case nil:
+			if err := v.OnNil(); err != nil {
+				return err
+			}
+		case M:
+			if err := x.Fold(v); err != nil {
+				return err
+			}
+		case map[string]interface{}:
+			if err := M(x).Fold(v); err != nil {
+				return err
+			}
+		default:
+			if err := gotype.Fold(val, v); err != nil {
+				return err
+			}
+		}
+	}
+	return v.OnArrayFinished()
+}
+
 // Fold implements go-structform's gotype.Folder interface, letting
 // go-structform serialize M without the reflect.Convert overhead it
 // normally incurs for named map types.
@@ -38,16 +85,36 @@ func (m M) Fold(v structform.ExtVisitor) error {
 			if err := v.OnString(x); err != nil {
 				return err
 			}
-		case M:
-			if err := x.Fold(v); err != nil {
-				return err
-			}
 		case int:
 			if err := v.OnInt(x); err != nil {
 				return err
 			}
+		case int64:
+			if err := v.OnInt64(x); err != nil {
+				return err
+			}
+		case float64:
+			if err := v.OnFloat64(x); err != nil {
+				return err
+			}
+		case bool:
+			if err := v.OnBool(x); err != nil {
+				return err
+			}
+		case nil:
+			if err := v.OnNil(); err != nil {
+				return err
+			}
+		case M:
+			if err := x.Fold(v); err != nil {
+				return err
+			}
 		case map[string]interface{}:
 			if err := M(x).Fold(v); err != nil {
+				return err
+			}
+		case []interface{}:
+			if err := foldSlice(v, x); err != nil {
 				return err
 			}
 		default:
