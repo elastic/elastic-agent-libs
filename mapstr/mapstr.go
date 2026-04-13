@@ -122,13 +122,18 @@ func (m M) DeepCloneUpdate(d M) {
 // already exist in the destination. This is equivalent to
 // m.DeepUpdateNoOverwrite(d.Clone()) but performs the clone and merge
 // in a single pass.
+//
+// When the source value is a map and the destination value is a non-map
+// scalar, the scalar is replaced by a fresh copy of the source map.
+// This matches deepUpdateValue semantics where a map always wins over
+// a non-map, regardless of the overwrite flag.
 func (m M) DeepCloneUpdateNoOverwrite(d M) {
 	for k, v := range d {
 		switch srcVal := v.(type) {
 		case M:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdateNoOverwrite(srcVal)
-			} else if _, exists := m[k]; !exists {
+			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(srcVal)
 				m[k] = fresh
@@ -136,7 +141,7 @@ func (m M) DeepCloneUpdateNoOverwrite(d M) {
 		case map[string]interface{}:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdateNoOverwrite(M(srcVal))
-			} else if _, exists := m[k]; !exists {
+			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(M(srcVal))
 				m[k] = fresh

@@ -404,6 +404,47 @@ func BenchmarkHeavyPipeline(b *testing.B) {
 	})
 }
 
+func TestDeepCloneUpdateNoOverwriteMapReplacesScalar(t *testing.T) {
+	dst := M{
+		"host":    "26.101.84.62",
+		"message": "log line",
+	}
+	src := M{
+		"host":  M{"name": "my-beat"},
+		"agent": M{"name": "my-beat", "type": "filebeat"},
+	}
+
+	expected := M{
+		"host":    "26.101.84.62",
+		"message": "log line",
+	}
+	expected.DeepUpdateNoOverwrite(src.Clone())
+
+	dst.DeepCloneUpdateNoOverwrite(src)
+
+	assert.Equal(t, expected, dst, "DeepCloneUpdateNoOverwrite must match DeepUpdateNoOverwrite semantics when map replaces scalar")
+
+	hostVal, ok := dst["host"].(M)
+	require.True(t, ok, "host must be a map after map-over-scalar merge, got %T", dst["host"])
+	assert.Equal(t, "my-beat", hostVal["name"])
+}
+
+func TestDeepCloneUpdateNoOverwriteMapReplacesScalarNoAliasing(t *testing.T) {
+	src := M{
+		"host": M{"name": "my-beat"},
+	}
+	srcCopy := src.Clone()
+
+	dst := M{"host": "1.2.3.4"}
+	dst.DeepCloneUpdateNoOverwrite(src)
+
+	hostVal, ok := dst["host"].(M)
+	require.True(t, ok)
+	hostVal["name"] = "MUTATED"
+
+	assert.Equal(t, srcCopy, src, "source must not be affected by mutations to destination")
+}
+
 // BenchmarkChainedMerge simulates the elastic agent pipeline where
 // 5 shared processor maps are merged into each event.
 func BenchmarkChainedMerge(b *testing.B) {
