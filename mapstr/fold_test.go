@@ -22,33 +22,32 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	structform "github.com/elastic/go-structform"
 	"github.com/elastic/go-structform/gotype"
 	sfjson "github.com/elastic/go-structform/json"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFoldMatchesReflection verifies that the Fold method produces
 // byte-identical JSON to go-structform's default reflection path.
 func TestFoldMatchesReflection(t *testing.T) {
 	tests := map[string]M{
-		"flat strings":    {"message": "hello world", "level": "info"},
-		"nested maps":     {"host": M{"name": "web-01", "os": M{"type": "linux"}}},
-		"mixed types":     {"name": "test", "count": 42, "rate": 3.14, "ok": true, "tags": []string{"a", "b"}},
-		"nil values":      {"present": "yes", "absent": nil},
-		"empty map":       {},
-		"deeply nested":   {"a": M{"b": M{"c": M{"d": "deep"}}}},
-		"array of mixed":  {"items": []interface{}{"one", 2, true, nil, M{"nested": "map"}}},
-		"int types":          {"i": 1, "i64": int64(99), "u64": uint64(42)},
-		"int64 boundaries":   {"min": int64(-9223372036854775808), "max": int64(9223372036854775807), "zero": int64(0)},
-		"float64 values":     {"pi": float64(3.14159), "neg": float64(-1.5), "zero": float64(0), "large": float64(1e308)},
-		"bool values":        {"t": true, "f": false},
-		"nil only":           {"nothing": nil},
-		"nested slice":       {"data": []interface{}{int64(1), float64(2.5), true, nil, "str", M{"k": "v"}, []interface{}{int64(3)}}},
-		"map[string]iface":   {"inner": map[string]interface{}{"a": int64(1), "b": true}},
-		"realistic event":    {"message": "log line", "agent": M{"name": "filebeat", "version": "8.17.0"}, "host": M{"name": "web-01", "os": M{"type": "linux"}}, "ecs": M{"version": "8.0.0"}},
+		"flat strings":     {"message": "hello world", "level": "info"},
+		"nested maps":      {"host": M{"name": "web-01", "os": M{"type": "linux"}}},
+		"mixed types":      {"name": "test", "count": 42, "rate": 3.14, "ok": true, "tags": []string{"a", "b"}},
+		"nil values":       {"present": "yes", "absent": nil},
+		"empty map":        {},
+		"deeply nested":    {"a": M{"b": M{"c": M{"d": "deep"}}}},
+		"array of mixed":   {"items": []interface{}{"one", 2, true, nil, M{"nested": "map"}}},
+		"int types":        {"i": 1, "i64": int64(99), "u64": uint64(42)},
+		"int64 boundaries": {"min": int64(-9223372036854775808), "max": int64(9223372036854775807), "zero": int64(0)},
+		"float64 values":   {"pi": float64(3.14159), "neg": float64(-1.5), "zero": float64(0), "large": float64(1e308)},
+		"bool values":      {"t": true, "f": false},
+		"nil only":         {"nothing": nil},
+		"nested slice":     {"data": []interface{}{int64(1), float64(2.5), true, nil, "str", M{"k": "v"}, []interface{}{int64(3)}}},
+		"map[string]iface": {"inner": map[string]interface{}{"a": int64(1), "b": true}},
+		"realistic event":  {"message": "log line", "agent": M{"name": "filebeat", "version": "8.17.0"}, "host": M{"name": "web-01", "os": M{"type": "linux"}}, "ecs": M{"version": "8.0.0"}},
 		"post-normalize event": {
 			"message": "log line",
 			"enabled": true,
