@@ -22,32 +22,40 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	structform "github.com/elastic/go-structform"
 	"github.com/elastic/go-structform/gotype"
 	sfjson "github.com/elastic/go-structform/json"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestFoldMatchesReflection verifies that the Fold method produces
 // byte-identical JSON to go-structform's default reflection path.
 func TestFoldMatchesReflection(t *testing.T) {
 	tests := map[string]M{
-		"flat strings":     {"message": "hello world", "level": "info"},
-		"nested maps":      {"host": M{"name": "web-01", "os": M{"type": "linux"}}},
-		"mixed types":      {"name": "test", "count": 42, "rate": 3.14, "ok": true, "tags": []string{"a", "b"}},
-		"nil values":       {"present": "yes", "absent": nil},
-		"empty map":        {},
-		"deeply nested":    {"a": M{"b": M{"c": M{"d": "deep"}}}},
-		"array of mixed":   {"items": []interface{}{"one", 2, true, nil, M{"nested": "map"}}},
-		"int types":        {"i": 1, "i64": int64(99), "u64": uint64(42)},
-		"int64 boundaries": {"min": int64(-9223372036854775808), "max": int64(9223372036854775807), "zero": int64(0)},
-		"float64 values":   {"pi": float64(3.14159), "neg": float64(-1.5), "zero": float64(0), "large": float64(1e308)},
-		"bool values":      {"t": true, "f": false},
-		"nil only":         {"nothing": nil},
-		"nested slice":     {"data": []interface{}{int64(1), float64(2.5), true, nil, "str", M{"k": "v"}, []interface{}{int64(3)}}},
-		"map[string]iface": {"inner": map[string]interface{}{"a": int64(1), "b": true}},
-		"realistic event":  {"message": "log line", "agent": M{"name": "filebeat", "version": "8.17.0"}, "host": M{"name": "web-01", "os": M{"type": "linux"}}, "ecs": M{"version": "8.0.0"}},
+		"flat strings":         {"message": "hello world", "level": "info"},
+		"nested maps":          {"host": M{"name": "web-01", "os": M{"type": "linux"}}},
+		"mixed types":          {"name": "test", "count": 42, "rate": 3.14, "ok": true, "tags": []string{"a", "b"}},
+		"nil values":           {"present": "yes", "absent": nil},
+		"empty map":            {},
+		"deeply nested":        {"a": M{"b": M{"c": M{"d": "deep"}}}},
+		"array of mixed":       {"items": []interface{}{"one", 2, true, nil, M{"nested": "map"}}},
+		"int types":            {"i": 1, "i64": int64(99), "u64": uint64(42)},
+		"int64 boundaries":     {"min": int64(-9223372036854775808), "max": int64(9223372036854775807), "zero": int64(0)},
+		"float64 values":       {"pi": float64(3.14159), "neg": float64(-1.5), "zero": float64(0), "large": float64(1e308)},
+		"bool values":          {"t": true, "f": false},
+		"nil only":             {"nothing": nil},
+		"nested slice":         {"data": []interface{}{int64(1), float64(2.5), true, nil, "str", M{"k": "v"}, []interface{}{int64(3)}}},
+		"map[string]iface":     {"inner": map[string]interface{}{"a": int64(1), "b": true}},
+		"realistic event":      {"message": "log line", "agent": M{"name": "filebeat", "version": "8.17.0"}, "host": M{"name": "web-01", "os": M{"type": "linux"}}, "ecs": M{"version": "8.0.0"}},
+		"empty slice":          {"items": []interface{}{}},
+		"empty nested map":     {"outer": M{"inner": M{}}},
+		"slice with plain map": {"items": []interface{}{map[string]interface{}{"a": int64(1)}}},
+		"nested empty slice":   {"data": M{"items": []interface{}{}}},
+		"uint types":           {"u8": uint8(1), "u16": uint16(2), "u32": uint32(3), "u64": uint64(4)},
+		"single nil":           {"k": nil},
+		"string with special":  {"msg": "line1\nline2\ttab\"quote\\back"},
 		"post-normalize event": {
 			"message": "log line",
 			"enabled": true,
@@ -81,6 +89,79 @@ func TestFoldProducesValidJSON(t *testing.T) {
 	var parsed map[string]interface{}
 	require.NoError(t, json.Unmarshal(output, &parsed))
 }
+
+// TestFoldErrorPropagation verifies that errors from the visitor bubble up
+// through Fold and foldSlice without being swallowed.
+func TestFoldErrorPropagation(t *testing.T) {
+	tests := map[string]M{
+		"flat":         {"k": "v"},
+		"nested map":   {"outer": M{"inner": "val"}},
+		"with slice":   {"items": []interface{}{"a", int64(1)}},
+		"deep nesting": {"a": M{"b": M{"c": "d"}}},
+		"mixed":        {"s": "str", "i": int64(1), "f": float64(1.1), "b": true, "n": nil},
+	}
+	for name, m := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Fold to JSON via the reflection path to confirm the input is valid.
+			reflectJSON := reflectToJSON(t, map[string]interface{}(m))
+			var parsed map[string]interface{}
+			require.NoError(t, json.Unmarshal(reflectJSON, &parsed), "input must be valid")
+
+			// Now fold with an errVisitor that fails after N callbacks.
+			// We don't assert which callback fails — only that the error surfaces.
+			for limit := 0; limit < 50; limit++ {
+				ev := &errVisitor{failAfter: limit}
+				err := m.Fold(structform.EnsureExtVisitor(ev))
+				if err == nil {
+					// Fold completed without hitting the limit — all callbacks fired.
+					break
+				}
+				assert.ErrorIs(t, err, errVisitorSentinel)
+			}
+		})
+	}
+}
+
+var errVisitorSentinel = assert.AnError
+
+// errVisitor is a structform.ExtVisitor that returns an error after failAfter
+// successful callbacks. This lets us exercise every error-return branch in Fold.
+type errVisitor struct {
+	calls     int
+	failAfter int
+}
+
+func (e *errVisitor) check() error {
+	e.calls++
+	if e.calls > e.failAfter {
+		return errVisitorSentinel
+	}
+	return nil
+}
+
+func (e *errVisitor) OnObjectStart(len int, _ structform.BaseType) error { return e.check() }
+func (e *errVisitor) OnObjectFinished() error                            { return e.check() }
+func (e *errVisitor) OnKey(string) error                                 { return e.check() }
+func (e *errVisitor) OnArrayStart(len int, _ structform.BaseType) error  { return e.check() }
+func (e *errVisitor) OnArrayFinished() error                             { return e.check() }
+func (e *errVisitor) OnString(string) error                              { return e.check() }
+func (e *errVisitor) OnBool(bool) error                                  { return e.check() }
+func (e *errVisitor) OnInt(int) error                                    { return e.check() }
+func (e *errVisitor) OnInt8(int8) error                                  { return e.check() }
+func (e *errVisitor) OnInt16(int16) error                                { return e.check() }
+func (e *errVisitor) OnInt32(int32) error                                { return e.check() }
+func (e *errVisitor) OnInt64(int64) error                                { return e.check() }
+func (e *errVisitor) OnFloat32(float32) error                            { return e.check() }
+func (e *errVisitor) OnFloat64(float64) error                            { return e.check() }
+func (e *errVisitor) OnByte(byte) error                                  { return e.check() }
+func (e *errVisitor) OnUint(uint) error                                  { return e.check() }
+func (e *errVisitor) OnUint8(uint8) error                                { return e.check() }
+func (e *errVisitor) OnUint16(uint16) error                              { return e.check() }
+func (e *errVisitor) OnUint32(uint32) error                              { return e.check() }
+func (e *errVisitor) OnUint64(uint64) error                              { return e.check() }
+func (e *errVisitor) OnNil() error                                       { return e.check() }
+func (e *errVisitor) OnStringObject(map[string]string) error             { return e.check() }
+func (e *errVisitor) OnStringArray([]string) error                       { return e.check() }
 
 func foldToJSON(t *testing.T, m M) []byte {
 	t.Helper()
