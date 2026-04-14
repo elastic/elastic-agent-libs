@@ -72,6 +72,13 @@ func foldSlice(v structform.ExtVisitor, s []interface{}) error {
 // Fold implements go-structform's gotype.Folder interface, letting
 // go-structform serialize M without the reflect.Convert overhead it
 // normally incurs for named map types.
+//
+// The type switch handles common leaf types (string, int, int64, float64,
+// bool, nil) directly rather than delegating to gotype.Fold. This is
+// intentional: each gotype.Fold call allocates an iterator and type
+// registry (~28 B), so falling back for every leaf value adds 20-72
+// allocs/op depending on event shape (2x slower on typical events).
+// Uncommon types still fall through to gotype.Fold for full coverage.
 func (m M) Fold(v structform.ExtVisitor) error {
 	if err := v.OnObjectStart(len(m), structform.AnyType); err != nil {
 		return err
