@@ -589,6 +589,67 @@ func BenchmarkHeavyPipeline(b *testing.B) {
 	})
 }
 
+// BenchmarkMixedTypePipeline benchmarks merging into an event whose field tree
+// contains map[string]interface{} subtrees — the common case when events are
+// decoded from JSON before processors run. This exercises the map[string]interface{}
+// destination branch added to fix the v0.36.0 regression.
+func BenchmarkMixedTypePipeline(b *testing.B) {
+	// Processor metadata: pure mapstr.M (as built by add_fields, add_cloud_metadata, etc.)
+	sharedMeta := []M{
+		{"elastic_agent": M{"id": "agent-uuid", "snapshot": false, "version": "8.12.0"}},
+		{"agent": M{"id": "agent-uuid"}},
+		{"data_stream": M{"type": "logs", "dataset": "system.syslog", "namespace": "default"}},
+		{"event": M{"dataset": "system.syslog"}},
+		{"cloud": M{
+			"provider": "aws", "region": "us-east-1",
+			"account": M{"id": "123456789012"}, "instance": M{"id": "i-0abcdef"},
+		}},
+	}
+
+	// makeDst returns an event whose subtrees are map[string]interface{} —
+	// simulating JSON-decoded input where the decoder returns native Go maps.
+	makeDst := func() M {
+		return M{
+			"message": "request completed in 42ms",
+			"event": map[string]interface{}{
+				"start": "2024-01-01T00:00:00Z",
+				"end":   "2024-01-01T00:00:01Z",
+			},
+			"process": map[string]interface{}{
+				"start": "2024-01-01T00:00:00Z",
+				"pid":   1234,
+				"name":  "myapp",
+			},
+			"host": map[string]interface{}{
+				"name": "prod-server-01",
+				"os":   map[string]interface{}{"type": "linux", "version": "22.04"},
+			},
+		}
+	}
+
+	b.Run("clone_and_deep_update", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			dst := makeDst()
+			for _, src := range sharedMeta {
+				dst.DeepUpdate(src.Clone())
+			}
+			benchSinkM = dst
+		}
+	})
+
+	b.Run("deep_clone_update", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			dst := makeDst()
+			for _, src := range sharedMeta {
+				dst.DeepCloneUpdate(src)
+			}
+			benchSinkM = dst
+		}
+	})
+}
+
 func TestDeepCloneUpdateNoOverwriteMapReplacesScalar(t *testing.T) {
 	dst := M{
 		"host":    "26.101.84.62",
