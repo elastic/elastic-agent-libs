@@ -99,6 +99,10 @@ func (m M) DeepCloneUpdate(d M) {
 		case M:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdate(srcVal)
+			} else if dstRaw, ok := m[k].(map[string]interface{}); ok {
+				// Destination is map[string]interface{}: recurse in-place (same
+				// semantics as deepUpdateValue) rather than overwriting the subtree.
+				M(dstRaw).DeepCloneUpdate(srcVal)
 			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(srcVal)
@@ -107,6 +111,8 @@ func (m M) DeepCloneUpdate(d M) {
 		case map[string]interface{}:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdate(M(srcVal))
+			} else if dstRaw, ok := m[k].(map[string]interface{}); ok {
+				M(dstRaw).DeepCloneUpdate(M(srcVal))
 			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(M(srcVal))
@@ -133,6 +139,8 @@ func (m M) DeepCloneUpdateNoOverwrite(d M) {
 		case M:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdateNoOverwrite(srcVal)
+			} else if dstRaw, ok := m[k].(map[string]interface{}); ok {
+				M(dstRaw).DeepCloneUpdateNoOverwrite(srcVal)
 			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(srcVal)
@@ -141,6 +149,8 @@ func (m M) DeepCloneUpdateNoOverwrite(d M) {
 		case map[string]interface{}:
 			if dstMap, ok := m[k].(M); ok {
 				dstMap.DeepCloneUpdateNoOverwrite(M(srcVal))
+			} else if dstRaw, ok := m[k].(map[string]interface{}); ok {
+				M(dstRaw).DeepCloneUpdateNoOverwrite(M(srcVal))
 			} else {
 				fresh := make(M, len(srcVal))
 				fresh.DeepCloneUpdate(M(srcVal))

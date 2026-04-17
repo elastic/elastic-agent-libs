@@ -264,6 +264,71 @@ func TestDeepCloneUpdateNoOverwriteEquivalence(t *testing.T) {
 	assert.Equal(t, dst1, dst2)
 }
 
+// TestDeepCloneUpdateMapStringInterfaceDst is the regression test for the bug
+// where DeepCloneUpdate overwrote a map[string]interface{} destination subtree
+// instead of merging into it. This caused event fields like @timestamp,
+// event.start, and process.start to be silently dropped or replaced with
+// empty maps when processors merged their metadata into events whose fields
+// contained map[string]interface{} values (e.g. decoded from JSON).
+func TestDeepCloneUpdateMapStringInterfaceDst(t *testing.T) {
+	// Simulates an event where "event" subtree is map[string]interface{} (as
+	// decoded from JSON/wire), and a processor adds "event.dataset".
+	dst := M{
+		"event": map[string]interface{}{
+			"start": "2024-01-01T00:00:00Z",
+			"end":   "2024-01-01T01:00:00Z",
+		},
+	}
+	src := M{
+		"event": M{"dataset": "mydata"},
+	}
+
+	dst.DeepCloneUpdate(src)
+
+	// Existing fields in the map[string]interface{} subtree must be preserved.
+	v, err := dst.GetValue("event.start")
+	require.NoError(t, err)
+	assert.Equal(t, "2024-01-01T00:00:00Z", v)
+
+	v, err = dst.GetValue("event.end")
+	require.NoError(t, err)
+	assert.Equal(t, "2024-01-01T01:00:00Z", v)
+
+	// New field from source must be added.
+	v, err = dst.GetValue("event.dataset")
+	require.NoError(t, err)
+	assert.Equal(t, "mydata", v)
+}
+
+func TestDeepCloneUpdateNoOverwriteMapStringInterfaceDst(t *testing.T) {
+	dst := M{
+		"process": map[string]interface{}{
+			"start": "2024-01-01T00:00:00Z",
+			"pid":   1234,
+		},
+	}
+	src := M{
+		"process": M{"start": "SHOULD-NOT-OVERWRITE", "name": "myapp"},
+	}
+
+	dst.DeepCloneUpdateNoOverwrite(src)
+
+	// Existing field must not be overwritten.
+	v, err := dst.GetValue("process.start")
+	require.NoError(t, err)
+	assert.Equal(t, "2024-01-01T00:00:00Z", v)
+
+	// Existing field from original map preserved.
+	v, err = dst.GetValue("process.pid")
+	require.NoError(t, err)
+	assert.Equal(t, 1234, v)
+
+	// New field added.
+	v, err = dst.GetValue("process.name")
+	require.NoError(t, err)
+	assert.Equal(t, "myapp", v)
+}
+
 func TestDeepCloneUpdateNilSource(t *testing.T) {
 	dst := M{"key": "value"}
 	dst.DeepCloneUpdate(nil)
