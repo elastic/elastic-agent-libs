@@ -329,6 +329,67 @@ func TestDeepCloneUpdateNoOverwriteMapStringInterfaceDst(t *testing.T) {
 	assert.Equal(t, "myapp", v)
 }
 
+// TestDeepCloneUpdateMapStringInterfaceDstEquivalence is the oracle test for
+// the map[string]interface{} destination fix: verifies DeepCloneUpdate
+// produces bit-for-bit the same result as DeepUpdate(src.Clone()) when the
+// destination tree contains map[string]interface{} nodes (as commonly occurs
+// with JSON-decoded event data).
+func TestDeepCloneUpdateMapStringInterfaceDstEquivalence(t *testing.T) {
+	makeDst := func() M {
+		return M{
+			"event": map[string]interface{}{
+				"start": "2024-01-01T00:00:00Z",
+				"end":   "2024-01-01T01:00:00Z",
+			},
+			"process": map[string]interface{}{
+				"start": "2024-01-01T00:00:00Z",
+				"pid":   1234,
+			},
+			"host": M{"name": "server1"},
+		}
+	}
+	src := M{
+		"event":   M{"dataset": "mydata"},
+		"process": M{"name": "myapp"},
+		"host":    M{"os": M{"type": "linux"}},
+	}
+
+	dst1 := makeDst()
+	dst1.DeepUpdate(src.Clone())
+
+	dst2 := makeDst()
+	dst2.DeepCloneUpdate(src)
+
+	assert.Equal(t, dst1, dst2, "DeepCloneUpdate must be equivalent to DeepUpdate(src.Clone()) for map[string]interface{} destinations")
+}
+
+func TestDeepCloneUpdateNoOverwriteMapStringInterfaceDstEquivalence(t *testing.T) {
+	makeDst := func() M {
+		return M{
+			"event": map[string]interface{}{
+				"start":   "2024-01-01T00:00:00Z",
+				"dataset": "original",
+			},
+			"process": map[string]interface{}{
+				"start": "2024-01-01T00:00:00Z",
+				"pid":   1234,
+			},
+		}
+	}
+	src := M{
+		"event":   M{"dataset": "new-dataset", "end": "2024-01-01T01:00:00Z"},
+		"process": M{"start": "SHOULD-NOT-OVERWRITE", "name": "myapp"},
+	}
+
+	dst1 := makeDst()
+	dst1.DeepUpdateNoOverwrite(src.Clone())
+
+	dst2 := makeDst()
+	dst2.DeepCloneUpdateNoOverwrite(src)
+
+	assert.Equal(t, dst1, dst2, "DeepCloneUpdateNoOverwrite must be equivalent to DeepUpdateNoOverwrite(src.Clone()) for map[string]interface{} destinations")
+}
+
 func TestDeepCloneUpdateNilSource(t *testing.T) {
 	dst := M{"key": "value"}
 	dst.DeepCloneUpdate(nil)
