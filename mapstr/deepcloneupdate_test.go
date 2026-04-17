@@ -190,6 +190,65 @@ func TestDeepCloneUpdateNoOverwriteNoAliasing(t *testing.T) {
 	assert.Equal(t, srcCopy, src, "source must not be affected")
 }
 
+// TestDeepCloneUpdateNoOverwriteDeepNested is the specific regression test for
+// the scenario CodeRabbit flagged as critical: an optimization in add_fields
+// short-circuited on top-level key presence, silently dropping enrichment for
+// partially-populated nested objects. This test verifies that
+// DeepCloneUpdateNoOverwrite descends into existing sub-maps and adds missing
+// leaves at any depth rather than stopping at the first level.
+func TestDeepCloneUpdateNoOverwriteDeepNested(t *testing.T) {
+	// Three levels deep: dst has host.os.type, src has host.os.version.
+	// The correct behavior is to add host.os.version without touching host.os.type.
+	dst := M{
+		"host": M{
+			"os": M{"type": "linux"},
+		},
+	}
+	src := M{
+		"host": M{
+			"os": M{"version": "22.04", "type": "windows"},
+		},
+	}
+
+	dst.DeepCloneUpdateNoOverwrite(src)
+
+	// Existing leaf at depth 3 must not be overwritten.
+	v, err := dst.GetValue("host.os.type")
+	require.NoError(t, err)
+	assert.Equal(t, "linux", v)
+
+	// Missing leaf at depth 3 must be added.
+	v, err = dst.GetValue("host.os.version")
+	require.NoError(t, err)
+	assert.Equal(t, "22.04", v)
+}
+
+// TestDeepCloneUpdateNoOverwriteNewSubMapNoAliasing verifies that when
+// DeepCloneUpdateNoOverwrite adds a new sub-map inside an existing sub-map,
+// the newly inserted map is a fresh copy and not aliased to the source.
+func TestDeepCloneUpdateNoOverwriteNewSubMapNoAliasing(t *testing.T) {
+	src := M{
+		"agent": M{
+			"id":      "existing",
+			"details": M{"version": "8.12.0"},
+		},
+	}
+	srcCopy := src.Clone()
+
+	dst := M{"agent": M{"id": "existing"}}
+	dst.DeepCloneUpdateNoOverwrite(src)
+
+	// Mutate the newly-inserted sub-map in the destination.
+	details, err := dst.GetValue("agent.details")
+	require.NoError(t, err)
+	detailsMap, ok := details.(M)
+	require.True(t, ok)
+	detailsMap["version"] = "MUTATED"
+
+	// Source must be unchanged.
+	assert.Equal(t, srcCopy, src, "source must not be affected by mutations to destination")
+}
+
 func TestDeepCloneUpdateNoOverwriteEquivalence(t *testing.T) {
 	src := M{
 		"agent": M{"id": "new", "version": "8.12.0"},
