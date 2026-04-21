@@ -28,9 +28,26 @@ import (
 )
 
 // CertificateReload is the configuration for hot-reloading TLS certificates.
+// Use DefaultCertificateReload to get a value with sensible defaults (enabled,
+// 5 s reload interval).
 type CertificateReload struct {
-	Enabled        bool          `config:"enabled" yaml:"enabled,omitempty"`
+	Enabled        *bool         `config:"enabled" yaml:"enabled,omitempty"`
 	ReloadInterval time.Duration `config:"reload_interval" yaml:"reload_interval,omitempty"`
+}
+
+// DefaultCertificateReload returns a CertificateReload with sensible defaults:
+// enabled with a 5-second reload interval.
+func DefaultCertificateReload() CertificateReload {
+	enabled := true
+	return CertificateReload{
+		Enabled:        &enabled,
+		ReloadInterval: defaultReloadInterval,
+	}
+}
+
+// IsEnabled returns true unless certificate reload has been explicitly disabled.
+func (c *CertificateReload) IsEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
 }
 
 // ServerConfig defines the user configurable tls options for any TCP based service.
