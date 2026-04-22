@@ -30,6 +30,19 @@ import (
 	"github.com/youmark/pkcs8"
 )
 
+func decryptPKCS1Key(block pem.Block, passphrase []byte) (pem.Block, error) {
+	if len(passphrase) == 0 {
+		return block, errors.New("no passphrase available")
+	}
+	decrypted, err := x509.DecryptPEMBlock(&block, passphrase) //nolint:staticcheck // intentional legacy support path
+	if err != nil {
+		return block, fmt.Errorf("failed to decrypt PKCS#1 key: %w", err)
+	}
+	block.Bytes = decrypted
+	block.Headers = nil
+	return block, nil
+}
+
 func decryptPKCS8Key(block pem.Block, passphrase []byte) (pem.Block, error) {
 	if len(passphrase) == 0 {
 		return block, errors.New("no passphrase available")

@@ -55,6 +55,32 @@ func TestNoFIPSCertificateAndKeys(t *testing.T) {
         cfg.Certificate.Passphrase = password
 
         tlsC, err := LoadTLSConfig(cfg, logptest.NewTestingLogger(t, ""))
+        require.NoError(t, err)
+        assert.NotNil(t, tlsC)
+    })
+
+    t.Run("embed encrypted PKCS#1 key with legacy support disabled", func(t *testing.T) {
+        password := "abcd1234"
+        keyFile, err := os.Open(filepath.Join("testdata", "key.pkcs1encrypted.pem"))
+        require.NoError(t, err)
+        defer keyFile.Close()
+        rawKey, err := io.ReadAll(keyFile)
+        require.NoError(t, err)
+
+        certFile, err := os.Open(filepath.Join("testdata", "cert.pkcs1encrypted.pem"))
+        require.NoError(t, err)
+        defer certFile.Close()
+        rawCert, err := io.ReadAll(certFile)
+        require.NoError(t, err)
+
+        cfg, err := load(`enabled: true`)
+        require.NoError(t, err)
+        cfg.Certificate.Certificate = string(rawCert)
+        cfg.Certificate.Key = string(rawKey)
+        cfg.Certificate.Passphrase = password
+        cfg.Certificate.DisableLegacyPEMSupport = true
+
+        tlsC, err := LoadTLSConfig(cfg, logptest.NewTestingLogger(t, ""))
         require.Error(t, err)
         assert.Nil(t, tlsC)
         assert.ErrorContains(t, err, "encrypted PKCS#1 PEM keys are insecure and no longer supported")
@@ -105,6 +131,19 @@ func TestEncryptedKeyPassphrase(t *testing.T) {
         key: testdata/ca.encrypted.key
         key_passphrase: Abcd1234!
         `), logger)
+        require.NoError(t, err)
+        assert.NotNil(t, cfg)
+    })
+
+    t.Run("passphrase value with legacy support disabled", func(t *testing.T) {
+        tlsCfg := mustLoad(t, `
+        enabled: true
+        certificate: testdata/ca.crt
+        key: testdata/ca.encrypted.key
+        key_passphrase: Abcd1234!
+        disable_legacy_pem_support: true
+        `)
+        cfg, err := LoadTLSConfig(tlsCfg, logger)
         require.Error(t, err)
         assert.Nil(t, cfg)
         assert.ErrorContains(t, err, "encrypted PKCS#1 PEM keys are insecure and no longer supported")
@@ -118,6 +157,20 @@ func TestEncryptedKeyPassphrase(t *testing.T) {
         key: testdata/ca.encrypted.key
         key_passphrase_path: %s
         `, fileName)), logger)
+        require.NoError(t, err)
+        assert.NotNil(t, cfg)
+    })
+
+    t.Run("passphrase file with legacy support disabled", func(t *testing.T) {
+        fileName := writeTestFile(t, passphrase)
+        tlsCfg := mustLoad(t, fmt.Sprintf(`
+        enabled: true
+        certificate: testdata/ca.crt
+        key: testdata/ca.encrypted.key
+        key_passphrase_path: %s
+        disable_legacy_pem_support: true
+        `, fileName))
+        cfg, err := LoadTLSConfig(tlsCfg, logger)
         require.Error(t, err)
         assert.Nil(t, cfg)
         assert.ErrorContains(t, err, "encrypted PKCS#1 PEM keys are insecure and no longer supported")
