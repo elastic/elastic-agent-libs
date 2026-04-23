@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/elastic/elastic-agent-libs/config"
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -52,6 +53,7 @@ type Connection struct {
 
 	HTTP    *http.Client
 	Version version.V
+	Retry   RetryConfig
 }
 
 type Client struct {
@@ -203,6 +205,7 @@ func NewClientWithConfigDefault(config *ClientConfig, defaultPort int, binaryNam
 			ServiceToken: config.ServiceToken,
 			Headers:      headers,
 			HTTP:         rt,
+			Retry:        config.Retry,
 		},
 		log: log,
 	}
@@ -252,35 +255,119 @@ func (conn *Connection) SendWithContext(ctx context.Context, method, extraPath s
 
 	reqURL := addToURL(conn.URL, extraPath, params)
 
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
-	if err != nil {
-		return nil, fmt.Errorf("fail to create the HTTP %s request: %w", method, err)
+	maxRetries := conn.Retry.MaxRetries
+
+	// Buffer the body into a bytes.Buffer and expose it via a getBody closure so
+	// each retry attempt gets an independent reader at offset 0, mirroring the
+	// approach used in elastic-transport-go.
+	var getBody func() io.ReadCloser
+	if body != nil && maxRetries > 0 {
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(body); err != nil {
+			return nil, fmt.Errorf("fail to read request body: %w", err)
+		}
+		getBody = func() io.ReadCloser {
+			r := buf // value copy gives an independent reader at offset 0
+			return io.NopCloser(&r)
+		}
 	}
 
-	if conn.Username != "" || conn.Password != "" {
-		req.SetBasicAuth(conn.Username, conn.Password)
-	}
-	if conn.APIKey != "" {
-		v := "ApiKey " + base64.StdEncoding.EncodeToString([]byte(conn.APIKey))
-		req.Header.Set("Authorization", v)
-	}
-	if conn.ServiceToken != "" {
-		v := "Bearer " + conn.ServiceToken
-		req.Header.Set("Authorization", v)
+	var (
+		res *http.Response
+		err error
+	)
+
+	for attempt := range maxRetries + 1 {
+		var (
+			shouldRetry     bool
+			shouldCloseBody bool
+		)
+
+		var reqBody io.Reader
+		if getBody != nil {
+			reqBody = getBody()
+		} else {
+			reqBody = body
+		}
+
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, method, reqURL, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("fail to create the HTTP %s request: %w", method, err)
+		}
+
+		if conn.Username != "" || conn.Password != "" {
+			req.SetBasicAuth(conn.Username, conn.Password)
+		}
+		if conn.APIKey != "" {
+			v := "ApiKey " + base64.StdEncoding.EncodeToString([]byte(conn.APIKey))
+			req.Header.Set("Authorization", v)
+		}
+		if conn.ServiceToken != "" {
+			v := "Bearer " + conn.ServiceToken
+			req.Header.Set("Authorization", v)
+		}
+
+		addHeaders(req.Header, conn.Headers)
+		addHeaders(req.Header, headers)
+
+		contentType := req.Header.Get("Content-Type")
+		contentType, _, _ = mime.ParseMediaType(contentType)
+		if contentType != "multipart/form-data" && contentType != "application/ndjson" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("kbn-xsrf", "1")
+
+		res, err = conn.RoundTrip(req)
+
+		if err != nil {
+			if conn.Retry.RetryOnError == nil || conn.Retry.RetryOnError(req, err) {
+				shouldRetry = true
+			}
+		}
+
+		// Retry on configured response statuses.
+		if res != nil {
+			for _, code := range conn.Retry.RetryOnStatus {
+				if res.StatusCode == code {
+					shouldRetry = true
+					shouldCloseBody = true
+				}
+			}
+		}
+
+		if !shouldRetry {
+			break
+		}
+
+		// Drain and close the body only when there are more attempts remaining,
+		// so the final response is still readable by the caller.
+		if shouldCloseBody && attempt < maxRetries {
+			if res.Body != nil {
+				_, _ = io.Copy(io.Discard, res.Body)
+				_ = res.Body.Close()
+			}
+		}
+
+		// Delay the retry if a backoff function is configured.
+		if conn.Retry.RetryBackoff != nil {
+			var cancelled bool
+			timer := time.NewTimer(conn.Retry.RetryBackoff(attempt + 1))
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+				cancelled = true
+				timer.Stop()
+			case <-timer.C:
+			}
+			if cancelled {
+				break
+			}
+		}
 	}
 
-	addHeaders(req.Header, conn.Headers)
-	addHeaders(req.Header, headers)
-
-	contentType := req.Header.Get("Content-Type")
-	contentType, _, _ = mime.ParseMediaType(contentType)
-	if contentType != "multipart/form-data" && contentType != "application/ndjson" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("kbn-xsrf", "1")
-
-	return conn.RoundTrip(req)
+	return res, err
 }
 
 func addHeaders(out, in http.Header) {
