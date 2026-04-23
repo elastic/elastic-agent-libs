@@ -380,7 +380,7 @@ func addHeaders(out, in http.Header) {
 
 // Implements RoundTrip interface
 func (conn *Connection) RoundTrip(r *http.Request) (*http.Response, error) {
-	return conn.HTTP.Do(r)
+	return conn.HTTP.Do(r) //nolint:gosec // G704: SSRF is intentional; this is an HTTP client round-tripper that forwards caller-supplied requests
 }
 
 func (client *Client) readVersion() error {
@@ -392,14 +392,14 @@ func (client *Client) readVersion() error {
 		} `json:"version"`
 	}
 
-	code, result, err := client.Connection.Request("GET", statusAPI, nil, nil, nil)
+	code, result, err := client.Request("GET", statusAPI, nil, nil, nil)
 	if err != nil {
 		return fmt.Errorf("HTTP GET request to %s/api/status fails: %w (status=%d). Response: %s",
-			client.Connection.URL, err, code, truncateString(result))
+			client.URL, err, code, truncateString(result))
 	}
 	if code >= 400 {
 		return fmt.Errorf("HTTP GET request to %s/api/status fails: status=%d. Response: %s",
-			client.Connection.URL, code, truncateString(result))
+			client.URL, code, truncateString(result))
 	}
 
 	var versionString string
@@ -408,7 +408,7 @@ func (client *Client) readVersion() error {
 	err = json.Unmarshal(result, &kibanaVersion)
 	if err != nil {
 		return fmt.Errorf("fail to unmarshal the response from GET %s/api/status. Response: %s. Kibana status api returns: %w",
-			client.Connection.URL, truncateString(result), err)
+			client.URL, truncateString(result), err)
 	}
 
 	versionString = kibanaVersion.Version.Number
@@ -447,7 +447,7 @@ func (client *Client) KibanaIsServerless() (bool, error) {
 		params.Add("Authorization", v)
 	}
 
-	ret, resp, err := client.Connection.Request("GET", "/api/status", nil, params, nil)
+	ret, resp, err := client.Request("GET", "/api/status", nil, params, nil)
 	if err != nil {
 		return false, fmt.Errorf("error in HTTP request: %w", err)
 	}
@@ -495,7 +495,7 @@ func (client *Client) ImportMultiPartFormFile(url string, params url.Values, fil
 	if serverless, _ := client.KibanaIsServerless(); serverless {
 		sendHeaders.Add("x-elastic-internal-origin", "elastic-agent-libs")
 	}
-	statusCode, response, err := client.Connection.Request("POST", url, params, sendHeaders, buf)
+	statusCode, response, err := client.Request("POST", url, params, sendHeaders, buf)
 	if err != nil {
 		return fmt.Errorf("returned %d to import file: %w. Response: %s", statusCode, err, response)
 	}
@@ -522,5 +522,5 @@ func truncateString(b []byte) string {
 		runes = append(runes[:maxLength], []rune("... (truncated)")...)
 	}
 
-	return strings.Replace(string(runes), "\n", " ", -1)
+	return strings.ReplaceAll(string(runes), "\n", " ")
 }

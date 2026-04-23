@@ -288,7 +288,10 @@ func TestRetryCustomRetryOnError(t *testing.T) {
 			},
 		},
 	}
-	_, err := conn.Send(http.MethodGet, "", nil, nil, nil)
+	resp, err := conn.Send(http.MethodGet, "", nil, nil, nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	require.Error(t, err)
 	assert.True(t, retryOnErrorCalled)
 }
