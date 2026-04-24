@@ -165,34 +165,67 @@ func TestMapStrCopyFieldsTo(t *testing.T) {
 }
 
 func TestMapStrDelete(t *testing.T) {
-	assert := assert.New(t)
+	t.Run("with Delete", func(t *testing.T) {
+		assert := assert.New(t)
 
-	m := M{
-		"c": M{
-			"c1": 1,
-			"c2": 2,
-			"c3": M{
-				"c31": 1,
-				"c32": 2,
+		m := M{
+			"c": M{
+				"c1": 1,
+				"c2": 2,
+				"c3": M{
+					"c31": 1,
+					"c32": 2,
+				},
 			},
-		},
-	}
+		}
 
-	err := m.Delete("c.c2")
-	assert.Equal(nil, err)
-	assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
+		err := m.Delete("c.c2")
+		assert.Equal(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
 
-	err = m.Delete("c.c2.c21")
-	assert.NotEqual(nil, err)
-	assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
+		err = m.Delete("c.c2.c21")
+		assert.NotEqual(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
 
-	err = m.Delete("c.c3.c31")
-	assert.Equal(nil, err)
-	assert.Equal(M{"c": M{"c1": 1, "c3": M{"c32": 2}}}, m)
+		err = m.Delete("c.c3.c31")
+		assert.Equal(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c32": 2}}}, m)
 
-	err = m.Delete("c")
-	assert.Equal(nil, err)
-	assert.Equal(M{}, m)
+		err = m.Delete("c")
+		assert.Equal(nil, err)
+		assert.Equal(M{}, m)
+	})
+
+	t.Run("with cleanupt Delete", func(t *testing.T) {
+		assert := assert.New(t)
+
+		m := M{
+			"c": M{
+				"c1": 1,
+				"c2": 2,
+				"c3": M{
+					"c31": 1,
+					"c32": 2,
+				},
+			},
+		}
+
+		err := m.DeleteWithCleanup("c.c2")
+		assert.Equal(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
+
+		err = m.DeleteWithCleanup("c.c2.c21")
+		assert.NotEqual(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c31": 1, "c32": 2}}}, m)
+
+		err = m.DeleteWithCleanup("c.c3.c31")
+		assert.Equal(nil, err)
+		assert.Equal(M{"c": M{"c1": 1, "c3": M{"c32": 2}}}, m)
+
+		err = m.DeleteWithCleanup("c")
+		assert.Equal(nil, err)
+		assert.Equal(M{}, m)
+	})
 }
 
 func TestMapStrDeleteWithCleanup(t *testing.T) {
