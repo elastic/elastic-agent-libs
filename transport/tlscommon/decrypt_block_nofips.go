@@ -39,6 +39,8 @@ func decryptPKCS1Key(block pem.Block, passphrase []byte) (pem.Block, error) {
 		return block, fmt.Errorf("failed to decrypt PKCS#1 key: %w", err)
 	}
 	block.Bytes = decrypted
+	// x509.EncryptPEMBlock sets exactly Proc-Type and DEK-Info; both are
+	// encryption metadata that must not appear in the decrypted block.
 	block.Headers = nil
 	return block, nil
 }
