@@ -195,6 +195,82 @@ func TestMapStrDelete(t *testing.T) {
 	assert.Equal(M{}, m)
 }
 
+func TestMapStrDeleteWithCleanup(t *testing.T) {
+	t.Run("removes leaf and empty parent maps", func(t *testing.T) {
+		m := M{
+			"key": M{
+				"key1": M{
+					"value": "value1",
+				},
+			},
+		}
+		err := m.DeleteWithCleanup("key.key1.value")
+		assert.NoError(t, err)
+		assert.Equal(t, M{}, m)
+	})
+
+	t.Run("stops pruning when parent still has other keys", func(t *testing.T) {
+		m := M{
+			"key": M{
+				"key1": M{
+					"value": "value1",
+				},
+				"key2": "other",
+			},
+		}
+		err := m.DeleteWithCleanup("key.key1.value")
+		assert.NoError(t, err)
+		assert.Equal(t, M{"key": M{"key2": "other"}}, m)
+	})
+
+	t.Run("deletes a shallow key with no cleanup needed", func(t *testing.T) {
+		m := M{"a": 1, "b": 2}
+		err := m.DeleteWithCleanup("a")
+		assert.NoError(t, err)
+		assert.Equal(t, M{"b": 2}, m)
+	})
+
+	t.Run("deletes a single remaining sibling leaving non-empty parent", func(t *testing.T) {
+		m := M{
+			"c": M{
+				"c1": 1,
+				"c2": 2,
+			},
+		}
+		err := m.DeleteWithCleanup("c.c1")
+		assert.NoError(t, err)
+		assert.Equal(t, M{"c": M{"c2": 2}}, m)
+	})
+
+	t.Run("prunes all levels when only key at each level", func(t *testing.T) {
+		m := M{
+			"a": M{
+				"b": M{
+					"c": M{
+						"d": "deep",
+					},
+				},
+			},
+		}
+		err := m.DeleteWithCleanup("a.b.c.d")
+		assert.NoError(t, err)
+		assert.Equal(t, M{}, m)
+	})
+
+	t.Run("returns error for missing key", func(t *testing.T) {
+		m := M{"a": M{"b": 1}}
+		err := m.DeleteWithCleanup("a.x")
+		assert.ErrorIs(t, err, ErrKeyNotFound)
+		assert.Equal(t, M{"a": M{"b": 1}}, m)
+	})
+
+	t.Run("returns error for missing intermediate key", func(t *testing.T) {
+		m := M{"a": M{"b": 1}}
+		err := m.DeleteWithCleanup("x.y.z")
+		assert.ErrorIs(t, err, ErrKeyNotFound)
+	})
+}
+
 func TestHasKey(t *testing.T) {
 	assert := assert.New(t)
 
