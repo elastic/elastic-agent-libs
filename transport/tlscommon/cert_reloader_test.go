@@ -129,6 +129,75 @@ func TestCertReloader_InvalidNewCert_KeepsOld(t *testing.T) {
 	}, 500*time.Millisecond, 50*time.Millisecond, "cert should not have changed after invalid reload")
 }
 
+func writeEncryptedKeyAndCertFiles(t *testing.T, dir string, blockType int, passphrase string) (certPath, keyPath string) {
+	t.Helper()
+
+	keyPEM, certPEM := makeKeyCertPair(t, blockType, passphrase)
+
+	certPath = filepath.Join(dir, "cert.pem")
+	keyPath = filepath.Join(dir, "key.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte(certPEM), 0o600))
+	require.NoError(t, os.WriteFile(keyPath, []byte(keyPEM), 0o600))
+
+	return certPath, keyPath
+}
+
+func TestNewCertReloader_WithPassphrase_PKCS1(t *testing.T) {
+	dir := t.TempDir()
+	passphrase := "test-passphrase"
+	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS1Encrypted, passphrase)
+
+	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase))
+	require.NoError(t, err)
+
+	got, err := r.GetCertificate(nil)
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.NotEmpty(t, got.Certificate)
+}
+
+func TestNewCertReloader_WithPassphrase_PKCS8(t *testing.T) {
+	dir := t.TempDir()
+	passphrase := "test-passphrase"
+	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, passphrase)
+
+	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase))
+	require.NoError(t, err)
+
+	got, err := r.GetCertificate(nil)
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.NotEmpty(t, got.Certificate)
+}
+
+func TestNewCertReloader_WithPassphrase_WrongPassphrase(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, "correct-passphrase")
+
+	_, err := NewCertReloader(certPath, keyPath, WithPassphrase("wrong-passphrase"))
+	assert.Error(t, err)
+}
+
+func TestCertReloader_WithPassphrase_ReloadsAfterInterval(t *testing.T) {
+	dir := t.TempDir()
+	passphrase := "test-passphrase"
+	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, passphrase)
+
+	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase), WithReloadInterval(100*time.Millisecond))
+	require.NoError(t, err)
+
+	initial, err := r.GetCertificate(nil)
+	require.NoError(t, err)
+	initialRaw := initial.Certificate[0]
+
+	writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, passphrase)
+
+	require.Eventually(t, func() bool {
+		got, err := r.GetCertificate(nil)
+		return err == nil && !bytes.Equal(got.Certificate[0], initialRaw)
+	}, 2*time.Second, 50*time.Millisecond, "cert should have been reloaded")
+}
+
 func TestCertReloader_NoReloadBeforeInterval(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
