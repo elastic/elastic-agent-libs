@@ -84,6 +84,76 @@ func (m M) DeepUpdateNoOverwrite(d M) {
 	m.deepUpdateMap(d, false)
 }
 
+// DeepCloneUpdate recursively merges the key-value pairs from d into this map,
+// creating fresh copies of all nested maps. Unlike DeepUpdate, this never
+// aliases d's sub-maps into m — the destination gets independent copies of
+// all nested map values. Scalar values (strings, ints, bools, etc.) are
+// shared safely since they are immutable in Go.
+//
+// This is equivalent to m.DeepUpdate(d.Clone()) but performs the clone and
+// merge in a single pass, avoiding the intermediate allocation of a full
+// clone.
+func (m M) DeepCloneUpdate(d M) {
+	for k, v := range d {
+		switch srcVal := v.(type) {
+		case M:
+			if dstMap, ok := m[k].(M); ok {
+				dstMap.DeepCloneUpdate(srcVal)
+			} else {
+				fresh := make(M, len(srcVal))
+				fresh.DeepCloneUpdate(srcVal)
+				m[k] = fresh
+			}
+		case map[string]interface{}:
+			if dstMap, ok := m[k].(M); ok {
+				dstMap.DeepCloneUpdate(M(srcVal))
+			} else {
+				fresh := make(M, len(srcVal))
+				fresh.DeepCloneUpdate(M(srcVal))
+				m[k] = fresh
+			}
+		default:
+			m[k] = v
+		}
+	}
+}
+
+// DeepCloneUpdateNoOverwrite is like DeepCloneUpdate but skips keys that
+// already exist in the destination. This is equivalent to
+// m.DeepUpdateNoOverwrite(d.Clone()) but performs the clone and merge
+// in a single pass.
+//
+// When the source value is a map and the destination value is a non-map
+// scalar, the scalar is replaced by a fresh copy of the source map.
+// This matches deepUpdateValue semantics where a map always wins over
+// a non-map, regardless of the overwrite flag.
+func (m M) DeepCloneUpdateNoOverwrite(d M) {
+	for k, v := range d {
+		switch srcVal := v.(type) {
+		case M:
+			if dstMap, ok := m[k].(M); ok {
+				dstMap.DeepCloneUpdateNoOverwrite(srcVal)
+			} else {
+				fresh := make(M, len(srcVal))
+				fresh.DeepCloneUpdate(srcVal)
+				m[k] = fresh
+			}
+		case map[string]interface{}:
+			if dstMap, ok := m[k].(M); ok {
+				dstMap.DeepCloneUpdateNoOverwrite(M(srcVal))
+			} else {
+				fresh := make(M, len(srcVal))
+				fresh.DeepCloneUpdate(M(srcVal))
+				m[k] = fresh
+			}
+		default:
+			if _, exists := m[k]; !exists {
+				m[k] = v
+			}
+		}
+	}
+}
+
 func (m M) deepUpdateMap(d M, overwrite bool) {
 	for k, v := range d {
 		switch val := v.(type) {
@@ -137,6 +207,57 @@ func (m M) Delete(key string) error {
 	}
 
 	delete(d, k)
+	return nil
+}
+
+// DeleteWithCleanup deletes the given key from the map and removes any
+// resulting empty parent maps by backtracking up the path.
+func (m M) DeleteWithCleanup(key string) error {
+	type segment struct {
+		m M
+		k string
+	}
+
+	parts := strings.Split(key, ".")
+	stack := make([]segment, 0, len(parts))
+
+	current := m
+	for i, part := range parts {
+		v, ok := current[part]
+		if !ok {
+			return ErrKeyNotFound
+		}
+		if i == len(parts)-1 {
+			stack = append(stack, segment{
+				m: current,
+				k: part,
+			})
+			break
+		}
+		vMap, ok := tryToMapStr(v)
+		if !ok {
+			return ErrKeyNotFound
+		}
+		stack = append(stack, segment{
+			m: current,
+			k: part,
+		})
+		current = vMap
+	}
+	// Delete the leaf key.
+	leaf := stack[len(stack)-1]
+	delete(leaf.m, leaf.k)
+
+	// Walk back up the path and prune any parent maps that are now empty.
+	for i := len(stack) - 2; i >= 0; i-- {
+		f := stack[i]
+		child, ok := tryToMapStr(f.m[f.k])
+		if !ok || len(child) > 0 {
+			break
+		}
+		delete(f.m, f.k)
+	}
+
 	return nil
 }
 

@@ -15,41 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package keystore
+//go:build go1.26
 
-import (
-	"fmt"
-	"testing"
+package tlscommon
 
-	"github.com/stretchr/testify/assert"
-)
+import "crypto/tls"
 
-var secret = []byte("mysecret")
-
-func TestGet(t *testing.T) {
-	s := NewSecureString(secret)
-	v, err := s.Get()
-	assert.Equal(t, secret, v)
-	assert.NoError(t, err)
-}
-
-func TestStringMarshalingS(t *testing.T) {
-	s := NewSecureString(secret)
-	v := fmt.Sprintf("%s", s) //nolint: staticcheck // the goal of the test is to check if the string is not printed
-
-	assert.Equal(t, v, "<SecureString>")
-}
-
-func TestStringMarshalingF(t *testing.T) {
-	s := NewSecureString(secret)
-	v := fmt.Sprintf("%v", s)
-
-	assert.Equal(t, v, "<SecureString>")
-}
-
-func TestStringGoStringerMarshaling(t *testing.T) {
-	s := NewSecureString(secret)
-	v := fmt.Sprintf("%#v", s)
-
-	assert.Equal(t, v, "<SecureString>")
+func init() {
+	tlsCurveTypes["SecP256r1MLKEM768"] = TLSCurveType(tls.SecP256r1MLKEM768)
+	tlsCurveTypes["SecP384r1MLKEM1024"] = TLSCurveType(tls.SecP384r1MLKEM1024)
 }
