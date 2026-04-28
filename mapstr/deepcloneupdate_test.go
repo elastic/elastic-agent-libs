@@ -419,6 +419,58 @@ func TestDeepCloneUpdateNoOverwriteNilMapDst(t *testing.T) {
 	assert.Equal(t, "server1", v)
 }
 
+// TestDeepCloneUpdateNilDsts verifies that DeepCloneUpdate and
+// DeepCloneUpdateNoOverwrite never panic on nil destination sub-maps —
+// neither for typed-nil map[string]interface{} nor for nil M — and that
+// the result matches the DeepUpdate(src.Clone()) oracle in every case.
+func TestDeepCloneUpdateNilDsts(t *testing.T) {
+	cases := []struct {
+		name string
+		dst  func() M
+	}{
+		{
+			name: "nil map[string]interface{}",
+			dst: func() M {
+				var nilMap map[string]interface{}
+				return M{"host": nilMap}
+			},
+		},
+		{
+			name: "nil M",
+			dst: func() M {
+				var nilM M
+				return M{"host": nilM}
+			},
+		},
+	}
+
+	src := M{"host": M{"name": "server1"}}
+
+	for _, tc := range cases {
+		t.Run(tc.name+"/DeepCloneUpdate", func(t *testing.T) {
+			dst := tc.dst()
+			oracle := tc.dst()
+			oracle.DeepUpdate(src.Clone())
+
+			assert.NotPanics(t, func() {
+				dst.DeepCloneUpdate(src)
+			})
+			assert.Equal(t, oracle, dst)
+		})
+
+		t.Run(tc.name+"/DeepCloneUpdateNoOverwrite", func(t *testing.T) {
+			dst := tc.dst()
+			oracle := tc.dst()
+			oracle.DeepUpdateNoOverwrite(src.Clone())
+
+			assert.NotPanics(t, func() {
+				dst.DeepCloneUpdateNoOverwrite(src)
+			})
+			assert.Equal(t, oracle, dst)
+		})
+	}
+}
+
 func TestDeepCloneUpdateMapStringInterface(t *testing.T) {
 	// Test that map[string]interface{} values are handled.
 	src := M{
