@@ -39,8 +39,10 @@ func decryptPKCS1Key(block pem.Block, passphrase []byte) (pem.Block, error) {
 		return block, fmt.Errorf("failed to decrypt PKCS#1 key: %w", err)
 	}
 	block.Bytes = decrypted
-	// x509.EncryptPEMBlock sets exactly Proc-Type and DEK-Info; both are
-	// encryption metadata that must not appear in the decrypted block.
+	// x509.IsEncryptedPEMBlock checks only for DEK-Info, so removing just
+	// that header prevents re-detection. However, x509.EncryptPEMBlock also
+	// sets Proc-Type, which would falsely appear as "4,ENCRYPTED" in the
+	// re-encoded PEM output if left in place. Nil the whole map to remove both.
 	block.Headers = nil
 	return block, nil
 }
