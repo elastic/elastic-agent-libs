@@ -90,20 +90,27 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		curves[idx] = tls.CurveID(id)
 	}
 
-	cert, err := LoadCertificate(&config.Certificate)
-	logFail(err)
-
 	cas, errs := LoadCertificateAuthorities(config.CAs)
 	logFail(errs...)
+
+	var certs []tls.Certificate
+	var reloader *CertReloader
+	var err error
+
+	if config.Certificate.Certificate != "" && config.CertificateReload.IsEnabled() {
+		reloader, err = newCertReloaderFromConfig(config.Certificate, config.CertificateReload)
+		logFail(err)
+	} else {
+		cert, err := LoadCertificate(&config.Certificate)
+		logFail(err)
+		if cert != nil {
+			certs = []tls.Certificate{*cert}
+		}
+	}
 
 	// fail, if any error occurred when loading certificate files
 	if len(fail) != 0 {
 		return nil, errors.Join(fail...)
-	}
-
-	certs := make([]tls.Certificate, 0)
-	if cert != nil {
-		certs = []tls.Certificate{*cert}
 	}
 
 	clientAuth := TLSClientAuthNone
@@ -122,6 +129,7 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		ClientAuth:       tls.ClientAuthType(clientAuth),
 		CASha256:         config.CASha256,
 		Logger:           logger,
+		certReloader:     reloader,
 	}, nil
 }
 

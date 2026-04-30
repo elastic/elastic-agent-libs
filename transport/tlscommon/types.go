@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 )
 
 var (
@@ -387,6 +388,22 @@ type CertificateConfig struct {
 	Passphrase              string `config:"key_passphrase" yaml:"key_passphrase,omitempty"`
 	PassphrasePath          string `config:"key_passphrase_path" yaml:"key_passphrase_path,omitempty"`
 	DisableLegacyPEMSupport bool   `config:"disable_legacy_pem_support" yaml:"disable_legacy_pem_support,omitempty"`
+}
+
+// resolvePassphrase returns the passphrase for decrypting private keys,
+// reading it from a file if PassphrasePath is set.
+func (c *CertificateConfig) resolvePassphrase() (string, error) {
+	if c.Passphrase != "" {
+		return c.Passphrase, nil
+	}
+	if c.PassphrasePath != "" {
+		p, err := os.ReadFile(c.PassphrasePath)
+		if err != nil {
+			return "", fmt.Errorf("unable to read key passphrase file: %w", err)
+		}
+		return string(p), nil
+	}
+	return "", nil
 }
 
 // Validate validates the CertificateConfig
