@@ -39,7 +39,7 @@ type redactOptions struct {
 	ignoreKeys   []string
 }
 
-// WithErrorOutput determines where any error messagess that are encounterd are written to.
+// WithErrorOutput determines where any error messagess that are encountered are written to.
 //
 // Defaults to io.Discard.
 func WithErrorOutput(w io.Writer) RedactOption {
@@ -88,7 +88,7 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 		// - name: Authorization
 		//   value: Bearer SecretValue
 		if keyString, ok := any(key).(string); ok && strings.ToLower(keyString) == "name" {
-			keyVal, ok := any(val).(string)
+			keyVal, ok := val.(string)
 			if ok && redactKey(keyVal, ro) {
 				for vk := range maps.Keys(obj) {
 					if vs, ok := any(vk).(string); ok && strings.ToLower(vs) == "value" {

@@ -93,6 +93,7 @@ func TestRedact(t *testing.T) {
 			},
 		},
 		"URL credentials are redacted": {
+			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[any]any{
 				"url":       "https://user:pass@example.com/path",
 				"other_url": "https://example.com/path",
@@ -121,6 +122,7 @@ func TestRedact(t *testing.T) {
 			},
 		},
 		"sensitive key wins over URL redaction": {
+			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[any]any{
 				"secret_url": "https://user:pass@example.com",
 			},
@@ -274,16 +276,16 @@ func TestRedact(t *testing.T) {
 			input: map[any]any{
 				"inputs": []any{
 					map[string]any{
-						"type":                        "test_input",
-						"redactKey":                   "secretValue",
-						markerPrefix + "redactKey":    true,
+						"type":                     "test_input",
+						"redactKey":                "secretValue",
+						markerPrefix + "redactKey": true,
 					},
 				},
 				"outputs": map[string]any{
 					"default": map[string]any{
-						"type":                       "elasticsearch",
-						"api_key":                    "alreadyMatched",
-						"redactOtherKey":             "secretOutputValue",
+						"type":                          "elasticsearch",
+						"api_key":                       "alreadyMatched",
+						"redactOtherKey":                "secretOutputValue",
 						markerPrefix + "redactOtherKey": true,
 					},
 				},
@@ -317,9 +319,9 @@ func TestRedact(t *testing.T) {
 									"transforms": []any{
 										map[string]any{
 											"set": map[string]any{
-												"target":                  "header.Authorization",
-												"value":                   "SSWS this-should-be-redacted",
-												markerPrefix + "value":    true,
+												"target":               "header.Authorization",
+												"value":                "SSWS this-should-be-redacted",
+												markerPrefix + "value": true,
 											},
 										},
 										map[string]any{
@@ -401,10 +403,10 @@ func TestRedact(t *testing.T) {
 		},
 		"ignored keys and markers coexist": {
 			input: map[any]any{
-				"routekey":                 "should-not-redact",
-				"keepme":                   "value",
-				markerPrefix + "keepme":    true,
-				"api_key":                  "secret",
+				"routekey":              "should-not-redact",
+				"keepme":                "value",
+				markerPrefix + "keepme": true,
+				"api_key":               "secret",
 			},
 			opts: []RedactOption{
 				WithIgnoreKeys("routekey"),
@@ -447,6 +449,7 @@ func TestRedactURL(t *testing.T) {
 			expect:   "https://example.com/path",
 			redacted: false,
 		},
+		//nolint:gosec // this test is meant to redact sensitive values
 		"url with credentials": {
 			input:    "https://user:pass@example.com/path",
 			expect:   "https://" + redactedURL + "@example.com/path",
