@@ -29,20 +29,24 @@ const redactedURL = REDACTED + ":" + REDACTED
 func TestRedact(t *testing.T) {
 	const markerPrefix = "__mark_redact_"
 
-	tests := map[string]struct {
+	tests := []struct {
+		name   string
 		input  map[any]any
 		opts   []RedactOption
 		expect map[any]any
 	}{
-		"nil map": {
+		{
+			name:   "nil map",
 			input:  nil,
 			expect: nil,
 		},
-		"empty map": {
+		{
+			name:   "empty map",
 			input:  map[any]any{},
 			expect: map[any]any{},
 		},
-		"no redactions": {
+		{
+			name: "no redactions",
 			input: map[any]any{
 				"type":      "elasticsearch",
 				"namespace": "default",
@@ -54,7 +58,8 @@ func TestRedact(t *testing.T) {
 				"count":     int64(5),
 			},
 		},
-		"sensitive keys are redacted": {
+		{
+			name: "sensitive keys are redacted",
 			input: map[any]any{
 				"api_key":     "secret",
 				"password":    "secret",
@@ -76,7 +81,8 @@ func TestRedact(t *testing.T) {
 				"safe":        "value",
 			},
 		},
-		"keys are matched case insensitively": {
+		{
+			name: "keys are matched case insensitively",
 			input: map[any]any{
 				"API_KEY":     "secret",
 				"PassWord":    "secret",
@@ -92,7 +98,8 @@ func TestRedact(t *testing.T) {
 				"Certificate": REDACTED,
 			},
 		},
-		"URL credentials are redacted": {
+		{
+			name: "URL credentials are redacted",
 			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[any]any{
 				"url":       "https://user:pass@example.com/path",
@@ -105,7 +112,8 @@ func TestRedact(t *testing.T) {
 				"plain":     "not a url",
 			},
 		},
-		"URL credentials in slice elements are redacted": {
+		{
+			name: "URL credentials in slice elements are redacted",
 			input: map[any]any{
 				"urls": []any{
 					"https://user:pass@my-url1",
@@ -121,7 +129,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"sensitive key wins over URL redaction": {
+		{
+			name: "sensitive key wins over URL redaction",
 			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[any]any{
 				"secret_url": "https://user:pass@example.com",
@@ -130,7 +139,8 @@ func TestRedact(t *testing.T) {
 				"secret_url": REDACTED,
 			},
 		},
-		"nested map[string]any is redacted recursively": {
+		{
+			name: "nested map[string]any is redacted recursively",
 			input: map[any]any{
 				"outputs": map[string]any{
 					"default": map[string]any{
@@ -152,7 +162,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"nested map[any]any is redacted recursively": {
+		{
+			name: "nested map[any]any is redacted recursively",
 			input: map[any]any{
 				"outputs": map[any]any{
 					"default": map[any]any{
@@ -170,7 +181,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"slice items that are maps are redacted recursively": {
+		{
+			name: "slice items that are maps are redacted recursively",
 			input: map[any]any{
 				"inputs": []any{
 					map[string]any{
@@ -196,7 +208,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"deeply nested ssl key in inputs is redacted": {
+		{
+			name: "deeply nested ssl key in inputs is redacted",
 			input: map[any]any{
 				"inputs": []any{
 					map[string]any{
@@ -246,7 +259,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"name/value entries are redacted when name indicates a secret": {
+		{
+			name: "name/value entries are redacted when name indicates a secret",
 			input: map[any]any{
 				"headers": []any{
 					map[string]any{
@@ -272,7 +286,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"redaction markers are processed when prefix is configured": {
+		{
+			name: "redaction markers are processed when prefix is configured",
 			input: map[any]any{
 				"inputs": []any{
 					map[string]any{
@@ -307,7 +322,8 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"redaction markers in nested slice items are processed": {
+		{
+			name: "redaction markers in nested slice items are processed",
 			input: map[any]any{
 				"id": "test-policy",
 				"inputs": []any{
@@ -378,7 +394,36 @@ func TestRedact(t *testing.T) {
 				},
 			},
 		},
-		"redaction markers are ignored when no prefix is configured": {
+		{
+			name: "redaction marker key is deleted from the map",
+			// Explicitly verifies that the bool branch's delete (followed by
+			// continue) removes the marker key so it does not survive in the
+			// output. Without the continue, the trailing obj[key] = val would
+			// re-add the marker before the post-loop cleanup.
+			input: map[any]any{
+				"redactKey":                "secretValue",
+				markerPrefix + "redactKey": true,
+			},
+			opts: []RedactOption{WithMarkerPrefix(markerPrefix)},
+			expect: map[any]any{
+				"redactKey": REDACTED,
+			},
+		},
+		{
+			name: "redaction marker without matching target is still deleted",
+			// The marker points to a key that does not exist in the map; the
+			// marker itself must still be removed from the output.
+			input: map[any]any{
+				"safe":                   "value",
+				markerPrefix + "missing": true,
+			},
+			opts: []RedactOption{WithMarkerPrefix(markerPrefix)},
+			expect: map[any]any{
+				"safe": "value",
+			},
+		},
+		{
+			name: "redaction markers are ignored when no prefix is configured",
 			input: map[any]any{
 				"benign":                "value",
 				markerPrefix + "benign": true,
@@ -388,7 +433,8 @@ func TestRedact(t *testing.T) {
 				markerPrefix + "benign": true,
 			},
 		},
-		"ignored keys are not redacted": {
+		{
+			name: "ignored keys are not redacted",
 			input: map[any]any{
 				"routekey":      "should-not-redact",
 				"my_secret_key": "redact-me",
@@ -401,7 +447,8 @@ func TestRedact(t *testing.T) {
 				"safe":          "value",
 			},
 		},
-		"ignored keys and markers coexist": {
+		{
+			name: "ignored keys and markers coexist",
 			input: map[any]any{
 				"routekey":              "should-not-redact",
 				"keepme":                "value",
@@ -420,8 +467,8 @@ func TestRedact(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			var errOut bytes.Buffer
 			opts := append([]RedactOption{WithErrorOutput(&errOut)}, tc.opts...)
 
@@ -434,36 +481,41 @@ func TestRedact(t *testing.T) {
 }
 
 func TestRedactURL(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		input    string
 		expect   string
 		redacted bool
 	}{
-		"plain string": {
+		{
+			name:     "plain string",
 			input:    "not a url",
 			expect:   "not a url",
 			redacted: false,
 		},
-		"url without credentials": {
+		{
+			name:     "url without credentials",
 			input:    "https://example.com/path",
 			expect:   "https://example.com/path",
 			redacted: false,
 		},
-		//nolint:gosec // this test is meant to redact sensitive values
-		"url with credentials": {
+		{
+			name: "url with credentials",
+			//nolint:gosec // this test is meant to redact sensitive values
 			input:    "https://user:pass@example.com/path",
 			expect:   "https://" + redactedURL + "@example.com/path",
 			redacted: true,
 		},
-		"url with username only": {
+		{
+			name:     "url with username only",
 			input:    "https://user@example.com",
 			expect:   "https://" + redactedURL + "@example.com",
 			redacted: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			got, redacted := redactURL(tc.input)
 			assert.Equal(t, tc.expect, got)
 			assert.Equal(t, tc.redacted, redacted)
@@ -472,32 +524,33 @@ func TestRedactURL(t *testing.T) {
 }
 
 func TestRedactKey(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name       string
 		key        string
 		ignoreKeys []string
 		expect     bool
 	}{
-		"empty":              {key: "", expect: false},
-		"safe":               {key: "type", expect: false},
-		"auth substring":     {key: "X-Authentication", expect: true},
-		"certificate":        {key: "certificate", expect: true},
-		"passphrase":         {key: "passphrase", expect: true},
-		"password":           {key: "password", expect: true},
-		"token":              {key: "token", expect: true},
-		"key substring":      {key: "api_key", expect: true},
-		"secret substring":   {key: "client_secret", expect: true},
-		"uppercase matches":  {key: "PASSWORD", expect: true},
-		"mixed case matches": {key: "ApiKey", expect: true},
-		"ignored exact":      {key: "routekey", ignoreKeys: []string{"routekey"}, expect: false},
-		"ignored is case sensitive": {
+		{name: "empty", key: "", expect: false},
+		{name: "safe", key: "type", expect: false},
+		{name: "auth substring", key: "X-Authentication", expect: true},
+		{name: "certificate", key: "certificate", expect: true},
+		{name: "passphrase", key: "passphrase", expect: true},
+		{name: "password", key: "password", expect: true},
+		{name: "token", key: "token", expect: true},
+		{name: "key substring", key: "api_key", expect: true},
+		{name: "secret substring", key: "client_secret", expect: true},
+		{name: "uppercase matches", key: "PASSWORD", expect: true},
+		{name: "mixed case matches", key: "ApiKey", expect: true},
+		{name: "ignored exact", key: "routekey", ignoreKeys: []string{"routekey"}, expect: false},
+		{
 			// "RouteKey" still matches the redaction rule via "key";
 			// ignoreKeys check is exact-match before lowercasing.
-			key: "RouteKey", ignoreKeys: []string{"routekey"}, expect: true,
+			name: "ignored is case sensitive", key: "RouteKey", ignoreKeys: []string{"routekey"}, expect: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			ro := &redactOptions{ignoreKeys: tc.ignoreKeys}
 			assert.Equal(t, tc.expect, redactKey(tc.key, ro))
 		})

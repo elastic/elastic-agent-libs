@@ -20,7 +20,6 @@ package redact
 import (
 	"fmt"
 	"io"
-	"maps"
 	"net/url"
 	"reflect"
 	"slices"
@@ -90,7 +89,7 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 		if keyString, ok := any(key).(string); ok && strings.ToLower(keyString) == "name" {
 			keyVal, ok := val.(string)
 			if ok && redactKey(keyVal, ro) {
-				for vk := range maps.Keys(obj) {
+				for vk := range obj {
 					if vs, ok := any(vk).(string); ok && strings.ToLower(vs) == "value" {
 						obj[vk] = REDACTED
 						break
@@ -136,6 +135,7 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 					if ro.markerPrefix != "" && strings.HasPrefix(keyString, ro.markerPrefix) {
 						markers = append(markers, keyString)
 						delete(obj, key)
+						continue
 					}
 				}
 			default:
