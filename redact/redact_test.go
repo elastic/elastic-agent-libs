@@ -499,9 +499,9 @@ func TestRedactURL(t *testing.T) {
 			expect:   "https://example.com/path",
 			redacted: false,
 		},
+		//nolint:gosec // this test is meant to redact sensitive values
 		{
-			name: "url with credentials",
-			//nolint:gosec // this test is meant to redact sensitive values
+			name:     "url with credentials",
 			input:    "https://user:pass@example.com/path",
 			expect:   "https://" + redactedURL + "@example.com/path",
 			redacted: true,
