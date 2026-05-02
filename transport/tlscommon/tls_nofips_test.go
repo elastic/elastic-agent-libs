@@ -142,7 +142,8 @@ func TestEncryptedKeyPassphrase(t *testing.T) {
         key_passphrase: Abcd1234!
         `), logptest.NewTestingLogger(t, ""))
         require.NoError(t, err)
-        assert.NotNil(t, cfg)
+        require.NotNil(t, cfg)
+        assert.Len(t, cfg.Certificates, 1)
     })
 
     t.Run("passphrase value with legacy support disabled", func(t *testing.T) {
