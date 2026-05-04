@@ -38,7 +38,7 @@ type redactOptions struct {
 	ignoreKeys   []string
 }
 
-// WithErrorOutput determines where any error messagess that are encountered are written to.
+// WithErrorOutput determines where any error messages that are encountered are written to.
 //
 // Defaults to io.Discard.
 func WithErrorOutput(w io.Writer) RedactOption {
