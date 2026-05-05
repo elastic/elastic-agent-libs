@@ -19,6 +19,7 @@ package tlscommon
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"time"
@@ -90,8 +91,21 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		curves[idx] = tls.CurveID(id)
 	}
 
-	cas, errs := LoadCertificateAuthorities(config.CAs)
-	logFail(errs...)
+	var cas *x509.CertPool
+	var caReloader *CAReloader
+
+	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
+		var err error
+		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		logFail(err)
+		if caReloader != nil {
+			cas = caReloader.GetCertPool()
+		}
+	} else {
+		var errs []error
+		cas, errs = LoadCertificateAuthorities(config.CAs)
+		logFail(errs...)
+	}
 
 	var certs []tls.Certificate
 	var reloader *CertReloader
@@ -123,13 +137,14 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		Versions:         config.Versions,
 		Verification:     config.VerificationMode,
 		Certificates:     certs,
-		ClientCAs:        cas,
+		clientCAs:        cas,
 		CipherSuites:     config.CipherSuites,
 		CurvePreferences: curves,
 		ClientAuth:       tls.ClientAuthType(clientAuth),
 		CASha256:         config.CASha256,
 		Logger:           logger,
 		certReloader:     reloader,
+		caReloader:       caReloader,
 	}, nil
 }
 

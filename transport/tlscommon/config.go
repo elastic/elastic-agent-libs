@@ -19,6 +19,7 @@ package tlscommon
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -62,8 +63,21 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		curves[idx] = tls.CurveID(id)
 	}
 
-	cas, errs := LoadCertificateAuthorities(config.CAs)
-	logFail(errs...)
+	var cas *x509.CertPool
+	var caReloader *CAReloader
+
+	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
+		var err error
+		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		logFail(err)
+		if caReloader != nil {
+			cas = caReloader.GetCertPool()
+		}
+	} else {
+		var errs []error
+		cas, errs = LoadCertificateAuthorities(config.CAs)
+		logFail(errs...)
+	}
 
 	var certs []tls.Certificate
 	var reloader *CertReloader
@@ -90,7 +104,7 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		Versions:             config.Versions,
 		Verification:         config.VerificationMode,
 		Certificates:         certs,
-		RootCAs:              cas,
+		rootCAs:              cas,
 		CipherSuites:         config.CipherSuites,
 		CurvePreferences:     curves,
 		Renegotiation:        tls.RenegotiationSupport(config.Renegotiation),
@@ -98,6 +112,7 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		CATrustedFingerprint: config.CATrustedFingerprint,
 		Logger:               logger,
 		certReloader:         reloader,
+		caReloader:           caReloader,
 	}, nil
 }
 
