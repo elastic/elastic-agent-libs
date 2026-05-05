@@ -146,7 +146,7 @@ func (c *TLSConfig) ToConfig() *tls.Config {
 
 	minVersion, maxVersion := extractMinMaxVersion(c.Versions)
 
-	insecure := c.Verification != VerifyStrict
+	insecure := c.Verification != VerifyStrict || c.caReloader != nil
 	if c.Verification == VerifyNone {
 		c.Logger.Named("tls").Warn("SSL/TLS verifications disabled.")
 	}
@@ -341,9 +341,29 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 		// Cert is trusted by CA
 		// Hostname or IP matches the certificate
 		// Returns error if SNA is empty
-		// The whole validation is done by Go's standard library default
-		// SSL/TLS verification (tls.Config.InsecureSkipVerify is set to false)
-		// so we only need to check the pin
+		if cfg.caReloader != nil {
+			// When caReloader is active, InsecureSkipVerify is true so Go's
+			// stdlib won't validate the chain. Do full strict verification
+			// manually using the dynamically reloaded CA pool.
+			return func(cs tls.ConnectionState) error {
+				if cfg.CATrustedFingerprint != "" {
+					if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
+						return err
+					}
+				}
+				if len(cs.PeerCertificates) == 0 {
+					return ErrMissingPeerCertificate
+				}
+				opts := x509.VerifyOptions{
+					Roots:         cfg.currentRootCAs(),
+					DNSName:       serverName,
+					Intermediates: x509.NewCertPool(),
+				}
+				return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			}
+		}
+		// Static CAs: Go's stdlib handles chain + hostname verification
+		// (InsecureSkipVerify is false). We only need a callback for CA pin checking.
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -385,6 +405,22 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 			return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
 		}
 	case VerifyStrict:
+		if cfg.caReloader != nil {
+			return func(cs tls.ConnectionState) error {
+				if len(cs.PeerCertificates) == 0 {
+					if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+						return ErrMissingPeerCertificate
+					}
+					return nil
+				}
+				opts := x509.VerifyOptions{
+					Roots:         cfg.currentClientCAs(),
+					Intermediates: x509.NewCertPool(),
+					KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+				}
+				return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			}
+		}
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				return verifyCAPin(cfg.CASha256, cs.VerifiedChains)
