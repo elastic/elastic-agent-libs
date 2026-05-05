@@ -56,7 +56,10 @@ func TestCAPinning(t *testing.T) {
 		require.NoError(t, err)
 
 		tls := tlsCfg.BuildModuleClientConfig(host)
-		require.Nil(t, tls.VerifyConnection)
+		// With CA reload enabled (the default), VerifyStrict uses a custom
+		// VerifyConnection callback to verify against the dynamically reloaded
+		// CA pool instead of relying on Go's built-in verification.
+		require.NotNil(t, tls.VerifyConnection)
 	})
 
 	t.Run("when the ca_sha256 field is defined we use CA cert pinning", func(t *testing.T) {
