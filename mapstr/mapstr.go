@@ -126,9 +126,10 @@ func (m M) deepCloneUpdateMap(d M, overwrite bool) {
 			continue
 		}
 
-		// Recurse into an existing non-nil destination sub-map. The tryToMapStr
-		// promotion writes back to m[k] so a raw map[string]interface{} slot
-		// becomes M, matching deepUpdateValue.
+		// Recurse into an existing non-nil destination sub-map. tryToMapStr only
+		// type-asserts/converts; the explicit assignment back to m[k] below is
+		// what normalizes a raw map[string]interface{} slot to M, matching
+		// deepUpdateValue.
 		if dstMap, ok := tryToMapStr(m[k]); ok && dstMap != nil {
 			dstMap.deepCloneUpdateMap(srcMap, overwrite)
 			m[k] = dstMap
