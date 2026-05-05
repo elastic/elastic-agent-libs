@@ -124,7 +124,7 @@ func TestCAPinning(t *testing.T) {
 
 				tlsC := &TLSConfig{
 					Verification: mode,
-					RootCAs:      rootCAs,
+					rootCAs:      rootCAs,
 					CASha256:     []string{pin},
 				}
 
@@ -208,7 +208,7 @@ func TestCAPinning(t *testing.T) {
 		pin := Fingerprint(ca.Leaf)
 
 		tlsC := &TLSConfig{
-			RootCAs:  rootCAs,
+			rootCAs:  rootCAs,
 			CASha256: []string{pin},
 		}
 
@@ -282,7 +282,7 @@ func TestCAPinning(t *testing.T) {
 		pin := "wrong-pin"
 
 		tlsC := &TLSConfig{
-			RootCAs:  rootCAs,
+			rootCAs:  rootCAs,
 			CASha256: []string{pin},
 		}
 

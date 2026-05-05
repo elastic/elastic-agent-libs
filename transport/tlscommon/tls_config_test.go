@@ -165,7 +165,7 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			cfg := &TLSConfig{
 				Verification: test.verificationMode,
 				ClientAuth:   test.clientAuth,
-				ClientCAs:    test.certAuthorities,
+				clientCAs:    test.certAuthorities,
 			}
 
 			verifier := makeVerifyServerConnection(cfg)
@@ -261,7 +261,7 @@ func TestTrustRootCA(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := TLSConfig{
-				RootCAs:              tc.rootCAs,
+				rootCAs:              tc.rootCAs,
 				CATrustedFingerprint: tc.caTrustedFingerprint,
 			}
 
@@ -297,18 +297,18 @@ func TestTrustRootCA(t *testing.T) {
 			}
 
 			if tc.expectedRootCAsLen == 0 {
-				if cfg.RootCAs != nil {
+				if cfg.rootCAs != nil {
 					t.Fatal("cfg.RootCAs should be nil")
 				}
 			} else {
-				if cfg.RootCAs == nil {
+				if cfg.rootCAs == nil {
 					t.Fatal("cfg.RootCAs should not be nil")
 				}
 
 				// we want to know the number of certificates in the CertPool (RootCAs), as it is not
 				// directly available, we use this workaround of reading the number of subjects in the pool.
 				//nolint:staticcheck // we do not expect the system root CAs.
-				if got, expected := len(cfg.RootCAs.Subjects()), tc.expectedRootCAsLen; got != expected {
+				if got, expected := len(cfg.rootCAs.Subjects()), tc.expectedRootCAsLen; got != expected {
 					t.Fatalf("expecting cfg.RootCAs to have %d element, got %d instead", expected, got)
 				}
 			}
@@ -472,7 +472,7 @@ func TestMakeVerifyServerConnectionForIPs(t *testing.T) {
 			}
 
 			cfg := &TLSConfig{
-				RootCAs:      rootCAs,
+				rootCAs:      rootCAs,
 				Verification: test.verificationMode,
 				ServerName:   test.serverName,
 			}
@@ -649,13 +649,13 @@ func TestVerificationMode(t *testing.T) {
 
 			tlsC := TLSConfig{
 				Verification: test.verificationMode,
-				RootCAs:      certPool,
+				rootCAs:      certPool,
 				ServerName:   test.hostname,
 				Logger:       logptest.NewTestingLogger(t, ""),
 			}
 
 			if test.ignoreCerts {
-				tlsC.RootCAs = nil
+				tlsC.rootCAs = nil
 				tlsC.ServerName = ""
 			}
 
