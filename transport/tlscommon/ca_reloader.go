@@ -49,6 +49,10 @@ func NewCAReloader(caPaths []string, reloadInterval time.Duration) (*CAReloader,
 		return nil, fmt.Errorf("at least one CA path must be provided")
 	}
 
+	if reloadInterval <= 0 {
+		reloadInterval = defaultReloadInterval
+	}
+
 	r := &CAReloader{
 		caPaths:        caPaths,
 		reloadInterval: reloadInterval,
