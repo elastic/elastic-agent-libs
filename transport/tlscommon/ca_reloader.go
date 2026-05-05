@@ -85,7 +85,7 @@ func (r *CAReloader) GetCertPool() *x509.CertPool {
 	r.nextReload = time.Now().Add(r.reloadInterval)
 
 	pool, errs := LoadCertificateAuthorities(r.caPaths)
-	if pool == nil {
+	if len(errs) == len(r.caPaths) {
 		r.log.Warnf("CA reload failed, keeping previous pool: %v", errs)
 		return r.pool
 	}
