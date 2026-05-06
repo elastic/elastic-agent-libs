@@ -18,6 +18,7 @@
 package tlscommon
 
 import (
+	"bytes"
 	"crypto/x509"
 	"fmt"
 	"sync"
@@ -38,6 +39,11 @@ type CAReloader struct {
 	mu         sync.RWMutex
 	pool       *x509.CertPool
 	nextReload time.Time
+	// trustedFingerprintCerts holds CA certificates discovered at runtime via
+	// CATrustedFingerprint. Unlike the CAs loaded from caPaths on disk, these
+	// certs come from the peer's certificate chain during a TLS handshake and
+	// must be explicitly re-added to the pool after every disk reload.
+	trustedFingerprintCerts []*x509.Certificate
 }
 
 // NewCAReloader creates a CAReloader for the given CA file paths. Inline PEM
@@ -93,6 +99,30 @@ func (r *CAReloader) GetCertPool() *x509.CertPool {
 		r.log.Warnf("CA reload failed for %d/%d CA(s), keeping previous pool: %v", len(errs), len(r.caPaths), errs)
 		return r.pool
 	}
+
+	for _, cert := range r.trustedFingerprintCerts {
+		pool.AddCert(cert)
+	}
+
 	r.pool = pool
 	return r.pool
+}
+
+// AddTrustedCert registers a certificate so it is included in every pool
+// returned by GetCertPool, surviving reloads from disk. Duplicate certs
+// (by raw bytes) are ignored.
+func (r *CAReloader) AddTrustedCert(cert *x509.Certificate) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, existing := range r.trustedFingerprintCerts {
+		if bytes.Equal(existing.Raw, cert.Raw) {
+			return
+		}
+	}
+
+	r.trustedFingerprintCerts = append(r.trustedFingerprintCerts, cert)
+	if r.pool != nil {
+		r.pool.AddCert(cert)
+	}
 }

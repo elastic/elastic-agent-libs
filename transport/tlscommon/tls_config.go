@@ -266,13 +266,16 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate, logger *logp.Log
 		}
 
 		logger.Debug("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
-		pool := cfg.currentRootCAs()
-		if pool == nil {
-			pool = x509.NewCertPool()
-			cfg.rootCAs = pool
+		if cfg.caReloader != nil {
+			cfg.caReloader.AddTrustedCert(cert)
+		} else {
+			pool := cfg.currentRootCAs()
+			if pool == nil {
+				pool = x509.NewCertPool()
+				cfg.rootCAs = pool
+			}
+			pool.AddCert(cert)
 		}
-
-		pool.AddCert(cert)
 		return nil
 	}
 

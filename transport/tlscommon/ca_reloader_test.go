@@ -111,6 +111,23 @@ func TestCAReloader_InvalidNewCA_KeepsOld(t *testing.T) {
 	}, 500*time.Millisecond, 50*time.Millisecond, "pool should not become nil after invalid reload")
 }
 
+func TestCAReloader_NoReloadBeforeInterval(t *testing.T) {
+	dir := t.TempDir()
+	caPath := writeCAFile(t, dir, "ca.pem")
+
+	r, err := NewCAReloader([]string{caPath}, 1*time.Hour)
+	require.NoError(t, err)
+
+	initialPool := r.GetCertPool()
+
+	// Replace the CA file.
+	writeCAFile(t, dir, "ca.pem")
+
+	// Should still return the original pool since interval hasn't elapsed.
+	pool := r.GetCertPool()
+	assert.True(t, pool.Equal(initialPool))
+}
+
 func TestCAReloader_PartialReloadFailure_KeepsOldPool(t *testing.T) {
 	dir := t.TempDir()
 	caPath1 := writeCAFile(t, dir, "ca1.pem")
@@ -133,21 +150,60 @@ func TestCAReloader_PartialReloadFailure_KeepsOldPool(t *testing.T) {
 		"pool should not change when one CA fails to reload")
 }
 
-func TestCAReloader_NoReloadBeforeInterval(t *testing.T) {
+func TestCAReloader_AddTrustedCert_SurvivesReload(t *testing.T) {
+	dir := t.TempDir()
+	caPath := writeCAFile(t, dir, "ca.pem")
+
+	r, err := NewCAReloader([]string{caPath}, 100*time.Millisecond)
+	require.NoError(t, err)
+
+	// Generate a separate CA cert and add it via AddTrustedCert.
+	_, _, pair, err := certutil.NewRootCA()
+	require.NoError(t, err)
+	block, _ := pem.Decode(pair.Cert)
+	require.NotNil(t, block)
+	extraCA, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	r.AddTrustedCert(extraCA)
+
+	// Verify it's in the pool now.
+	pool := r.GetCertPool()
+	_, err = extraCA.Verify(x509.VerifyOptions{Roots: pool})
+	require.NoError(t, err, "trusted fingerprint cert should be in the pool before reload")
+
+	// Trigger a reload by writing a new CA to the file and waiting.
+	writeCAFile(t, dir, "ca.pem")
+	require.Eventually(t, func() bool {
+		pool = r.GetCertPool()
+		_, err = extraCA.Verify(x509.VerifyOptions{Roots: pool})
+		return err == nil
+	}, 2*time.Second, 50*time.Millisecond,
+		"trusted fingerprint cert should survive CA reload")
+}
+
+func TestCAReloader_AddTrustedCert_Deduplicates(t *testing.T) {
 	dir := t.TempDir()
 	caPath := writeCAFile(t, dir, "ca.pem")
 
 	r, err := NewCAReloader([]string{caPath}, 1*time.Hour)
 	require.NoError(t, err)
 
-	initialPool := r.GetCertPool()
+	_, _, pair, err := certutil.NewRootCA()
+	require.NoError(t, err)
+	block, _ := pem.Decode(pair.Cert)
+	require.NotNil(t, block)
+	extraCA, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
 
-	// Replace the CA file.
-	writeCAFile(t, dir, "ca.pem")
+	r.AddTrustedCert(extraCA)
+	r.AddTrustedCert(extraCA)
+	r.AddTrustedCert(extraCA)
 
-	// Should still return the original pool since interval hasn't elapsed.
-	pool := r.GetCertPool()
-	assert.True(t, pool.Equal(initialPool))
+	r.mu.RLock()
+	count := len(r.trustedFingerprintCerts)
+	r.mu.RUnlock()
+	assert.Equal(t, 1, count, "duplicate certs should not be added")
 }
 
 func TestCAReloader_InlinePEM(t *testing.T) {
