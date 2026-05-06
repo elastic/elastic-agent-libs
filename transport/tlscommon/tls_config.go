@@ -152,7 +152,6 @@ func (c *TLSConfig) ToConfig() *tls.Config {
 	if c.certReloader != nil {
 		cfg.GetCertificate = c.certReloader.GetCertificate
 		cfg.GetClientCertificate = c.certReloader.GetClientCertificate
-		cfg.Certificates = nil
 	}
 
 	return cfg
