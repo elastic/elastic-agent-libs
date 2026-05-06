@@ -19,6 +19,7 @@ package tlscommon
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -36,6 +37,7 @@ type Config struct {
 	Renegotiation        TLSRenegotiationSupport `config:"renegotiation" yaml:"renegotiation"`
 	CASha256             []string                `config:"ca_sha256" yaml:"ca_sha256,omitempty"`
 	CATrustedFingerprint string                  `config:"ca_trusted_fingerprint" yaml:"ca_trusted_fingerprint,omitempty"`
+	CertificateReload    CertificateReload       `config:"certificate_reload" yaml:"certificate_reload,omitempty"`
 }
 
 // LoadTLSConfig will load a certificate from config with all TLS based keys
@@ -61,20 +63,40 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		curves[idx] = tls.CurveID(id)
 	}
 
-	cert, err := LoadCertificate(&config.Certificate)
-	logFail(err)
+	var cas *x509.CertPool
+	var caReloader *CAReloader
 
-	cas, errs := LoadCertificateAuthorities(config.CAs)
-	logFail(errs...)
+	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
+		var err error
+		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		logFail(err)
+		if caReloader != nil {
+			cas = caReloader.GetCertPool()
+		}
+	} else {
+		var errs []error
+		cas, errs = LoadCertificateAuthorities(config.CAs)
+		logFail(errs...)
+	}
+
+	var certs []tls.Certificate
+	var reloader *CertReloader
+	var err error
+
+	if config.Certificate.Certificate != "" && config.CertificateReload.IsEnabled() {
+		reloader, err = newCertReloaderFromConfig(config.Certificate, config.CertificateReload)
+		logFail(err)
+	} else {
+		cert, err := LoadCertificate(&config.Certificate)
+		logFail(err)
+		if cert != nil {
+			certs = []tls.Certificate{*cert}
+		}
+	}
 
 	// fail, if any error occurred when loading certificate files
 	if len(fail) != 0 {
 		return nil, errors.Join(fail...)
-	}
-
-	certs := make([]tls.Certificate, 0)
-	if cert != nil {
-		certs = []tls.Certificate{*cert}
 	}
 
 	// return config if no error occurred
@@ -82,13 +104,15 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		Versions:             config.Versions,
 		Verification:         config.VerificationMode,
 		Certificates:         certs,
-		RootCAs:              cas,
+		rootCAs:              cas,
 		CipherSuites:         config.CipherSuites,
 		CurvePreferences:     curves,
 		Renegotiation:        tls.RenegotiationSupport(config.Renegotiation),
 		CASha256:             config.CASha256,
 		CATrustedFingerprint: config.CATrustedFingerprint,
 		Logger:               logger,
+		certReloader:         reloader,
+		caReloader:           caReloader,
 	}, nil
 }
 

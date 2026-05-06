@@ -37,11 +37,12 @@ const defaultReloadInterval = 5 * time.Second
 // This design follows the OpenTelemetry Collector's configtls approach: no file
 // watchers or extra goroutines — just a time check on the handshake hot path.
 type CertReloader struct {
-	certPath       string
-	keyPath        string
-	passphrase     string
-	reloadInterval time.Duration
-	log            *logp.Logger
+	certPath         string
+	keyPath          string
+	passphrase       string
+	disableLegacyPEM bool
+	reloadInterval   time.Duration
+	log              *logp.Logger
 
 	mu         sync.RWMutex
 	cert       *tls.Certificate
@@ -63,6 +64,14 @@ func WithReloadInterval(d time.Duration) CertReloaderOption {
 func WithPassphrase(passphrase string) CertReloaderOption {
 	return func(r *CertReloader) {
 		r.passphrase = passphrase
+	}
+}
+
+// WithDisableLegacyPEMSupport configures whether encrypted PKCS#1 PEM keys
+// should be treated as an error instead of a deprecation warning.
+func WithDisableLegacyPEMSupport(disable bool) CertReloaderOption {
+	return func(r *CertReloader) {
+		r.disableLegacyPEM = disable
 	}
 }
 
@@ -94,12 +103,13 @@ func NewCertReloader(certPath, keyPath string, opts ...CertReloaderOption) (*Cer
 	return r, nil
 }
 
+// loadKeyPair mirrors the static cert-loading path in LoadCertificate (tls.go).
 func (r *CertReloader) loadKeyPair() (tls.Certificate, error) {
-	certPEM, err := ReadPEMFile(r.log, r.certPath, r.passphrase)
+	certPEM, err := readPEMFile(r.log, r.certPath, r.passphrase, r.disableLegacyPEM)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("reading certificate file: %w", err)
 	}
-	keyPEM, err := ReadPEMFile(r.log, r.keyPath, r.passphrase)
+	keyPEM, err := readPEMFile(r.log, r.keyPath, r.passphrase, r.disableLegacyPEM)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("reading key file: %w", err)
 	}
@@ -110,6 +120,17 @@ func (r *CertReloader) loadKeyPair() (tls.Certificate, error) {
 // reload interval has elapsed. It is safe for concurrent use and is intended
 // to be used with tls.Config.GetCertificate.
 func (r *CertReloader) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return r.getCertificate()
+}
+
+// GetClientCertificate returns the current certificate, reloading from disk if
+// the reload interval has elapsed. It is safe for concurrent use and is
+// intended to be used with tls.Config.GetClientCertificate.
+func (r *CertReloader) GetClientCertificate(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	return r.getCertificate()
+}
+
+func (r *CertReloader) getCertificate() (*tls.Certificate, error) {
 	r.mu.RLock()
 	if time.Now().Before(r.nextReload) {
 		defer r.mu.RUnlock()
@@ -133,4 +154,27 @@ func (r *CertReloader) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate,
 	}
 	r.cert = &cert
 	return r.cert, nil
+}
+
+// newCertReloaderFromConfig creates a CertReloader from a CertificateConfig
+// and CertificateReload configuration. It resolves the passphrase from the
+// config and applies the reload interval.
+func newCertReloaderFromConfig(certCfg CertificateConfig, reloadCfg CertificateReload) (*CertReloader, error) {
+	var opts []CertReloaderOption
+	if reloadCfg.ReloadInterval > 0 {
+		opts = append(opts, WithReloadInterval(reloadCfg.ReloadInterval))
+	}
+
+	passphrase, err := certCfg.resolvePassphrase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve TLS key passphrase: %w", err)
+	}
+	if passphrase != "" {
+		opts = append(opts, WithPassphrase(passphrase))
+	}
+	if certCfg.DisableLegacyPEMSupport {
+		opts = append(opts, WithDisableLegacyPEMSupport(true))
+	}
+
+	return NewCertReloader(certCfg.Certificate, certCfg.Key, opts...)
 }

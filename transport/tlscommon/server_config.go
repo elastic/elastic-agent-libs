@@ -19,6 +19,7 @@ package tlscommon
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"time"
@@ -90,20 +91,40 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		curves[idx] = tls.CurveID(id)
 	}
 
-	cert, err := LoadCertificate(&config.Certificate)
-	logFail(err)
+	var cas *x509.CertPool
+	var caReloader *CAReloader
 
-	cas, errs := LoadCertificateAuthorities(config.CAs)
-	logFail(errs...)
+	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
+		var err error
+		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		logFail(err)
+		if caReloader != nil {
+			cas = caReloader.GetCertPool()
+		}
+	} else {
+		var errs []error
+		cas, errs = LoadCertificateAuthorities(config.CAs)
+		logFail(errs...)
+	}
+
+	var certs []tls.Certificate
+	var reloader *CertReloader
+	var err error
+
+	if config.Certificate.Certificate != "" && config.CertificateReload.IsEnabled() {
+		reloader, err = newCertReloaderFromConfig(config.Certificate, config.CertificateReload)
+		logFail(err)
+	} else {
+		cert, err := LoadCertificate(&config.Certificate)
+		logFail(err)
+		if cert != nil {
+			certs = []tls.Certificate{*cert}
+		}
+	}
 
 	// fail, if any error occurred when loading certificate files
 	if len(fail) != 0 {
 		return nil, errors.Join(fail...)
-	}
-
-	certs := make([]tls.Certificate, 0)
-	if cert != nil {
-		certs = []tls.Certificate{*cert}
 	}
 
 	clientAuth := TLSClientAuthNone
@@ -116,12 +137,14 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		Versions:         config.Versions,
 		Verification:     config.VerificationMode,
 		Certificates:     certs,
-		ClientCAs:        cas,
+		clientCAs:        cas,
 		CipherSuites:     config.CipherSuites,
 		CurvePreferences: curves,
 		ClientAuth:       tls.ClientAuthType(clientAuth),
 		CASha256:         config.CASha256,
 		Logger:           logger,
+		certReloader:     reloader,
+		caReloader:       caReloader,
 	}, nil
 }
 

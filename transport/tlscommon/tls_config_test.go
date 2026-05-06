@@ -22,11 +22,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -165,7 +169,7 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			cfg := &TLSConfig{
 				Verification: test.verificationMode,
 				ClientAuth:   test.clientAuth,
-				ClientCAs:    test.certAuthorities,
+				clientCAs:    test.certAuthorities,
 			}
 
 			verifier := makeVerifyServerConnection(cfg)
@@ -261,7 +265,7 @@ func TestTrustRootCA(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := TLSConfig{
-				RootCAs:              tc.rootCAs,
+				rootCAs:              tc.rootCAs,
 				CATrustedFingerprint: tc.caTrustedFingerprint,
 			}
 
@@ -297,23 +301,55 @@ func TestTrustRootCA(t *testing.T) {
 			}
 
 			if tc.expectedRootCAsLen == 0 {
-				if cfg.RootCAs != nil {
+				if cfg.rootCAs != nil {
 					t.Fatal("cfg.RootCAs should be nil")
 				}
 			} else {
-				if cfg.RootCAs == nil {
+				if cfg.rootCAs == nil {
 					t.Fatal("cfg.RootCAs should not be nil")
 				}
 
 				// we want to know the number of certificates in the CertPool (RootCAs), as it is not
 				// directly available, we use this workaround of reading the number of subjects in the pool.
 				//nolint:staticcheck // we do not expect the system root CAs.
-				if got, expected := len(cfg.RootCAs.Subjects()), tc.expectedRootCAsLen; got != expected {
+				if got, expected := len(cfg.rootCAs.Subjects()), tc.expectedRootCAsLen; got != expected {
 					t.Fatalf("expecting cfg.RootCAs to have %d element, got %d instead", expected, got)
 				}
 			}
 		})
 	}
+}
+
+func TestTrustRootCA_WithCAReloader(t *testing.T) {
+	certs := tlscommontest.GenTestCerts(t)
+	cafingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+
+	dir := t.TempDir()
+	caPath := filepath.Join(dir, "ca.pem")
+	require.NoError(t, os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certs["ca"].Raw,
+	}), 0o600))
+
+	reloader, err := NewCAReloader([]string{caPath}, 1*time.Hour)
+	require.NoError(t, err)
+
+	cfg := TLSConfig{
+		CATrustedFingerprint: cafingerprint,
+		caReloader:           reloader,
+	}
+
+	logger := logptest.NewTestingLogger(t, "")
+	err = trustRootCA(&cfg, []*x509.Certificate{certs["correct"], certs["ca"]}, logger)
+	require.NoError(t, err)
+
+	// The CA should be in the reloader's pool.
+	pool := reloader.GetCertPool()
+	_, err = certs["ca"].Verify(x509.VerifyOptions{Roots: pool})
+	assert.NoError(t, err, "trusted CA should be verifiable through the reloader pool")
+
+	// rootCAs on the config should remain nil since the reloader handles it.
+	assert.Nil(t, cfg.rootCAs, "rootCAs should remain nil when caReloader is set")
 }
 
 func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
@@ -472,7 +508,7 @@ func TestMakeVerifyServerConnectionForIPs(t *testing.T) {
 			}
 
 			cfg := &TLSConfig{
-				RootCAs:      rootCAs,
+				rootCAs:      rootCAs,
 				Verification: test.verificationMode,
 				ServerName:   test.serverName,
 			}
@@ -649,13 +685,13 @@ func TestVerificationMode(t *testing.T) {
 
 			tlsC := TLSConfig{
 				Verification: test.verificationMode,
-				RootCAs:      certPool,
+				rootCAs:      certPool,
 				ServerName:   test.hostname,
 				Logger:       logptest.NewTestingLogger(t, ""),
 			}
 
 			if test.ignoreCerts {
-				tlsC.RootCAs = nil
+				tlsC.rootCAs = nil
 				tlsC.ServerName = ""
 			}
 
