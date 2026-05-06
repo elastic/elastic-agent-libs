@@ -70,7 +70,11 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 	var err error
 
 	if config.Certificate.Certificate != "" && config.CertificateReload.IsEnabled() {
-		reloader, err = newCertReloaderFromConfig(config.Certificate, config.CertificateReload)
+		var reloadOpts []CertReloaderOption
+		if config.CertificateReload.ReloadInterval > 0 {
+			reloadOpts = append(reloadOpts, WithReloadInterval(config.CertificateReload.ReloadInterval))
+		}
+		reloader, err = newCertReloaderFromConfig(config.Certificate, reloadOpts...)
 		logFail(err)
 	} else {
 		cert, err := LoadCertificate(&config.Certificate)

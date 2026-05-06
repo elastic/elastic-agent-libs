@@ -156,15 +156,9 @@ func (r *CertReloader) getCertificate() (*tls.Certificate, error) {
 	return r.cert, nil
 }
 
-// newCertReloaderFromConfig creates a CertReloader from a CertificateConfig
-// and CertificateReload configuration. It resolves the passphrase from the
-// config and applies the reload interval.
-func newCertReloaderFromConfig(certCfg CertificateConfig, reloadCfg CertificateReload) (*CertReloader, error) {
-	var opts []CertReloaderOption
-	if reloadCfg.ReloadInterval > 0 {
-		opts = append(opts, WithReloadInterval(reloadCfg.ReloadInterval))
-	}
-
+// newCertReloaderFromConfig creates a CertReloader from a CertificateConfig.
+// Additional options (e.g. WithReloadInterval) can be passed by the caller.
+func newCertReloaderFromConfig(certCfg CertificateConfig, opts ...CertReloaderOption) (*CertReloader, error) {
 	passphrase, err := certCfg.resolvePassphrase()
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve TLS key passphrase: %w", err)
