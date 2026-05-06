@@ -22,11 +22,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -314,6 +318,38 @@ func TestTrustRootCA(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTrustRootCA_WithCAReloader(t *testing.T) {
+	certs := tlscommontest.GenTestCerts(t)
+	cafingerprint := tlscommontest.GetCertFingerprint(certs["ca"])
+
+	dir := t.TempDir()
+	caPath := filepath.Join(dir, "ca.pem")
+	require.NoError(t, os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certs["ca"].Raw,
+	}), 0o600))
+
+	reloader, err := NewCAReloader([]string{caPath}, 1*time.Hour)
+	require.NoError(t, err)
+
+	cfg := TLSConfig{
+		CATrustedFingerprint: cafingerprint,
+		caReloader:           reloader,
+	}
+
+	logger := logptest.NewTestingLogger(t, "")
+	err = trustRootCA(&cfg, []*x509.Certificate{certs["correct"], certs["ca"]}, logger)
+	require.NoError(t, err)
+
+	// The CA should be in the reloader's pool.
+	pool := reloader.GetCertPool()
+	_, err = certs["ca"].Verify(x509.VerifyOptions{Roots: pool})
+	assert.NoError(t, err, "trusted CA should be verifiable through the reloader pool")
+
+	// rootCAs on the config should remain nil since the reloader handles it.
+	assert.Nil(t, cfg.rootCAs, "rootCAs should remain nil when caReloader is set")
 }
 
 func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
