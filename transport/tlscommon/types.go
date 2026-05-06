@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 )
 
 var (
@@ -401,7 +402,7 @@ func (c *CertificateConfig) resolvePassphrase() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("unable to read key passphrase file: %w", err)
 		}
-		return string(p), nil
+		return strings.TrimSpace(string(p)), nil
 	}
 	return "", nil
 }
