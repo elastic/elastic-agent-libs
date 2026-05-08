@@ -407,6 +407,23 @@ func (c *CertificateConfig) resolvePassphrase() (string, error) {
 	return "", nil
 }
 
+// reloaderOptions returns the CertReloaderOption values derived from this config.
+func (c *CertificateConfig) reloaderOptions() ([]CertReloaderOption, error) {
+	passphrase, err := c.resolvePassphrase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve TLS key passphrase: %w", err)
+	}
+
+	var opts []CertReloaderOption
+	if passphrase != "" {
+		opts = append(opts, WithPassphrase(passphrase))
+	}
+	if c.DisableLegacyPEMSupport {
+		opts = append(opts, WithDisableLegacyPEMSupport(true))
+	}
+	return opts, nil
+}
+
 // Validate validates the CertificateConfig
 func (c *CertificateConfig) Validate() error {
 	hasCertificate := c.Certificate != ""

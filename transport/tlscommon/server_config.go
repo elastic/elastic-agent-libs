@@ -95,14 +95,14 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 
 	var certs []tls.Certificate
 	var reloader *CertReloader
-	var err error
 
 	if config.Certificate.Certificate != "" && config.CertificateReload.IsEnabled() {
-		var reloadOpts []CertReloaderOption
+		reloadOpts, err := config.Certificate.reloaderOptions()
+		logFail(err)
 		if config.CertificateReload.ReloadInterval > 0 {
 			reloadOpts = append(reloadOpts, WithReloadInterval(config.CertificateReload.ReloadInterval))
 		}
-		reloader, err = newCertReloaderFromConfig(config.Certificate, reloadOpts...)
+		reloader, err = NewCertReloader(config.Certificate.Certificate, config.Certificate.Key, reloadOpts...)
 		logFail(err)
 	} else {
 		cert, err := LoadCertificate(&config.Certificate)
