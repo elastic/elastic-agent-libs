@@ -156,4 +156,3 @@ func (r *CertReloader) getCertificate() (*tls.Certificate, error) {
 	r.cert = &cert
 	return r.cert, nil
 }
-
