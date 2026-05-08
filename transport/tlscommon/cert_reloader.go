@@ -82,6 +82,12 @@ func NewCertReloader(certPath, keyPath string, opts ...CertReloaderOption) (*Cer
 	if certPath == "" || keyPath == "" {
 		return nil, fmt.Errorf("certificate and key paths must be non-empty")
 	}
+	if IsPEMString(certPath) {
+		return nil, fmt.Errorf("certificate must be a file path, not an inline PEM")
+	}
+	if IsPEMString(keyPath) {
+		return nil, fmt.Errorf("key must be a file path, not an inline PEM")
+	}
 
 	r := &CertReloader{
 		certPath:       certPath,
