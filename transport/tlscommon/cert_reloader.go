@@ -31,7 +31,7 @@ const defaultReloadInterval = 5 * time.Second
 // CertReloader periodically reloads TLS certificate and key files from disk.
 // On each call to GetCertificate (i.e., on each TLS handshake), it checks
 // whether the reload interval has elapsed and, if so, re-reads the files from
-// disk. Invalid cert/key pairs are silently skipped, preserving the last
+// disk. Invalid cert/key pairs are logged and skipped, preserving the last
 // successfully loaded certificate.
 //
 // This design follows the OpenTelemetry Collector's configtls approach: no file
@@ -150,6 +150,7 @@ func (r *CertReloader) getCertificate() (*tls.Certificate, error) {
 
 	cert, err := r.loadKeyPair()
 	if err != nil {
+		r.log.Errorf("Failed to reload TLS certificate from %s and %s, continuing with current certificate: %v", r.certPath, r.keyPath, err)
 		return r.cert, nil
 	}
 	r.cert = &cert
