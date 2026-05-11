@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -45,6 +46,10 @@ type TLSConfig struct {
 	// List of certificate chains to present to the other side of the
 	// connection.
 	Certificates []tls.Certificate
+
+	// rootCAsMu protects rootCAs against concurrent writes from trustRootCA
+	// during parallel TLS handshakes.
+	rootCAsMu sync.Mutex
 
 	// rootCAs holds the root certificate authorities used to verify server
 	// certificates. Access via currentRootCAs() to support dynamic reloading.
@@ -106,6 +111,8 @@ func (c *TLSConfig) currentRootCAs() *x509.CertPool {
 	if c.caReloader != nil {
 		return c.caReloader.GetCertPool()
 	}
+	c.rootCAsMu.Lock()
+	defer c.rootCAsMu.Unlock()
 	return c.rootCAs
 }
 
@@ -268,12 +275,14 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate, logger *logp.Log
 		if cfg.caReloader != nil {
 			cfg.caReloader.AddTrustedCert(cert)
 		} else {
-			pool := cfg.currentRootCAs()
+			cfg.rootCAsMu.Lock()
+			pool := cfg.rootCAs
 			if pool == nil {
 				pool = x509.NewCertPool()
 				cfg.rootCAs = pool
 			}
 			pool.AddCert(cert)
+			cfg.rootCAsMu.Unlock()
 		}
 		return nil
 	}
