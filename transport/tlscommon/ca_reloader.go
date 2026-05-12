@@ -76,7 +76,9 @@ func NewCAReloader(caPaths []string, reloadInterval time.Duration) (*CAReloader,
 }
 
 // GetCertPool returns the current CA certificate pool, reloading from disk if
-// the reload interval has elapsed. It is safe for concurrent use.
+// the reload interval has elapsed. The returned pool is a snapshot: callers
+// should not cache it across handshakes but instead call GetCertPool each time
+// to pick up reloaded CAs. It is safe for concurrent use.
 func (r *CAReloader) GetCertPool() *x509.CertPool {
 	r.mu.RLock()
 	if time.Now().Before(r.nextReload) {
