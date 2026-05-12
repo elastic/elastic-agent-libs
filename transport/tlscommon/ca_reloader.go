@@ -95,9 +95,12 @@ func (r *CAReloader) GetCertPool() *x509.CertPool {
 	r.nextReload = time.Now().Add(r.reloadInterval)
 
 	pool, errs := LoadCertificateAuthorities(r.caPaths)
-	if len(errs) > 0 {
-		r.log.Warnf("CA reload failed for %d/%d CA(s), keeping previous pool: %v", len(errs), len(r.caPaths), errs)
+	if len(errs) == len(r.caPaths) {
+		r.log.Warnf("CA reload failed for all %d CA(s), keeping previous pool: %v", len(r.caPaths), errs)
 		return r.pool
+	}
+	if len(errs) > 0 {
+		r.log.Warnf("CA reload: %d/%d CA(s) failed to load, continuing with the ones that succeeded: %v", len(errs), len(r.caPaths), errs)
 	}
 
 	for _, cert := range r.trustedFingerprintCerts {

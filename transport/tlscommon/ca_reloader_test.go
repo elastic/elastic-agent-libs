@@ -128,7 +128,7 @@ func TestCAReloader_NoReloadBeforeInterval(t *testing.T) {
 	assert.True(t, pool.Equal(initialPool))
 }
 
-func TestCAReloader_PartialReloadFailure_KeepsOldPool(t *testing.T) {
+func TestCAReloader_PartialReloadFailure_UsesSuccessfulCAs(t *testing.T) {
 	dir := t.TempDir()
 	caPath1 := writeCAFile(t, dir, "ca1.pem")
 	caPath2 := writeCAFile(t, dir, "ca2.pem")
@@ -142,12 +142,33 @@ func TestCAReloader_PartialReloadFailure_KeepsOldPool(t *testing.T) {
 	// Corrupt one CA file; the other stays valid.
 	require.NoError(t, os.WriteFile(caPath2, []byte("not a cert"), 0o600))
 
-	// The old pool (with both CAs) should be preserved.
+	// The pool should update to contain only the successful CA.
+	require.Eventually(t, func() bool {
+		pool := r.GetCertPool()
+		return pool != nil && !pool.Equal(initialPool)
+	}, 2*time.Second, 50*time.Millisecond,
+		"pool should update with the CAs that loaded successfully")
+}
+
+func TestCAReloader_TotalReloadFailure_KeepsOldPool(t *testing.T) {
+	dir := t.TempDir()
+	caPath := writeCAFile(t, dir, "ca.pem")
+
+	r, err := NewCAReloader([]string{caPath}, 100*time.Millisecond)
+	require.NoError(t, err)
+
+	initialPool := r.GetCertPool()
+	require.NotNil(t, initialPool)
+
+	// Corrupt the only CA file so all paths fail.
+	require.NoError(t, os.WriteFile(caPath, []byte("not a cert"), 0o600))
+
+	// The old pool should be preserved since all CAs failed.
 	require.Never(t, func() bool {
 		pool := r.GetCertPool()
 		return !pool.Equal(initialPool)
 	}, 500*time.Millisecond, 50*time.Millisecond,
-		"pool should not change when one CA fails to reload")
+		"pool should not change when all CAs fail to reload")
 }
 
 func TestCAReloader_AddTrustedCert_SurvivesReload(t *testing.T) {
