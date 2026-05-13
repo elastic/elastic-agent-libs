@@ -100,7 +100,7 @@ func TestCAPinning(t *testing.T) {
 					_, _ = w.Write(msg)
 				})
 
-				l, err := net.Listen("tcp", addr)
+				l, err := net.Listen("tcp", addr) //nolint:noctx // testing
 
 				server := &http.Server{ //nolint:gosec // testing
 					Handler: mux,
@@ -181,7 +181,7 @@ func TestCAPinning(t *testing.T) {
 			_, _ = w.Write(msg)
 		})
 
-		l, err := net.Listen("tcp", addr)
+		l, err := net.Listen("tcp", addr) //nolint:noctx // testing
 		require.NoError(t, err)
 
 		// Server needs to provides the chain of trust, so server certificate + intermediate.
@@ -255,7 +255,7 @@ func TestCAPinning(t *testing.T) {
 			_, _ = w.Write(msg)
 		})
 
-		l, err := net.Listen("tcp", addr)
+		l, err := net.Listen("tcp", addr) //nolint:noctx // testing
 		require.NoError(t, err)
 
 		// Server needs to provides the chain of trust, so server certificate + intermediate.

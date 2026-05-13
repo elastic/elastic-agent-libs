@@ -129,7 +129,6 @@ type TLSConfig struct {
 	// ToConfig will use it to set GetCertificate and GetClientCertificate on
 	// the resulting tls.Config instead of populating Certificates statically.
 	certReloader *CertReloader
-
 }
 
 var (
@@ -175,7 +174,7 @@ func WithLogger(logger *logp.Logger) TLSOption {
 // By default VerifyConnection is set to client mode.
 func (c *TLSConfig) ToConfig() *tls.Config {
 	if c == nil {
-		return &tls.Config{} //nolint:gosec // empty TLS config
+		return &tls.Config{}
 	}
 
 	minVersion, maxVersion := extractMinMaxVersion(c.Versions)

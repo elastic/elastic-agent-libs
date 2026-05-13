@@ -745,7 +745,7 @@ func TestVerificationMode(t *testing.T) {
 // The HTTP server will shutdown at the end of the test.
 func startTestServer(t *testing.T, serverAddr string, serverCerts []tls.Certificate) url.URL {
 	// Creates a listener on a random port selected by the OS
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := net.Listen("tcp", "localhost:0") //nolint:noctx // testing
 	if err != nil {
 		t.Fatalf("could call net.Listen: %s", err)
 	}
