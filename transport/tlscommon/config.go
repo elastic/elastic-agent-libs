@@ -19,7 +19,6 @@ package tlscommon
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 
 	"github.com/elastic/elastic-agent-libs/logp"
@@ -63,17 +62,23 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		curves[idx] = tls.CurveID(id)
 	}
 
-	var cas *x509.CertPool
-	var caReloader *CAReloader
+	var rootCAs certPoolProvider
 
 	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
-		var err error
-		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		reloader, err := NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
 		logFail(err)
-	} else {
-		var errs []error
-		cas, errs = LoadCertificateAuthorities(config.CAs)
+		if reloader != nil {
+			rootCAs = reloader
+		}
+	} else if len(config.CAs) > 0 {
+		pool, errs := LoadCertificateAuthorities(config.CAs)
 		logFail(errs...)
+		rootCAs = newStaticCertPool(pool)
+	}
+	if rootCAs == nil && config.CATrustedFingerprint != "" {
+		// Pre-allocate an empty pool so trustRootCA can add fingerprint-matched
+		// certs without a nil dereference on concurrent handshakes.
+		rootCAs = newStaticCertPool(nil)
 	}
 
 	var certs []tls.Certificate
@@ -107,7 +112,7 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		Versions:             config.Versions,
 		Verification:         config.VerificationMode,
 		Certificates:         certs,
-		rootCAs:              cas,
+		rootCAs:              rootCAs,
 		CipherSuites:         config.CipherSuites,
 		CurvePreferences:     curves,
 		Renegotiation:        tls.RenegotiationSupport(config.Renegotiation),
@@ -115,7 +120,6 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		CATrustedFingerprint: config.CATrustedFingerprint,
 		Logger:               logger,
 		certReloader:         reloader,
-		caReloader:           caReloader,
 	}, nil
 }
 

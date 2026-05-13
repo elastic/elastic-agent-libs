@@ -113,6 +113,9 @@ func (r *CAReloader) GetCertPool() *x509.CertPool {
 	return r.pool
 }
 
+// IsDynamic reports that CAReloader provides a dynamically reloaded pool.
+func (r *CAReloader) IsDynamic() bool { return true }
+
 // AddTrustedCert registers a certificate so it is included in every pool
 // returned by GetCertPool, surviving reloads from disk. Duplicate certs
 // (by raw bytes) are ignored.

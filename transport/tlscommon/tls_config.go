@@ -32,6 +32,43 @@ import (
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
+// certPoolProvider abstracts over static and dynamically-reloaded CA pools.
+// CAReloader implements this interface for the dynamic case; staticCertPool
+// implements it for the static case.
+type certPoolProvider interface {
+	GetCertPool() *x509.CertPool
+	AddTrustedCert(cert *x509.Certificate)
+	IsDynamic() bool
+}
+
+// staticCertPool is a certPoolProvider backed by a fixed *x509.CertPool.
+// It is safe for concurrent use.
+type staticCertPool struct {
+	mu   sync.Mutex
+	pool *x509.CertPool
+}
+
+func newStaticCertPool(pool *x509.CertPool) *staticCertPool {
+	return &staticCertPool{pool: pool}
+}
+
+func (s *staticCertPool) GetCertPool() *x509.CertPool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pool
+}
+
+func (s *staticCertPool) AddTrustedCert(cert *x509.Certificate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pool == nil {
+		s.pool = x509.NewCertPool()
+	}
+	s.pool.AddCert(cert)
+}
+
+func (s *staticCertPool) IsDynamic() bool { return false }
+
 // TLSConfig is the interface used to configure a tcp client or server from a `Config`
 type TLSConfig struct {
 
@@ -47,17 +84,13 @@ type TLSConfig struct {
 	// connection.
 	Certificates []tls.Certificate
 
-	// rootCAsMu protects rootCAs against concurrent writes from trustRootCA
-	// during parallel TLS handshakes.
-	rootCAsMu sync.Mutex
+	// rootCAs provides the CA pool for verifying server certificates.
+	// nil means use the system pool. Use currentRootCAs() to access.
+	rootCAs certPoolProvider
 
-	// rootCAs holds the root certificate authorities used to verify server
-	// certificates. Access via currentRootCAs() to support dynamic reloading.
-	rootCAs *x509.CertPool
-
-	// clientCAs holds the root certificate authorities used to verify client
-	// certificates. Access via currentClientCAs() to support dynamic reloading.
-	clientCAs *x509.CertPool
+	// clientCAs provides the CA pool for verifying client certificates.
+	// nil means use the system pool. Use currentClientCAs() to access.
+	clientCAs certPoolProvider
 
 	// List of supported cipher suites. If nil, a default list provided by the
 	// implementation will be used.
@@ -97,10 +130,6 @@ type TLSConfig struct {
 	// the resulting tls.Config instead of populating Certificates statically.
 	certReloader *CertReloader
 
-	// caReloader, when set, provides dynamic CA certificate reloading from
-	// disk. The VerifyConnection callback will call caReloader.GetCertPool()
-	// on each handshake instead of using the static RootCAs/ClientCAs pool.
-	caReloader *CAReloader
 }
 
 var (
@@ -108,19 +137,17 @@ var (
 )
 
 func (c *TLSConfig) currentRootCAs() *x509.CertPool {
-	if c.caReloader != nil {
-		return c.caReloader.GetCertPool()
+	if c.rootCAs == nil {
+		return nil
 	}
-	c.rootCAsMu.Lock()
-	defer c.rootCAsMu.Unlock()
-	return c.rootCAs
+	return c.rootCAs.GetCertPool()
 }
 
 func (c *TLSConfig) currentClientCAs() *x509.CertPool {
-	if c.caReloader != nil {
-		return c.caReloader.GetCertPool()
+	if c.clientCAs == nil {
+		return nil
 	}
-	return c.clientCAs
+	return c.clientCAs.GetCertPool()
 }
 
 type tlsOptFunc func(t *TLSSettings)
@@ -153,7 +180,8 @@ func (c *TLSConfig) ToConfig() *tls.Config {
 
 	minVersion, maxVersion := extractMinMaxVersion(c.Versions)
 
-	insecure := c.Verification != VerifyStrict || c.caReloader != nil
+	dynamic := (c.rootCAs != nil && c.rootCAs.IsDynamic()) || (c.clientCAs != nil && c.clientCAs.IsDynamic())
+	insecure := c.Verification != VerifyStrict || dynamic
 	if c.Verification == VerifyNone {
 		c.Logger.Named("tls").Warn("SSL/TLS verifications disabled.")
 	}
@@ -162,8 +190,8 @@ func (c *TLSConfig) ToConfig() *tls.Config {
 		MinVersion:         minVersion,
 		MaxVersion:         maxVersion,
 		Certificates:       c.Certificates,
-		RootCAs:            c.rootCAs,
-		ClientCAs:          c.clientCAs,
+		RootCAs:            c.currentRootCAs(),
+		ClientCAs:          c.currentClientCAs(),
 		InsecureSkipVerify: insecure, //nolint:gosec // we are using our own verification for now
 		CipherSuites:       convCipherSuites(c.CipherSuites),
 		CurvePreferences:   c.CurvePreferences,
@@ -272,18 +300,7 @@ func trustRootCA(cfg *TLSConfig, peerCerts []*x509.Certificate, logger *logp.Log
 		}
 
 		logger.Debug("CA certificate matching 'ca_trusted_fingerprint' found, adding it to 'certificate_authorities'")
-		if cfg.caReloader != nil {
-			cfg.caReloader.AddTrustedCert(cert)
-		} else {
-			cfg.rootCAsMu.Lock()
-			pool := cfg.rootCAs
-			if pool == nil {
-				pool = x509.NewCertPool()
-				cfg.rootCAs = pool
-			}
-			pool.AddCert(cert)
-			cfg.rootCAsMu.Unlock()
-		}
+		cfg.rootCAs.AddTrustedCert(cert)
 		return nil
 	}
 
@@ -352,8 +369,8 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 		// Cert is trusted by CA
 		// Hostname or IP matches the certificate
 		// Returns error if SNA is empty
-		if cfg.caReloader != nil {
-			// When caReloader is active, InsecureSkipVerify is true so Go's
+		if cfg.rootCAs != nil && cfg.rootCAs.IsDynamic() {
+			// When rootCAs is dynamic, InsecureSkipVerify is true so Go's
 			// stdlib won't validate the chain. Do full strict verification
 			// manually using the dynamically reloaded CA pool.
 			return func(cs tls.ConnectionState) error {
@@ -416,7 +433,7 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 			return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
 		}
 	case VerifyStrict:
-		if cfg.caReloader != nil {
+		if cfg.clientCAs != nil && cfg.clientCAs.IsDynamic() {
 			return func(cs tls.ConnectionState) error {
 				if len(cs.PeerCertificates) == 0 {
 					if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
