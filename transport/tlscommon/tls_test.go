@@ -139,7 +139,11 @@ func TestApplyWithConfig(t *testing.T) {
 	assert.NotNil(t, cfg.GetCertificate, "expected GetCertificate callback from cert reloader")
 	assert.NotNil(t, cfg.GetClientCertificate, "expected GetClientCertificate callback from cert reloader")
 	assert.Empty(t, cfg.Certificates, "expected Certificates to be empty when cert reloader is active")
-	assert.NotNil(t, cfg.RootCAs)
+	// When caReloader is active, RootCAs is nil: Go ignores it (InsecureSkipVerify=true)
+	// and CA verification is done via VerifyConnection. With verification_mode=none,
+	// VerifyConnection is nil (no verification performed).
+	assert.Nil(t, cfg.RootCAs)
+	assert.Nil(t, cfg.VerifyConnection)
 	assert.Equal(t, true, cfg.InsecureSkipVerify)
 	assert.Len(t, cfg.CipherSuites, 2)
 	assert.Equal(t, int(TLSVersionDefaultMin), int(cfg.MinVersion))
@@ -197,7 +201,10 @@ key: mykey.pem
 		assert.NotNil(t, cfg)
 		// values not set by default
 		assert.Len(t, cfg.Certificates, 0)
-		assert.NotNil(t, cfg.ClientCAs)
+		// When caReloader is active, ClientCAs is nil: Go ignores it (InsecureSkipVerify=true)
+		// and CA verification is done via VerifyConnection.
+		assert.Nil(t, cfg.ClientCAs)
+		assert.NotNil(t, cfg.VerifyConnection, "expected VerifyConnection to enforce CA validation with caReloader")
 		assert.Len(t, cfg.CipherSuites, 0)
 		assert.Len(t, cfg.CurvePreferences, 0)
 		// values set by default
@@ -245,7 +252,11 @@ func TestApplyWithServerConfig(t *testing.T) {
 	assert.NotNil(t, cfg.GetCertificate, "expected GetCertificate callback from cert reloader")
 	assert.NotNil(t, cfg.GetClientCertificate, "expected GetClientCertificate callback from cert reloader")
 	assert.Empty(t, cfg.Certificates, "expected Certificates to be empty when cert reloader is active")
-	assert.NotNil(t, cfg.ClientCAs)
+	// When caReloader is active, ClientCAs is nil: Go ignores it (InsecureSkipVerify=true)
+	// and CA verification is done via VerifyConnection. With verification_mode=none,
+	// VerifyConnection is nil (no verification performed).
+	assert.Nil(t, cfg.ClientCAs)
+	assert.Nil(t, cfg.VerifyConnection)
 	assert.Equal(t, true, cfg.InsecureSkipVerify)
 	assert.Len(t, cfg.CipherSuites, 2)
 	assert.Equal(t, int(TLSVersionDefaultMin), int(cfg.MinVersion))

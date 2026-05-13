@@ -70,9 +70,6 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		var err error
 		caReloader, err = NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
 		logFail(err)
-		if caReloader != nil {
-			cas = caReloader.GetCertPool()
-		}
 	} else {
 		var errs []error
 		cas, errs = LoadCertificateAuthorities(config.CAs)
