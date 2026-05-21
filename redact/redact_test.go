@@ -100,7 +100,6 @@ func TestRedact(t *testing.T) {
 		},
 		{
 			name: "URL credentials are redacted",
-			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[string]any{
 				"url":       "https://user:pass@example.com/path",
 				"other_url": "https://example.com/path",
@@ -131,7 +130,6 @@ func TestRedact(t *testing.T) {
 		},
 		{
 			name: "sensitive key wins over URL redaction",
-			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[string]any{
 				"secret_url": "https://user:pass@example.com",
 			},
@@ -445,6 +443,58 @@ func TestRedact(t *testing.T) {
 				"routekey":      "should-not-redact",
 				"my_secret_key": REDACTED,
 				"safe":          "value",
+			},
+		},
+		{
+			name: "map[string][]string sensitive key is redacted",
+			input: map[string]any{
+				"headers": map[string][]string{
+					"Authorization": {"Bearer secret-token"},
+					"Content-Type":  {"application/json"},
+				},
+			},
+			expect: map[string]any{
+				"headers": map[string]any{
+					"Authorization": REDACTED,
+					"Content-Type":  []any{"application/json"},
+				},
+			},
+		},
+		{
+			name: "map[string][]string URL credentials in values are redacted",
+			//nolint:gosec // this test is meant to redact sensitive values
+			input: map[string]any{
+				"endpoints": map[string][]string{
+					"hosts": {
+						"https://user:pass@es1:9200",
+						"https://user:pass@es2:9200",
+						"https://es3:9200",
+					},
+				},
+			},
+			expect: map[string]any{
+				"endpoints": map[string]any{
+					"hosts": []any{
+						"https://" + redactedURL + "@es1:9200",
+						"https://" + redactedURL + "@es2:9200",
+						"https://es3:9200",
+					},
+				},
+			},
+		},
+		{
+			name: "map[string][]string with no sensitive data is unchanged",
+			input: map[string]any{
+				"labels": map[string][]string{
+					"env":  {"production"},
+					"team": {"platform", "infra"},
+				},
+			},
+			expect: map[string]any{
+				"labels": map[string]any{
+					"env":  []any{"production"},
+					"team": []any{"platform", "infra"},
+				},
 			},
 		},
 		{
