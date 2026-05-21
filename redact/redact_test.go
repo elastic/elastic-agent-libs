@@ -100,6 +100,7 @@ func TestRedact(t *testing.T) {
 		},
 		{
 			name: "URL credentials are redacted",
+			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[string]any{
 				"url":       "https://user:pass@example.com/path",
 				"other_url": "https://example.com/path",
@@ -130,6 +131,7 @@ func TestRedact(t *testing.T) {
 		},
 		{
 			name: "sensitive key wins over URL redaction",
+			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[string]any{
 				"secret_url": "https://user:pass@example.com",
 			},
@@ -462,7 +464,6 @@ func TestRedact(t *testing.T) {
 		},
 		{
 			name: "map[string][]string URL credentials in values are redacted",
-			//nolint:gosec // this test is meant to redact sensitive values
 			input: map[string]any{
 				"endpoints": map[string][]string{
 					"hosts": {

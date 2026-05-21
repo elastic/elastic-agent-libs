@@ -100,7 +100,7 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 		if val != nil {
 			switch cast := val.(type) {
 			case map[string][]string:
-				var newMap map[string]any = make(map[string]any, len(cast))
+				newMap := make(map[string]any, len(cast))
 				for k, v := range cast {
 					if redactKey(k, ro) {
 						newMap[k] = REDACTED
