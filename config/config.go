@@ -27,11 +27,14 @@ import (
 	"github.com/elastic/elastic-agent-libs/str"
 	ucfg "github.com/elastic/go-ucfg"
 	"github.com/elastic/go-ucfg/yaml"
+	"go.opentelemetry.io/collector/confmap"
 )
 
 // C object to store hierarchical configurations into.
 // See https://godoc.org/github.com/elastic/go-ucfg#Config
 type C ucfg.Config
+
+var _ confmap.Unmarshaler = (*C)(nil)
 
 // Namespace stores at most one configuration section by name and sub-section.
 type Namespace struct {
@@ -278,6 +281,10 @@ func (c *C) access() *ucfg.Config {
 // GetFields returns the list of fields in the configuration.
 func (c *C) GetFields() []string {
 	return c.access().GetFields()
+}
+
+func (c *C) Unmarshal(conf *confmap.Conf) error {
+	return c.Merge(conf.ToStringMap())
 }
 
 // Unpack unpacks a configuration with at most one sub object. An sub object is
