@@ -265,18 +265,10 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 		return nil, err
 	}
 
-	// Apply dialer modifications (e.g. I/O stats) and connection logging to the
-	// plain TCP dialer *before* wrapping it with TLS, so the TLS dialer remains
-	// the outermost layer and returns a *tls.Conn.
-	//
-	// net/http only records the TLS connection state (and therefore populates
-	// Response.TLS) when the connection produced by Transport.DialTLSContext is a
-	// *tls.Conn (see (*http.Transport).dialConn, which does a concrete-type
-	// assertion `conn.(*tls.Conn)`). Wrapping the *tls.Conn in any other net.Conn
-	// implementation (stats or logging) makes that assertion fail and silently
-	// drops all tls.* metadata for HTTPS requests. Wrapping the underlying TCP
-	// connection instead keeps both behaviours: connection-level logging/stats and
-	// a usable *tls.Conn for net/http.
+	// Apply stats and logging to the TCP dialer before wrapping it with TLS, so
+	// the TLS dialer stays outermost and returns a *tls.Conn. net/http only sets
+	// Response.TLS when DialTLSContext yields a *tls.Conn (it does conn.(*tls.Conn)
+	// in Transport.dialConn); wrapping it would drop all tls.* metadata.
 	for _, opt := range opts {
 		if dialOpt, ok := opt.(dialerModOption); ok {
 			dialer = dialOpt.applyDialer(settings, dialer)
