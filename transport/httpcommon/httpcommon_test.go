@@ -19,10 +19,13 @@ package httpcommon
 
 import (
 	"bytes"
+	"crypto/tls"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -334,6 +337,76 @@ func Test_HTTPTransportSettings_RoundTripper(t *testing.T) {
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 		})
 	}
+}
+
+// countingStatser is a minimal transport.IOStatser used to verify the I/O stats
+// dialer still observes traffic when wrapped beneath the TLS layer.
+type countingStatser struct {
+	readBytes  atomic.Int64
+	writeBytes atomic.Int64
+}
+
+func (c *countingStatser) WriteError(error) {}
+func (c *countingStatser) WriteBytes(n int) { c.writeBytes.Add(int64(n)) }
+func (c *countingStatser) ReadError(error)  {}
+func (c *countingStatser) ReadBytes(n int)  { c.readBytes.Add(int64(n)) }
+
+// Test_HTTPTransportSettings_RoundTripper_TLSMetadata is a regression test for
+// https://github.com/elastic/beats/issues/48335. The RoundTripper installs a
+// custom DialTLSContext, and net/http only populates Response.TLS when that
+// dialer returns a *tls.Conn. Connection logging is always enabled (a default
+// logger is set when none is provided) and the I/O stats dialer is optional;
+// both used to wrap the *tls.Conn in another net.Conn, which made net/http drop
+// all TLS metadata for HTTPS requests.
+func Test_HTTPTransportSettings_RoundTripper_TLSMetadata(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ca := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: srv.TLS.Certificates[0].Certificate[0],
+	})
+	require.NotEmpty(t, ca)
+
+	newSettings := func() *HTTPTransportSettings {
+		s := DefaultHTTPTransportSettings()
+		s.TLS = &tlscommon.Config{CAs: []string{string(ca)}}
+		return &s
+	}
+
+	doRequest := func(t *testing.T, rt http.RoundTripper) *tls.ConnectionState {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, nil)
+		require.NoError(t, err)
+		resp, err := rt.RoundTrip(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		return resp.TLS
+	}
+
+	t.Run("populates Response.TLS for HTTPS requests", func(t *testing.T) {
+		rt, err := newSettings().RoundTripper()
+		require.NoError(t, err)
+
+		tlsState := doRequest(t, rt)
+		require.NotNil(t, tlsState, "Response.TLS must be set for HTTPS requests")
+		require.NotEmpty(t, tlsState.PeerCertificates, "TLS peer certificates must be present")
+	})
+
+	t.Run("populates Response.TLS and records stats with WithIOStats", func(t *testing.T) {
+		stats := &countingStatser{}
+		rt, err := newSettings().RoundTripper(WithIOStats(stats))
+		require.NoError(t, err)
+
+		tlsState := doRequest(t, rt)
+		require.NotNil(t, tlsState, "Response.TLS must be set for HTTPS requests")
+		require.NotEmpty(t, tlsState.PeerCertificates, "TLS peer certificates must be present")
+		require.Positive(t, stats.readBytes.Load(), "stats dialer must record bytes read over the TLS connection")
+		require.Positive(t, stats.writeBytes.Load(), "stats dialer must record bytes written over the TLS connection")
+	})
 }
 
 func Test_HTTPAuthorization_ToMap(t *testing.T) {
