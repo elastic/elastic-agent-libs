@@ -265,10 +265,6 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 		return nil, err
 	}
 
-	// Apply stats and logging to the TCP dialer before wrapping it with TLS, so
-	// the TLS dialer stays outermost and returns a *tls.Conn. net/http only sets
-	// Response.TLS when DialTLSContext yields a *tls.Conn (it does conn.(*tls.Conn)
-	// in Transport.dialConn); wrapping it would drop all tls.* metadata.
 	for _, opt := range opts {
 		if dialOpt, ok := opt.(dialerModOption); ok {
 			dialer = dialOpt.applyDialer(settings, dialer)
@@ -279,6 +275,10 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 		dialer = transport.LoggingDialer(dialer, logger)
 	}
 
+	// Wrap the TCP dialer (already decorated with stats/logging above) with TLS
+	// last, so the TLS dialer stays outermost and returns a *tls.Conn. net/http
+	// only sets Response.TLS when DialTLSContext yields a *tls.Conn (it does
+	// conn.(*tls.Conn) in Transport.dialConn); wrapping it would drop tls.* metadata.
 	tlsDialer := transport.TLSDialer(dialer, tls, settings.Timeout, extra.logger)
 
 	var rt http.RoundTripper
