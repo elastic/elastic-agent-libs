@@ -135,7 +135,7 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "localhost",
-			expectedCallback: false,
+			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"default verification with certificates when required with cert signed by unknown authority": {
@@ -160,6 +160,7 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			clientAuth:       tls.NoClientCert,
 			peerCerts:        nil,
 			serverName:       "",
+			expectedCallback: true,
 			expectedError:    nil,
 		},
 	}

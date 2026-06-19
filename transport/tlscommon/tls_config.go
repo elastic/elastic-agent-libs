@@ -407,7 +407,9 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 			}
 		}
 		// Static CAs: Go's stdlib handles chain + hostname verification
-		// (InsecureSkipVerify is false). We only need a callback for CA pin checking.
+		// (InsecureSkipVerify is false). A VerifyConnection callback is still
+		// required for FIPS key-type enforcement in requirefips builds without
+		// GODEBUG=fips140=only, and for CA pin checking when CASha256 is set.
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -415,8 +417,14 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 						return err
 					}
 				}
-				return verifyCAPin(cfg.CASha256, cs.VerifiedChains)
+				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
+					return err
+				}
+				return checkPeerCertsFIPS(cs.PeerCertificates)
 			}
+		}
+		return func(cs tls.ConnectionState) error {
+			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	default:
 	}
@@ -427,6 +435,12 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
 	switch cfg.Verification {
 
+	case VerifyNone:
+		// Chain and client-cert verification are disabled, but FIPS key-type
+		// constraints still apply to any cert the client presents.
+		return func(cs tls.ConnectionState) error {
+			return checkPeerCertsFIPS(cs.PeerCertificates)
+		}
 	// VerifyFull would attempt to match 'host' (c.ServerName) that is the host
 	// the client is trying to connect to with a DNS, IP or the CN from the
 	// client's certificate. Such validation, besides making no sense on the
@@ -446,7 +460,10 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				Intermediates: x509.NewCertPool(),
 				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 			}
-			return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+				return err
+			}
+			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	case VerifyStrict:
 		if cfg.clientCAs != nil && cfg.clientCAs.IsDynamic() {
@@ -462,13 +479,33 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 					Intermediates: x509.NewCertPool(),
 					KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 				}
-				return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+				if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+					return err
+				}
+				return checkPeerCertsFIPS(cs.PeerCertificates)
 			}
 		}
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
-				return verifyCAPin(cfg.CASha256, cs.VerifiedChains)
+				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
+					return err
+				}
+				return checkPeerCertsFIPS(cs.PeerCertificates)
 			}
+		}
+		// Static CAs: Go's stdlib handles chain verification via ClientAuth.
+		// A VerifyConnection callback is still required for FIPS key-type
+		// enforcement in requirefips builds without GODEBUG=fips140=only.
+		if len(cfg.CASha256) > 0 {
+			return func(cs tls.ConnectionState) error {
+				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
+					return err
+				}
+				return checkPeerCertsFIPS(cs.PeerCertificates)
+			}
+		}
+		return func(cs tls.ConnectionState) error {
+			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	default:
 	}

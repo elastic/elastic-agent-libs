@@ -47,6 +47,8 @@ func checkPeerCertsFIPS(certs []*x509.Certificate) error {
 
 // isCertAllowedFIPS reports whether cert uses a FIPS 140-3 approved key:
 // RSA ≥ 2048 bits, ECDSA on P-256/P-384/P-521, or Ed25519.
+// The allowed ECDSA curves mirror the TLS key-exchange curve allowlist in types_fips.go.
+// If that list changes, update this function to match.
 func isCertAllowedFIPS(cert *x509.Certificate) bool {
 	switch k := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
