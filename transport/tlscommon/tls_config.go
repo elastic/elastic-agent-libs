@@ -496,14 +496,6 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 		// Static CAs: Go's stdlib handles chain verification via ClientAuth.
 		// A VerifyConnection callback is still required for FIPS key-type
 		// enforcement in requirefips builds without GODEBUG=fips140=only.
-		if len(cfg.CASha256) > 0 {
-			return func(cs tls.ConnectionState) error {
-				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
-					return err
-				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
-			}
-		}
 		return func(cs tls.ConnectionState) error {
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
