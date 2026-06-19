@@ -391,7 +391,7 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			verificationMode: VerifyNone,
 			peerCerts:        []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:       "localhost",
-			expectedCallback: false,
+			expectedCallback: true,
 		},
 		"invalid CATrustedFingerprint and verification mode:VerifyFull returns error": {
 			verificationMode:     VerifyFull,

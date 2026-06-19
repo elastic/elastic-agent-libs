@@ -141,9 +141,10 @@ func TestApplyWithConfig(t *testing.T) {
 	assert.Empty(t, cfg.Certificates, "expected Certificates to be empty when cert reloader is active")
 	// RootCAs is populated from the provider's initial pool. Go ignores it when
 	// InsecureSkipVerify=true; CA verification is done via VerifyConnection instead.
-	// With verification_mode=none, VerifyConnection is nil (no verification performed).
+	// With verification_mode=none, VerifyConnection still enforces FIPS key-type
+	// constraints (a no-op in non-FIPS builds).
 	assert.NotNil(t, cfg.RootCAs)
-	assert.Nil(t, cfg.VerifyConnection)
+	assert.NotNil(t, cfg.VerifyConnection)
 	assert.Equal(t, true, cfg.InsecureSkipVerify)
 	assert.Len(t, cfg.CipherSuites, 2)
 	assert.Equal(t, int(TLSVersionDefaultMin), int(cfg.MinVersion))
@@ -254,9 +255,10 @@ func TestApplyWithServerConfig(t *testing.T) {
 	assert.Empty(t, cfg.Certificates, "expected Certificates to be empty when cert reloader is active")
 	// ClientCAs is populated from the provider's initial pool. Go ignores it when
 	// InsecureSkipVerify=true; CA verification is done via VerifyConnection instead.
-	// With verification_mode=none, VerifyConnection is nil (no verification performed).
+	// With verification_mode=none, VerifyConnection still enforces FIPS key-type
+	// constraints (a no-op in non-FIPS builds).
 	assert.NotNil(t, cfg.ClientCAs)
-	assert.Nil(t, cfg.VerifyConnection)
+	assert.NotNil(t, cfg.VerifyConnection)
 	assert.Equal(t, true, cfg.InsecureSkipVerify)
 	assert.Len(t, cfg.CipherSuites, 2)
 	assert.Equal(t, int(TLSVersionDefaultMin), int(cfg.MinVersion))

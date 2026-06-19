@@ -317,6 +317,13 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 	serverName := cfg.ServerName
 
 	switch cfg.Verification {
+	case VerifyNone:
+		// Chain and hostname verification are disabled, but FIPS key-type
+		// constraints still apply: if you want to skip FIPS, build without
+		// the requirefips tag.
+		return func(cs tls.ConnectionState) error {
+			return checkPeerCertsFIPS(cs.PeerCertificates)
+		}
 	case VerifyFull:
 		// Cert is trusted by CA
 		// Hostname or IP matches the certificate
@@ -341,6 +348,10 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return err
 			}
 
+			if err := checkPeerCertsFIPS(cs.PeerCertificates); err != nil {
+				return err
+			}
+
 			return verifyHostname(cs.PeerCertificates[0], serverName)
 		}
 	case VerifyCertificate:
@@ -362,7 +373,10 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				Roots:         cfg.currentRootCAs(),
 				Intermediates: x509.NewCertPool(),
 			}
-			return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+				return err
+			}
+			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	case VerifyStrict:
 		// Cert is trusted by CA
@@ -386,7 +400,10 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 					DNSName:       serverName,
 					Intermediates: x509.NewCertPool(),
 				}
-				return verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+				if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+					return err
+				}
+				return checkPeerCertsFIPS(cs.PeerCertificates)
 			}
 		}
 		// Static CAs: Go's stdlib handles chain + hostname verification
