@@ -27,9 +27,6 @@ import (
 	"fmt"
 )
 
-// fipsKeyTypeErrMark is the substring present in every FIPS key-type error message.
-const fipsKeyTypeErrMark = "not allowed by FIPS 140-3"
-
 // checkPeerCertsFIPS rejects any certificate in the peer chain (leaf and all
 // intermediates sent by the peer) whose public key is not approved by FIPS 140-3.
 // It must be called explicitly from VerifyConnection because Go's built-in FIPS
@@ -50,14 +47,14 @@ func checkPeerCertsFIPS(certs []*x509.Certificate) error {
 func fipsKeyError(cert *x509.Certificate) error {
 	switch k := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		return fmt.Errorf("tls: certificate uses RSA-%d public key which is %s (minimum 2048 bits)", k.N.BitLen(), fipsKeyTypeErrMark)
+		return fmt.Errorf("tls: certificate uses RSA-%d public key which is not allowed by FIPS 140-3 (minimum 2048 bits)", k.N.BitLen())
 	case *ecdsa.PublicKey:
 		if k.Curve == nil {
-			return fmt.Errorf("tls: certificate uses ECDSA public key with unknown curve which is %s (allowed: P-256, P-384, P-521)", fipsKeyTypeErrMark)
+			return fmt.Errorf("tls: certificate uses ECDSA public key with unknown curve which is not allowed by FIPS 140-3 (allowed: P-256, P-384, P-521)")
 		}
-		return fmt.Errorf("tls: certificate uses ECDSA-%s public key which is %s (allowed: P-256, P-384, P-521)", k.Curve.Params().Name, fipsKeyTypeErrMark)
+		return fmt.Errorf("tls: certificate uses ECDSA-%s public key which is not allowed by FIPS 140-3 (allowed: P-256, P-384, P-521)", k.Curve.Params().Name)
 	default:
-		return fmt.Errorf("tls: certificate uses %T public key which is %s", cert.PublicKey, fipsKeyTypeErrMark)
+		return fmt.Errorf("tls: certificate uses %T public key which is not allowed by FIPS 140-3", cert.PublicKey)
 	}
 }
 

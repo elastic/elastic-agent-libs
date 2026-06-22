@@ -202,7 +202,7 @@ func TestFIPSVerifyConnectionStaticCAs(t *testing.T) {
 
 	err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{invalidCert}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), fipsKeyTypeErrMark)
+	assert.Contains(t, err.Error(), "not allowed by FIPS 140-3")
 
 	err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{validCert}})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestFIPSVerifyConnectionStaticCAsWithCASha256(t *testing.T) {
 		VerifiedChains:   [][]*x509.Certificate{{invalidCert, caCert}},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), fipsKeyTypeErrMark,
+	assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 		"VerifyStrict+CASha256 must reject non-FIPS cert after CA pin passes")
 
 	err = verifier(tls.ConnectionState{
@@ -286,7 +286,7 @@ func TestFIPSVerifyServerConnectionRejectsBadCerts(t *testing.T) {
 				PeerCertificates: []*x509.Certificate{invalidCert},
 			})
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), fipsKeyTypeErrMark,
+			assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 				"mode %q must reject non-FIPS cert", tc.name)
 
 			err = verifier(tls.ConnectionState{
@@ -324,7 +324,7 @@ func TestFIPSVerifyServerConnectionDynamicCAs(t *testing.T) {
 		PeerCertificates: []*x509.Certificate{invalidCert},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), fipsKeyTypeErrMark,
+	assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 		"dynamic server VerifyStrict must reject non-FIPS client cert")
 
 	err = verifier(tls.ConnectionState{
@@ -335,7 +335,7 @@ func TestFIPSVerifyServerConnectionDynamicCAs(t *testing.T) {
 
 // TestFIPSVerifyConnectionCallbackRejectsBadCerts calls makeVerifyConnection
 // directly for every verification mode and asserts that the callback returns
-// the specific fipsKeyTypeErrMark error for a non-FIPS peer cert and
+// the specific "not allowed by FIPS 140-3" error for a non-FIPS peer cert and
 // nil for a FIPS-compliant cert.  This complements TestFIPSVerifyConnectionRejectsBadCerts
 // (end-to-end), which cannot assert the exact error source because Go's TLS
 // layer may reject the RSA-1024 server key before our VerifyConnection fires.
@@ -369,7 +369,7 @@ func TestFIPSVerifyConnectionCallbackRejectsBadCerts(t *testing.T) {
 
 			err := verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{invalidCert}})
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), fipsKeyTypeErrMark,
+			assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 				"mode %q must report FIPS key-type error, got: %v", tc.name, err)
 
 			err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{validCert}})
@@ -546,7 +546,7 @@ func TestFIPSCheckPeerCertsFIPSChain(t *testing.T) {
 	// FIPS-valid leaf followed by non-FIPS intermediate → rejected.
 	err := checkPeerCertsFIPS([]*x509.Certificate{validCert, invalidCert})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), fipsKeyTypeErrMark,
+	assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 		"non-FIPS intermediate must be caught even when leaf is compliant")
 
 	// All-FIPS chain → accepted.
