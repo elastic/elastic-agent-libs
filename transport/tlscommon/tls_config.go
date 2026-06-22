@@ -420,9 +420,7 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
-		return func(cs tls.ConnectionState) error {
-			return checkConnectionCertsFIPS(cs)
-		}
+		return checkConnectionCertsFIPS
 	default:
 		// Unrecognised modes are rejected at config validation time, so this
 		// branch is unreachable in practice. An error callback rather than nil
@@ -439,70 +437,24 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 
 	case VerifyNone:
 		// Chain and client-cert verification are disabled, but FIPS key-type
-		// constraints still apply. All certs the client sent are checked — a
-		// weak key anywhere in what was presented is still a violation.
-		return func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 {
-				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
-					return ErrMissingPeerCertificate
-				}
-				return nil
-			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
-		}
+		// constraints still apply — enforced by fipsVerifyNoneCallback. Returns
+		// nil in non-FIPS builds so no overhead is added to VerifyNone handshakes.
+		return fipsVerifyNoneCallback()
 	// VerifyFull would attempt to match 'host' (c.ServerName) that is the host
 	// the client is trying to connect to with a DNS, IP or the CN from the
 	// client's certificate. Such validation, besides making no sense on the
 	// server side also causes errors as the client certificate usually does not
 	// contain a DNS, IP or CN matching the server's hostname.
 	case VerifyFull, VerifyCertificate:
-		return func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 {
-				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
-					return ErrMissingPeerCertificate
-				}
-				return nil
-			}
-
-			opts := x509.VerifyOptions{
-				Roots:         cfg.currentClientCAs(),
-				Intermediates: x509.NewCertPool(),
-				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-			}
-			chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
-			if err != nil {
-				return err
-			}
-			return checkAllChainsFIPS(chains)
-		}
+		return verifyClientChain(cfg)
 	case VerifyStrict:
 		if cfg.clientCAs != nil && cfg.clientCAs.IsDynamic() {
-			return func(cs tls.ConnectionState) error {
-				if len(cs.PeerCertificates) == 0 {
-					if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
-						return ErrMissingPeerCertificate
-					}
-					return nil
-				}
-				opts := x509.VerifyOptions{
-					Roots:         cfg.currentClientCAs(),
-					Intermediates: x509.NewCertPool(),
-					KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-				}
-				chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
-				if err != nil {
-					return err
-				}
-				return checkAllChainsFIPS(chains)
-			}
+			return verifyClientChain(cfg)
 		}
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if len(cs.PeerCertificates) == 0 {
-					if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
-						return ErrMissingPeerCertificate
-					}
-					return nil
+					return noPeerCertsError(cfg)
 				}
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
@@ -511,14 +463,17 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
-		// Static CAs: Go handles chain verification automatically.
-		// A callback is still needed for FIPS key-type enforcement.
+		// Static CAs: Go builds cs.VerifiedChains for RequireAndVerifyClientCert and
+		// VerifyClientCertIfGiven; FIPS coverage uses those verified chains.
+		// For RequireAnyClientCert, Go deliberately skips chain building so
+		// cs.VerifiedChains is empty; checkConnectionCertsFIPS falls back to
+		// PeerCertificates (whatever the client chose to send). A client that omits
+		// intermediates can pass with a non-FIPS intermediate — accepted limitation of
+		// RequireAnyClientCert semantics; callers needing full chain coverage should
+		// use RequireAndVerifyClientCert.
 		return func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 {
-				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
-					return ErrMissingPeerCertificate
-				}
-				return nil
+				return noPeerCertsError(cfg)
 			}
 			return checkConnectionCertsFIPS(cs)
 		}
@@ -545,6 +500,37 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 		return chains, verifyCAPin(casha256, chains)
 	}
 	return chains, nil
+}
+
+// verifyClientChain returns a VerifyConnection callback that verifies the
+// client certificate chain against the configured CA pool and enforces FIPS
+// key-type constraints. Used by VerifyFull, VerifyCertificate, and the
+// dynamic-CA VerifyStrict server paths, which share identical verification logic.
+func verifyClientChain(cfg *TLSConfig) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		if len(cs.PeerCertificates) == 0 {
+			return noPeerCertsError(cfg)
+		}
+		opts := x509.VerifyOptions{
+			Roots:         cfg.currentClientCAs(),
+			Intermediates: x509.NewCertPool(),
+			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		}
+		chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+		if err != nil {
+			return err
+		}
+		return checkAllChainsFIPS(chains)
+	}
+}
+
+// noPeerCertsError returns ErrMissingPeerCertificate when the config requires a
+// verified client cert and none was presented, otherwise nil.
+func noPeerCertsError(cfg *TLSConfig) error {
+	if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+		return ErrMissingPeerCertificate
+	}
+	return nil
 }
 
 // checkConnectionCertsFIPS enforces FIPS key-type constraints using the verified

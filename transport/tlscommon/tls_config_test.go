@@ -150,13 +150,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			serverName:       "",
 			expectedError:    nil,
 		},
-		"no verification without certificates when required": {
-			verificationMode: VerifyNone,
-			clientAuth:       tls.RequireAndVerifyClientCert,
-			peerCerts:        nil,
-			serverName:       "",
-			expectedError:    ErrMissingPeerCertificate,
-		},
 	}
 
 	for name, test := range testcases {
@@ -172,7 +165,13 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			}
 
 			verifier := makeVerifyServerConnection(cfg)
-			require.NotNil(t, verifier, "makeVerifyServerConnection returned a nil verifier")
+			// VerifyNone returns nil in non-FIPS builds (no callback overhead needed).
+			// FIPS builds always install a callback to enforce key-type constraints.
+			if verifier == nil {
+				require.Equal(t, VerifyNone, test.verificationMode, "only VerifyNone should return a nil verifier")
+				require.Nil(t, test.expectedError, "nil verifier cannot produce an error")
+				return
+			}
 
 			err := verifier(tls.ConnectionState{
 				PeerCertificates: test.peerCerts,
@@ -420,7 +419,12 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			}
 
 			verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
-			require.NotNil(t, verifier, "makeVerifyConnection returned a nil verifier")
+			// VerifyNone returns nil in non-FIPS builds (no callback overhead needed).
+			// FIPS builds always install a callback to enforce key-type constraints.
+			if verifier == nil {
+				require.False(t, test.expectingError, "nil verifier cannot produce an error")
+				return
+			}
 
 			err := verifier(tls.ConnectionState{
 				PeerCertificates: test.peerCerts,
