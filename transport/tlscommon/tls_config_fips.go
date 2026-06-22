@@ -27,6 +27,20 @@ import (
 	"fmt"
 )
 
+// checkAllChainsFIPS rejects if any chain in chains contains a certificate whose
+// public key is not FIPS 140-3 approved. cert.Verify() can return multiple chains
+// when a certificate has more than one valid path to a trusted root; per SP 800-57
+// (weakest-link principle), every authentication path must use only approved keys —
+// a non-FIPS chain is unacceptable even when a compliant path also exists.
+func checkAllChainsFIPS(chains [][]*x509.Certificate) error {
+	for _, chain := range chains {
+		if err := checkPeerCertsFIPS(chain); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // checkPeerCertsFIPS rejects any certificate in certs whose public key is not
 // approved by FIPS 140-3. Must be called explicitly from VerifyConnection because
 // Go skips its own FIPS certificate check when chain verification is handled by

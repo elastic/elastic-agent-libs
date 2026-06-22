@@ -216,9 +216,8 @@ func TestFIPSVerifyConnectionStaticCAs(t *testing.T) {
 
 // TestFIPSNonFIPSIntermediateInVerifiedChain confirms that a non-FIPS intermediate
 // (or root) in the verified chain is rejected even when the leaf is FIPS-compliant.
-// This exercises the path added to close the bypass where verifiedChainOrPeerCerts
-// was needed: if Go does not populate VerifiedChains the code now falls back to
-// PeerCertificates, and when it is populated the full chain is checked.
+// checkAllChainsFIPS checks every cert in every chain, so a non-FIPS intermediate
+// is caught regardless of its position.
 func TestFIPSNonFIPSIntermediateInVerifiedChain(t *testing.T) {
 	caCertPEM, err := os.ReadFile(filepath.Join("testdata", "ca.crt"))
 	require.NoError(t, err)
@@ -598,6 +597,54 @@ func TestFIPSCertificateAndKeys(t *testing.T) {
 
 		_, err = LoadTLSConfig(cfg, logptest.NewTestingLogger(t, ""))
 		assert.ErrorIs(t, err, errors.ErrUnsupported)
+	})
+}
+
+// TestFIPSMultipleVerifiedChainsAllMustPass verifies the weakest-link rule for
+// multi-chain scenarios (e.g. a cross-signed cert with two valid paths to
+// different roots). Every chain in cs.VerifiedChains must be FIPS-compliant;
+// a single non-FIPS chain causes rejection even when another chain is clean.
+func TestFIPSMultipleVerifiedChainsAllMustPass(t *testing.T) {
+	caCertPEM, err := os.ReadFile(filepath.Join("testdata", "ca.crt"))
+	require.NoError(t, err)
+	pool := x509.NewCertPool()
+	require.True(t, pool.AppendCertsFromPEM(caCertPEM))
+
+	validCert := loadX509Cert(t, "fips_valid.crt")
+	invalidCert := loadX509Cert(t, "fips_invalid.crt")
+
+	cfg := &TLSConfig{
+		Verification: VerifyStrict,
+		rootCAs:      newStaticCertPool(pool),
+		ServerName:   "localhost",
+	}
+	verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
+	require.NotNil(t, verifier)
+
+	t.Run("any non-FIPS chain causes rejection", func(t *testing.T) {
+		// chain 0 is FIPS-clean; chain 1 has a non-FIPS intermediate.
+		// The non-FIPS chain must cause rejection (weakest-link principle).
+		err := verifier(tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{validCert},
+			VerifiedChains: [][]*x509.Certificate{
+				{validCert},
+				{validCert, invalidCert},
+			},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
+			"a non-FIPS chain must cause rejection even when another chain is FIPS-compliant")
+	})
+
+	t.Run("all-FIPS chains accepted", func(t *testing.T) {
+		err := verifier(tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{validCert},
+			VerifiedChains: [][]*x509.Certificate{
+				{validCert},
+				{validCert, validCert},
+			},
+		})
+		require.NoError(t, err, "all-FIPS chains must be accepted")
 	})
 }
 

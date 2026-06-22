@@ -23,3 +23,6 @@ import "crypto/x509"
 
 // checkPeerCertsFIPS is a no-op in non-FIPS builds.
 func checkPeerCertsFIPS(_ []*x509.Certificate) error { return nil }
+
+// checkAllChainsFIPS is a no-op in non-FIPS builds.
+func checkAllChainsFIPS(_ [][]*x509.Certificate) error { return nil }
