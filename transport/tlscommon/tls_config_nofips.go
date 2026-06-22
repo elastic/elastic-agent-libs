@@ -19,10 +19,16 @@
 
 package tlscommon
 
-import "crypto/x509"
+import (
+	"crypto/tls"
+	"crypto/x509"
+)
 
 // checkPeerCertsFIPS is a no-op in non-FIPS builds.
 func checkPeerCertsFIPS(_ []*x509.Certificate) error { return nil }
 
 // checkAllChainsFIPS is a no-op in non-FIPS builds.
 func checkAllChainsFIPS(_ [][]*x509.Certificate) error { return nil }
+
+// fipsVerifyNoneCallback returns nil in non-FIPS builds — no callback needed.
+func fipsVerifyNoneCallback() func(tls.ConnectionState) error { return nil }

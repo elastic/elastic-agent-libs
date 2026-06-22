@@ -23,9 +23,19 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 )
+
+// fipsVerifyNoneCallback returns a VerifyConnection callback that enforces FIPS
+// key-type constraints on all peer certs when chain verification is disabled.
+// In non-FIPS builds the stub returns nil so no callback is installed.
+func fipsVerifyNoneCallback() func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		return checkPeerCertsFIPS(cs.PeerCertificates)
+	}
+}
 
 // checkAllChainsFIPS rejects if any chain in chains contains a certificate whose
 // public key is not FIPS 140-3 approved. cert.Verify() can return multiple chains
@@ -74,8 +84,8 @@ func fipsKeyError(cert *x509.Certificate) error {
 
 // isCertAllowedFIPS reports whether cert uses a FIPS 140-3 approved key:
 // RSA ≥ 2048 bits, ECDSA on P-256/P-384/P-521, or Ed25519.
-// The ECDSA curves match the key-exchange curve allowlist (SP 800-186).
-// If that list changes, update the ECDSA case here to match.
+// The ECDSA curve set must stay in sync with the key-exchange allowlist in
+// types_fips.go init(). If SP 800-186 changes the approved curves, update both.
 // Ed25519 is approved for signatures under FIPS 186-5.
 func isCertAllowedFIPS(cert *x509.Certificate) bool {
 	switch k := cert.PublicKey.(type) {

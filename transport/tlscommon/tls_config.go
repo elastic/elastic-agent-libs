@@ -319,12 +319,9 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 	switch cfg.Verification {
 	case VerifyNone:
 		// Chain and hostname verification are disabled, but FIPS key-type constraints
-		// still apply. No verified chain is available, so all certs the peer sent
-		// (PeerCertificates) are checked — a weak key anywhere in what was presented
-		// is still a violation.
-		return func(cs tls.ConnectionState) error {
-			return checkPeerCertsFIPS(cs.PeerCertificates)
-		}
+		// still apply — enforced by fipsVerifyNoneCallback. Returns nil in non-FIPS
+		// builds so no overhead is added to VerifyNone handshakes.
+		return fipsVerifyNoneCallback()
 	case VerifyFull:
 		// Cert is trusted by CA; hostname or IP matches the certificate.
 		// Go's built-in chain verification is not used — chain and FIPS checks are done here.
@@ -419,19 +416,12 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				// cs.VerifiedChains is empty for ClientAuth modes that don't fully
-				// verify the cert (e.g. RequireAnyClientCert); fall back to all peer certs.
-				if len(cs.VerifiedChains) > 0 {
-					return checkAllChainsFIPS(cs.VerifiedChains)
-				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				// verifyCAPin returning nil guarantees cs.VerifiedChains is non-empty.
+				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
 		return func(cs tls.ConnectionState) error {
-			if len(cs.VerifiedChains) > 0 {
-				return checkAllChainsFIPS(cs.VerifiedChains)
-			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkConnectionCertsFIPS(cs)
 		}
 	default:
 		// Unrecognised modes are rejected at config validation time, so this
@@ -517,10 +507,8 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				if len(cs.VerifiedChains) > 0 {
-					return checkAllChainsFIPS(cs.VerifiedChains)
-				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				// verifyCAPin returning nil guarantees cs.VerifiedChains is non-empty.
+				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
 		// Static CAs: Go handles chain verification automatically.
@@ -532,12 +520,7 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				}
 				return nil
 			}
-			// cs.VerifiedChains is empty for ClientAuth modes that don't fully
-			// verify the cert (e.g. RequireAnyClientCert); fall back to all peer certs.
-			if len(cs.VerifiedChains) > 0 {
-				return checkAllChainsFIPS(cs.VerifiedChains)
-			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkConnectionCertsFIPS(cs)
 		}
 	default:
 		// Unrecognised modes are rejected at config validation time, so this
@@ -562,6 +545,19 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 		return chains, verifyCAPin(casha256, chains)
 	}
 	return chains, nil
+}
+
+// checkConnectionCertsFIPS enforces FIPS key-type constraints using the verified
+// chains when Go has built them, falling back to the raw peer certs when
+// VerifiedChains is empty. Go only populates VerifiedChains for ClientAuth modes
+// that fully verify the client cert (RequireAndVerifyClientCert,
+// VerifyClientCertIfGiven); for RequireAnyClientCert, VerifiedChains is empty
+// even when PeerCertificates is not.
+func checkConnectionCertsFIPS(cs tls.ConnectionState) error {
+	if len(cs.VerifiedChains) > 0 {
+		return checkAllChainsFIPS(cs.VerifiedChains)
+	}
+	return checkPeerCertsFIPS(cs.PeerCertificates)
 }
 
 // verifyHostname verifies if the provided hostnmae matches
