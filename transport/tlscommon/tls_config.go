@@ -319,19 +319,16 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 	switch cfg.Verification {
 	case VerifyNone:
 		// Chain and hostname verification are disabled, but FIPS key-type constraints
-		// still apply — enforced by fipsVerifyNoneCallback. Returns nil in non-FIPS
-		// builds so no overhead is added to VerifyNone handshakes.
+		// still apply — all peer certificates are checked for approved key types.
 		return fipsVerifyNoneCallback()
 	case VerifyFull:
 		// Cert is trusted by CA; hostname or IP matches the certificate.
-		// Go's built-in chain verification is not used — chain and FIPS checks are done here.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
 					return err
 				}
 			}
-			// On the client side, PeerCertificates can't be empty.
 			if len(cs.PeerCertificates) == 0 {
 				return ErrMissingPeerCertificate
 			}
@@ -353,14 +350,12 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 		}
 	case VerifyCertificate:
 		// Cert is trusted by CA; hostname/IP is NOT validated.
-		// Go's built-in chain verification is not used — chain and FIPS checks are done here.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
 					return err
 				}
 			}
-			// On the client side, PeerCertificates can't be empty.
 			if len(cs.PeerCertificates) == 0 {
 				return ErrMissingPeerCertificate
 			}
@@ -376,12 +371,10 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 			return checkAllChainsFIPS(chains)
 		}
 	case VerifyStrict:
-		// Cert is trusted by CA
-		// Hostname or IP matches the certificate
-		// Returns error if SNA is empty
+		// Cert is trusted by CA; hostname or IP must match the certificate's SAN.
 		if cfg.rootCAs != nil && cfg.rootCAs.IsDynamic() {
-			// The CA pool is reloaded at runtime. Go can't automatically verify
-			// the chain with a dynamic pool, so full verification is done here.
+			// The CA pool reloads at runtime; the callback must verify the chain
+			// using the current pool on every handshake.
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
 					if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -403,9 +396,8 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return checkAllChainsFIPS(chains)
 			}
 		}
-		// Static CAs: Go handles chain and hostname verification automatically.
-		// A callback is still needed for FIPS key-type enforcement and CA pin
-		// checking when CASha256 is set.
+		// Static CAs: chain and hostname are verified by the TLS stack automatically.
+		// A callback is only needed when a CA pin or FIPS key-type check is required.
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -416,7 +408,7 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				// verifyCAPin returning nil guarantees cs.VerifiedChains is non-empty.
+				// CA pin verified — the verified chain is guaranteed non-empty.
 				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
@@ -437,8 +429,8 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 
 	case VerifyNone:
 		// Chain and client-cert verification are disabled, but FIPS key-type
-		// constraints still apply — enforced by fipsVerifyNoneCallback. Returns
-		// nil in non-FIPS builds so no overhead is added to VerifyNone handshakes.
+		// constraints still apply — all presented certificates are checked for
+		// approved key types.
 		return fipsVerifyNoneCallback()
 	// VerifyFull would attempt to match 'host' (c.ServerName) that is the host
 	// the client is trying to connect to with a DNS, IP or the CN from the
@@ -459,18 +451,16 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				// verifyCAPin returning nil guarantees cs.VerifiedChains is non-empty.
+				// CA pin verified — the verified chain is guaranteed non-empty.
 				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
 		}
-		// Static CAs: Go builds cs.VerifiedChains for RequireAndVerifyClientCert and
-		// VerifyClientCertIfGiven; FIPS coverage uses those verified chains.
-		// For RequireAnyClientCert, Go deliberately skips chain building so
-		// cs.VerifiedChains is empty; checkConnectionCertsFIPS falls back to
-		// PeerCertificates (whatever the client chose to send). A client that omits
-		// intermediates can pass with a non-FIPS intermediate — accepted limitation of
-		// RequireAnyClientCert semantics; callers needing full chain coverage should
-		// use RequireAndVerifyClientCert.
+		// Static CAs: the TLS stack builds a verified chain for RequireAndVerifyClientCert
+		// and VerifyClientCertIfGiven; FIPS checks use those chains.
+		// For RequireAnyClientCert, chain building is deliberately skipped, so only
+		// the certificates the client chose to send are checked. A client that omits
+		// intermediates can pass with a non-FIPS intermediate — accepted limitation;
+		// use RequireAndVerifyClientCert for full chain coverage.
 		return func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 {
 				return noPeerCertsError(cfg)
@@ -502,10 +492,8 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 	return chains, nil
 }
 
-// verifyClientChain returns a VerifyConnection callback that verifies the
-// client certificate chain against the configured CA pool and enforces FIPS
-// key-type constraints. Used by VerifyFull, VerifyCertificate, and the
-// dynamic-CA VerifyStrict server paths, which share identical verification logic.
+// verifyClientChain returns a callback that verifies the client certificate
+// chain against the configured CA pool and enforces FIPS key-type constraints.
 func verifyClientChain(cfg *TLSConfig) func(tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {

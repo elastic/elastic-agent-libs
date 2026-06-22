@@ -28,20 +28,19 @@ import (
 	"fmt"
 )
 
-// fipsVerifyNoneCallback returns a VerifyConnection callback that enforces FIPS
-// key-type constraints on all peer certs when chain verification is disabled.
-// In non-FIPS builds the stub returns nil so no callback is installed.
+// fipsVerifyNoneCallback returns a handshake callback that enforces FIPS key-type
+// constraints on all certificates presented by the peer, used when chain
+// verification is disabled. The non-FIPS stub returns nil.
 func fipsVerifyNoneCallback() func(tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error {
 		return checkPeerCertsFIPS(cs.PeerCertificates)
 	}
 }
 
-// checkAllChainsFIPS rejects if any chain in chains contains a certificate whose
-// public key is not FIPS 140-3 approved. cert.Verify() can return multiple chains
-// when a certificate has more than one valid path to a trusted root; per SP 800-57
-// (weakest-link principle), every authentication path must use only approved keys —
-// a non-FIPS chain is unacceptable even when a compliant path also exists.
+// checkAllChainsFIPS rejects if any chain contains a certificate with a non-FIPS
+// 140-3 approved key. A certificate can have multiple valid paths to a trusted
+// root; per SP 800-57 (weakest-link principle), every path must use only approved
+// keys — a non-FIPS chain is unacceptable even when a compliant path also exists.
 func checkAllChainsFIPS(chains [][]*x509.Certificate) error {
 	for _, chain := range chains {
 		if err := checkPeerCertsFIPS(chain); err != nil {
@@ -51,14 +50,14 @@ func checkAllChainsFIPS(chains [][]*x509.Certificate) error {
 	return nil
 }
 
-// checkPeerCertsFIPS rejects any certificate in certs whose public key is not
-// approved by FIPS 140-3. Must be called explicitly from VerifyConnection because
-// Go skips its own FIPS certificate check when chain verification is handled by
-// the callback rather than the TLS stack (golang/go#80074). Callers pass the
-// verified chain when available, or all peer certs when no chain is built.
+// checkPeerCertsFIPS rejects any certificate whose public key is not approved by
+// FIPS 140-3. The TLS stack skips its own key-type check when a custom
+// verification callback is installed, so this must be called explicitly.
+// Callers pass the verified chain when available, or the raw peer certificates
+// when no chain was built.
 //
-// TODO: once Go exposes a public API for this check (requested in
-// https://github.com/golang/go/issues/80074), replace this local copy.
+// TODO: replace with a public API once one is available
+// (https://github.com/golang/go/issues/80074).
 func checkPeerCertsFIPS(certs []*x509.Certificate) error {
 	for _, cert := range certs {
 		if !isCertAllowedFIPS(cert) {
