@@ -27,14 +27,14 @@ import (
 	"fmt"
 )
 
-// checkPeerCertsFIPS rejects any certificate in the peer chain (leaf and all
-// intermediates sent by the peer) whose public key is not approved by FIPS 140-3.
-// It must be called explicitly from VerifyConnection because Go's built-in FIPS
-// certificate check is skipped whenever InsecureSkipVerify=true (golang/go#80074).
+// checkPeerCertsFIPS rejects any certificate in certs whose public key is not
+// approved by FIPS 140-3. Must be called explicitly from VerifyConnection because
+// Go skips its own FIPS certificate check when chain verification is handled by
+// the callback rather than the TLS stack (golang/go#80074). Callers pass the
+// verified chain when available, or all peer certs when no chain is built.
 //
-// TODO: Go does not yet expose a public API for this check. If one is added
-// (tracked in https://github.com/golang/go/issues/80074), replace this with
-// the standard library call so we stop maintaining a local copy.
+// TODO: once Go exposes a public API for this check (requested in
+// https://github.com/golang/go/issues/80074), replace this local copy.
 func checkPeerCertsFIPS(certs []*x509.Certificate) error {
 	for _, cert := range certs {
 		if !isCertAllowedFIPS(cert) {
@@ -60,9 +60,9 @@ func fipsKeyError(cert *x509.Certificate) error {
 
 // isCertAllowedFIPS reports whether cert uses a FIPS 140-3 approved key:
 // RSA ≥ 2048 bits, ECDSA on P-256/P-384/P-521, or Ed25519.
-// The ECDSA curves mirror the key-exchange curve allowlist in types_fips.go (SP 800-186).
+// The ECDSA curves match the key-exchange curve allowlist (SP 800-186).
 // If that list changes, update the ECDSA case here to match.
-// Ed25519 is approved for signatures under FIPS 186-5 and is handled independently.
+// Ed25519 is approved for signatures under FIPS 186-5.
 func isCertAllowedFIPS(cert *x509.Certificate) bool {
 	switch k := cert.PublicKey.(type) {
 	case *rsa.PublicKey:

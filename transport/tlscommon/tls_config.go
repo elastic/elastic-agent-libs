@@ -318,13 +318,16 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 
 	switch cfg.Verification {
 	case VerifyNone:
-		// Chain and hostname verification are disabled. FIPS key-type constraints still apply.
+		// Chain and hostname verification are disabled, but FIPS key-type constraints
+		// still apply. No verified chain is available, so all certs the peer sent
+		// (PeerCertificates) are checked — a weak key anywhere in what was presented
+		// is still a violation.
 		return func(cs tls.ConnectionState) error {
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	case VerifyFull:
 		// Cert is trusted by CA; hostname or IP matches the certificate.
-		// InsecureSkipVerify=true — chain and FIPS checks are done manually in this callback.
+		// Go's built-in chain verification is not used — chain and FIPS checks are done here.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -340,7 +343,7 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				Roots:         cfg.currentRootCAs(),
 				Intermediates: x509.NewCertPool(),
 			}
-			err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
 			if err != nil {
 				return err
 			}
@@ -349,11 +352,11 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return err
 			}
 
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkPeerCertsFIPS(verifiedChain(chains))
 		}
 	case VerifyCertificate:
 		// Cert is trusted by CA; hostname/IP is NOT validated.
-		// InsecureSkipVerify=true — chain and FIPS checks are done manually in this callback.
+		// Go's built-in chain verification is not used — chain and FIPS checks are done here.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -369,19 +372,19 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				Roots:         cfg.currentRootCAs(),
 				Intermediates: x509.NewCertPool(),
 			}
-			if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+			chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			if err != nil {
 				return err
 			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkPeerCertsFIPS(verifiedChain(chains))
 		}
 	case VerifyStrict:
 		// Cert is trusted by CA
 		// Hostname or IP matches the certificate
 		// Returns error if SNA is empty
 		if cfg.rootCAs != nil && cfg.rootCAs.IsDynamic() {
-			// When rootCAs is dynamic, InsecureSkipVerify is true so Go's
-			// stdlib won't validate the chain. Do full strict verification
-			// manually using the dynamically reloaded CA pool.
+			// The CA pool is reloaded at runtime. Go can't automatically verify
+			// the chain with a dynamic pool, so full verification is done here.
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
 					if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -396,15 +399,16 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 					DNSName:       serverName,
 					Intermediates: x509.NewCertPool(),
 				}
-				if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+				chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+				if err != nil {
 					return err
 				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				return checkPeerCertsFIPS(verifiedChain(chains))
 			}
 		}
-		// Static CAs: Go's stdlib handles chain and hostname verification
-		// (InsecureSkipVerify=false). A callback is still needed for FIPS
-		// key-type enforcement and CA pin checking when CASha256 is set.
+		// Static CAs: Go handles chain and hostname verification automatically.
+		// A callback is still needed for FIPS key-type enforcement and CA pin
+		// checking when CASha256 is set.
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -415,19 +419,19 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				return checkPeerCertsFIPS(verifiedChainOrPeerCerts(cs))
 			}
 		}
 		return func(cs tls.ConnectionState) error {
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkPeerCertsFIPS(verifiedChainOrPeerCerts(cs))
 		}
 	default:
-		// Validate() rejects unrecognised modes before ToConfig is called, so
-		// this branch is unreachable for a correctly built TLSConfig. An error
-		// callback is returned rather than nil to fail the handshake explicitly.
+		// Unrecognised modes are rejected at config validation time, so this
+		// branch is unreachable in practice. An error callback rather than nil
+		// ensures the handshake fails explicitly if it is ever reached.
 		mode := cfg.Verification
 		return func(_ tls.ConnectionState) error {
-			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %d", mode)
+			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %v", mode)
 		}
 	}
 }
@@ -437,7 +441,8 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 
 	case VerifyNone:
 		// Chain and client-cert verification are disabled, but FIPS key-type
-		// constraints still apply to any cert the client presents.
+		// constraints still apply. All certs the client sent are checked — a
+		// weak key anywhere in what was presented is still a violation.
 		return func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 {
 				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
@@ -466,10 +471,11 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				Intermediates: x509.NewCertPool(),
 				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 			}
-			if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+			chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+			if err != nil {
 				return err
 			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkPeerCertsFIPS(verifiedChain(chains))
 		}
 	case VerifyStrict:
 		if cfg.clientCAs != nil && cfg.clientCAs.IsDynamic() {
@@ -485,10 +491,11 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 					Intermediates: x509.NewCertPool(),
 					KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 				}
-				if err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts); err != nil {
+				chains, err := verifyCertsWithOpts(cs.PeerCertificates, cfg.CASha256, opts)
+				if err != nil {
 					return err
 				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				return checkPeerCertsFIPS(verifiedChain(chains))
 			}
 		}
 		if len(cfg.CASha256) > 0 {
@@ -502,10 +509,10 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
-				return checkPeerCertsFIPS(cs.PeerCertificates)
+				return checkPeerCertsFIPS(verifiedChainOrPeerCerts(cs))
 			}
 		}
-		// Static CAs: Go's stdlib handles chain verification via ClientAuth.
+		// Static CAs: Go handles chain verification automatically.
 		// A callback is still needed for FIPS key-type enforcement.
 		return func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 {
@@ -514,32 +521,54 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				}
 				return nil
 			}
-			return checkPeerCertsFIPS(cs.PeerCertificates)
+			return checkPeerCertsFIPS(verifiedChainOrPeerCerts(cs))
 		}
 	default:
-		// Validate() rejects unrecognised modes before ToConfig is called, so
-		// this branch is unreachable for a correctly built TLSConfig. An error
-		// callback is returned rather than nil to fail the handshake explicitly.
+		// Unrecognised modes are rejected at config validation time, so this
+		// branch is unreachable in practice. An error callback rather than nil
+		// ensures the handshake fails explicitly if it is ever reached.
 		mode := cfg.Verification
 		return func(_ tls.ConnectionState) error {
-			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %d", mode)
+			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %v", mode)
 		}
 	}
 }
 
-func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509.VerifyOptions) error {
+func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509.VerifyOptions) ([][]*x509.Certificate, error) {
 	for _, cert := range certs[1:] {
 		opts.Intermediates.AddCert(cert)
 	}
-	verifiedChains, err := certs[0].Verify(opts)
+	chains, err := certs[0].Verify(opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	if len(casha256) > 0 {
-		return verifyCAPin(casha256, verifiedChains)
+		return chains, verifyCAPin(casha256, chains)
 	}
-	return nil
+	return chains, nil
+}
+
+// verifiedChain returns the first chain from cert.Verify(). cert.Verify()
+// guarantees at least one chain on nil error, so this never returns nil
+// for callers that check the error first.
+func verifiedChain(chains [][]*x509.Certificate) []*x509.Certificate {
+	if len(chains) == 0 {
+		return nil
+	}
+	return chains[0]
+}
+
+// verifiedChainOrPeerCerts returns the first verified chain when available,
+// falling back to the raw peer certs. Use for paths that read cs.VerifiedChains,
+// which Go only populates for ClientAuth modes that fully verify the cert
+// (RequireAndVerifyClientCert, VerifyClientCertIfGiven). For other modes
+// (e.g. RequireAnyClientCert), VerifiedChains is empty even if PeerCertificates
+// is not, and a fallback prevents silently skipping the FIPS check.
+func verifiedChainOrPeerCerts(cs tls.ConnectionState) []*x509.Certificate {
+	if len(cs.VerifiedChains) > 0 {
+		return cs.VerifiedChains[0]
+	}
+	return cs.PeerCertificates
 }
 
 // verifyHostname verifies if the provided hostnmae matches

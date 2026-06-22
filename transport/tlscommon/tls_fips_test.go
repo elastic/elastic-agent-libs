@@ -200,12 +200,69 @@ func TestFIPSVerifyConnectionStaticCAs(t *testing.T) {
 	verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
 	require.NotNil(t, verifier)
 
-	err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{invalidCert}})
+	err = verifier(tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{invalidCert},
+		VerifiedChains:   [][]*x509.Certificate{{invalidCert}},
+	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not allowed by FIPS 140-3")
 
-	err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{validCert}})
+	err = verifier(tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{validCert},
+		VerifiedChains:   [][]*x509.Certificate{{validCert}},
+	})
 	require.NoError(t, err)
+}
+
+// TestFIPSNonFIPSIntermediateInVerifiedChain confirms that a non-FIPS intermediate
+// (or root) in the verified chain is rejected even when the leaf is FIPS-compliant.
+// This exercises the path added to close the bypass where verifiedChainOrPeerCerts
+// was needed: if Go does not populate VerifiedChains the code now falls back to
+// PeerCertificates, and when it is populated the full chain is checked.
+func TestFIPSNonFIPSIntermediateInVerifiedChain(t *testing.T) {
+	caCertPEM, err := os.ReadFile(filepath.Join("testdata", "ca.crt"))
+	require.NoError(t, err)
+	pool := x509.NewCertPool()
+	require.True(t, pool.AppendCertsFromPEM(caCertPEM))
+
+	validCert := loadX509Cert(t, "fips_valid.crt")
+	invalidCert := loadX509Cert(t, "fips_invalid.crt")
+
+	t.Run("client static-bare: FIPS leaf + non-FIPS intermediate", func(t *testing.T) {
+		cfg := &TLSConfig{
+			Verification: VerifyStrict,
+			rootCAs:      newStaticCertPool(pool),
+			ServerName:   "localhost",
+		}
+		verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
+		require.NotNil(t, verifier)
+
+		err := verifier(tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{validCert},
+			VerifiedChains:   [][]*x509.Certificate{{validCert, invalidCert}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
+			"non-FIPS intermediate must be caught even when leaf is compliant")
+	})
+
+	t.Run("server static-bare: FIPS leaf + non-FIPS intermediate", func(t *testing.T) {
+		cfg := &TLSConfig{
+			Verification: VerifyStrict,
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			clientCAs:    newStaticCertPool(pool),
+		}
+		verifier := makeVerifyServerConnection(cfg)
+		require.NotNil(t, verifier)
+
+		err := verifier(tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{validCert},
+			VerifiedChains:   [][]*x509.Certificate{{validCert, invalidCert}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
+			"non-FIPS intermediate must be caught even when leaf is compliant")
+	})
 }
 
 // TestFIPSVerifyConnectionStaticCAsWithCASha256 tests the VerifyStrict + static
@@ -284,6 +341,7 @@ func TestFIPSVerifyServerConnectionRejectsBadCerts(t *testing.T) {
 
 			err := verifier(tls.ConnectionState{
 				PeerCertificates: []*x509.Certificate{invalidCert},
+				VerifiedChains:   [][]*x509.Certificate{{invalidCert}},
 			})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
@@ -291,6 +349,7 @@ func TestFIPSVerifyServerConnectionRejectsBadCerts(t *testing.T) {
 
 			err = verifier(tls.ConnectionState{
 				PeerCertificates: []*x509.Certificate{validCert},
+				VerifiedChains:   [][]*x509.Certificate{{validCert}},
 			})
 			require.NoError(t, err, "mode %q must accept FIPS-compliant cert", tc.name)
 		})
@@ -367,12 +426,18 @@ func TestFIPSVerifyConnectionCallbackRejectsBadCerts(t *testing.T) {
 			verifier := makeVerifyConnection(cfg, logger)
 			require.NotNil(t, verifier)
 
-			err := verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{invalidCert}})
+			err := verifier(tls.ConnectionState{
+				PeerCertificates: []*x509.Certificate{invalidCert},
+				VerifiedChains:   [][]*x509.Certificate{{invalidCert}},
+			})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "not allowed by FIPS 140-3",
 				"mode %q must report FIPS key-type error, got: %v", tc.name, err)
 
-			err = verifier(tls.ConnectionState{PeerCertificates: []*x509.Certificate{validCert}})
+			err = verifier(tls.ConnectionState{
+				PeerCertificates: []*x509.Certificate{validCert},
+				VerifiedChains:   [][]*x509.Certificate{{validCert}},
+			})
 			require.NoError(t, err, "mode %q must accept FIPS-compliant cert", tc.name)
 		})
 	}

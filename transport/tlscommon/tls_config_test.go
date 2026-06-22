@@ -150,6 +150,13 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			serverName:       "",
 			expectedError:    nil,
 		},
+		"no verification without certificates when required": {
+			verificationMode: VerifyNone,
+			clientAuth:       tls.RequireAndVerifyClientCert,
+			peerCerts:        nil,
+			serverName:       "",
+			expectedError:    ErrMissingPeerCertificate,
+		},
 	}
 
 	for name, test := range testcases {
