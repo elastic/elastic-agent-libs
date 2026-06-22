@@ -22,16 +22,18 @@ package tlscommon
 import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
 )
 
-// checkPeerCertsFIPS rejects any certificate in the chain whose public key is
-// not approved by FIPS 140-3. It must be called explicitly from VerifyConnection
-// because Go's built-in FIPS certificate check is skipped whenever
-// InsecureSkipVerify=true — which most of our verification modes require.
+// fipsKeyTypeErrMark is the substring present in every FIPS key-type error message.
+const fipsKeyTypeErrMark = "not allowed by FIPS 140-3"
+
+// checkPeerCertsFIPS rejects any certificate in the peer chain (leaf and all
+// intermediates sent by the peer) whose public key is not approved by FIPS 140-3.
+// It must be called explicitly from VerifyConnection because Go's built-in FIPS
+// certificate check is skipped whenever InsecureSkipVerify=true (golang/go#80074).
 //
 // TODO: Go does not yet expose a public API for this check. If one is added
 // (tracked in https://github.com/golang/go/issues/80074), replace this with
@@ -39,22 +41,42 @@ import (
 func checkPeerCertsFIPS(certs []*x509.Certificate) error {
 	for _, cert := range certs {
 		if !isCertAllowedFIPS(cert) {
-			return fmt.Errorf("tls: certificate uses %T public key which is not allowed by FIPS 140-3", cert.PublicKey)
+			return fipsKeyError(cert)
 		}
 	}
 	return nil
 }
 
+func fipsKeyError(cert *x509.Certificate) error {
+	switch k := cert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		return fmt.Errorf("tls: certificate uses RSA-%d public key which is %s (minimum 2048 bits)", k.N.BitLen(), fipsKeyTypeErrMark)
+	case *ecdsa.PublicKey:
+		if k.Curve == nil {
+			return fmt.Errorf("tls: certificate uses ECDSA public key with unknown curve which is %s (allowed: P-256, P-384, P-521)", fipsKeyTypeErrMark)
+		}
+		return fmt.Errorf("tls: certificate uses ECDSA-%s public key which is %s (allowed: P-256, P-384, P-521)", k.Curve.Params().Name, fipsKeyTypeErrMark)
+	default:
+		return fmt.Errorf("tls: certificate uses %T public key which is %s", cert.PublicKey, fipsKeyTypeErrMark)
+	}
+}
+
 // isCertAllowedFIPS reports whether cert uses a FIPS 140-3 approved key:
 // RSA ≥ 2048 bits, ECDSA on P-256/P-384/P-521, or Ed25519.
-// The allowed ECDSA curves mirror the TLS key-exchange curve allowlist in types_fips.go.
-// If that list changes, update this function to match.
+// The ECDSA curves mirror the key-exchange curve allowlist in types_fips.go (SP 800-186).
+// If that list changes, update the ECDSA case here to match.
+// Ed25519 is approved for signatures under FIPS 186-5 and is handled independently.
 func isCertAllowedFIPS(cert *x509.Certificate) bool {
 	switch k := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
 		return k.N.BitLen() >= 2048
 	case *ecdsa.PublicKey:
-		return k.Curve == elliptic.P256() || k.Curve == elliptic.P384() || k.Curve == elliptic.P521()
+		if k.Curve == nil {
+			return false
+		}
+		// Compare by name rather than pointer to handle non-singleton curve implementations.
+		name := k.Curve.Params().Name
+		return name == "P-256" || name == "P-384" || name == "P-521"
 	case ed25519.PublicKey:
 		return true
 	default:

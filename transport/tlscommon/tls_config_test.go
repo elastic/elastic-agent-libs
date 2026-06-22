@@ -55,7 +55,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 		certAuthorities  *x509.CertPool
 		peerCerts        []*x509.Certificate
 		serverName       string
-		expectedCallback bool
 		expectedError    error
 	}{
 		"default verification without certificates when required": {
@@ -63,7 +62,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			clientAuth:       tls.RequireAndVerifyClientCert,
 			peerCerts:        nil,
 			serverName:       "",
-			expectedCallback: true,
 			expectedError:    ErrMissingPeerCertificate,
 		},
 		"default verification with certificates when required with expired cert": {
@@ -72,7 +70,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["expired"]},
 			serverName:       "",
-			expectedCallback: true,
 			expectedError:    x509.CertificateInvalidError{Cert: testCerts["expired"], Reason: x509.Expired},
 		},
 		"default verification with certificates when required do not verify hostname": {
@@ -81,7 +78,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "some.example.com",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"default verification with certificates when required with correct cert": {
@@ -90,7 +86,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "localhost",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"default verification with certificates when required with correct wildcard cert": {
@@ -99,7 +94,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["wildcard"]},
 			serverName:       "hello.example.com",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"certificate verification with certificates when required with correct cert": {
@@ -108,7 +102,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "localhost",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"certificate verification with certificates when required with expired cert": {
@@ -117,7 +110,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["expired"]},
 			serverName:       "localhost",
-			expectedCallback: true,
 			expectedError:    x509.CertificateInvalidError{Cert: testCerts["expired"], Reason: x509.Expired},
 		},
 		"certificate verification with certificates when required with incorrect server name in cert": {
@@ -126,7 +118,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "bad.example.com",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"strict verification with certificates when required with correct cert": {
@@ -135,7 +126,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["correct"]},
 			serverName:       "localhost",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"default verification with certificates when required with cert signed by unknown authority": {
@@ -144,7 +134,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			certAuthorities:  certPool,
 			peerCerts:        []*x509.Certificate{testCerts["unknown_authority"]},
 			serverName:       "",
-			expectedCallback: true,
 			expectedError:    x509.UnknownAuthorityError{Cert: testCerts["unknown_authority"]},
 		},
 		"default verification without certificates not required": {
@@ -152,7 +141,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			clientAuth:       tls.NoClientCert,
 			peerCerts:        nil,
 			serverName:       "",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 		"no verification without certificates not required": {
@@ -160,7 +148,6 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			clientAuth:       tls.NoClientCert,
 			peerCerts:        nil,
 			serverName:       "",
-			expectedCallback: true,
 			expectedError:    nil,
 		},
 	}
@@ -178,10 +165,7 @@ func TestMakeVerifyServerConnection(t *testing.T) {
 			}
 
 			verifier := makeVerifyServerConnection(cfg)
-			if !test.expectedCallback {
-				assert.Nil(t, verifier)
-				return
-			}
+			require.NotNil(t, verifier, "makeVerifyServerConnection returned a nil verifier")
 
 			err := verifier(tls.ConnectionState{
 				PeerCertificates: test.peerCerts,
@@ -361,7 +345,6 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 		verificationMode     TLSVerificationMode
 		peerCerts            []*x509.Certificate
 		serverName           string
-		expectedCallback     bool
 		expectingError       bool
 		CATrustedFingerprint string
 		CASHA256             []string
@@ -370,21 +353,18 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			verificationMode:     VerifyFull,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: fingerprint,
 		},
 		"CATrustedFingerprint and verification mode:VerifyCertificate": {
 			verificationMode:     VerifyCertificate,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: fingerprint,
 		},
 		"CATrustedFingerprint and verification mode:VerifyStrict": {
 			verificationMode:     VerifyStrict,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: fingerprint,
 			CASHA256:             []string{Fingerprint(testCerts["correct"])},
 		},
@@ -392,13 +372,11 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			verificationMode: VerifyNone,
 			peerCerts:        []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:       "localhost",
-			expectedCallback: true,
 		},
 		"invalid CATrustedFingerprint and verification mode:VerifyFull returns error": {
 			verificationMode:     VerifyFull,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: "INVALID HEX ENCODING",
 			expectingError:       true,
 		},
@@ -406,7 +384,6 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			verificationMode:     VerifyCertificate,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: "INVALID HEX ENCODING",
 			expectingError:       true,
 		},
@@ -414,7 +391,6 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			verificationMode:     VerifyStrict,
 			peerCerts:            []*x509.Certificate{testCerts["correct"], testCerts["ca"]},
 			serverName:           "localhost",
-			expectedCallback:     true,
 			CATrustedFingerprint: "INVALID HEX ENCODING",
 			expectingError:       true,
 			CASHA256:             []string{Fingerprint(testCerts["correct"])},
@@ -437,12 +413,7 @@ func TestMakeVerifyConnectionUsesCATrustedFingerprint(t *testing.T) {
 			}
 
 			verifier := makeVerifyConnection(cfg, logptest.NewTestingLogger(t, ""))
-			if test.expectedCallback {
-				require.NotNil(t, verifier, "makeVerifyConnection returned a nil verifier")
-			} else {
-				require.Nil(t, verifier)
-				return
-			}
+			require.NotNil(t, verifier, "makeVerifyConnection returned a nil verifier")
 
 			err := verifier(tls.ConnectionState{
 				PeerCertificates: test.peerCerts,
@@ -746,7 +717,7 @@ func TestVerificationMode(t *testing.T) {
 // The HTTP server will shutdown at the end of the test.
 func startTestServer(t *testing.T, serverAddr string, serverCerts []tls.Certificate) url.URL {
 	// Creates a listener on a random port selected by the OS
-	l, err := net.Listen("tcp", "localhost:0") //nolint:noctx // testing
+	l, err := net.Listen("tcp", serverAddr) //nolint:noctx // testing
 	if err != nil {
 		t.Fatalf("could call net.Listen: %s", err)
 	}
@@ -779,4 +750,23 @@ func startTestServer(t *testing.T, serverAddr string, serverCerts []tls.Certific
 	}()
 
 	return *serverURL
+}
+
+// TestMakeVerifyConnectionUnhandledMode exercises the default: error branch in
+// both makeVerifyConnection and makeVerifyServerConnection.
+func TestMakeVerifyConnectionUnhandledMode(t *testing.T) {
+	const unknownMode = TLSVerificationMode(99)
+	logger := logptest.NewTestingLogger(t, "")
+
+	clientVerifier := makeVerifyConnection(&TLSConfig{Verification: unknownMode}, logger)
+	require.NotNil(t, clientVerifier)
+	err := clientVerifier(tls.ConnectionState{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unhandled TLSVerificationMode")
+
+	serverVerifier := makeVerifyServerConnection(&TLSConfig{Verification: unknownMode})
+	require.NotNil(t, serverVerifier)
+	err = serverVerifier(tls.ConnectionState{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unhandled TLSVerificationMode")
 }

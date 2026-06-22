@@ -318,16 +318,13 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 
 	switch cfg.Verification {
 	case VerifyNone:
-		// Chain and hostname verification are disabled, but FIPS key-type
-		// constraints still apply: if you want to skip FIPS, build without
-		// the requirefips tag.
+		// Chain and hostname verification are disabled. FIPS key-type constraints still apply.
 		return func(cs tls.ConnectionState) error {
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	case VerifyFull:
-		// Cert is trusted by CA
-		// Hostname or IP matches the certificate
-		// tls.Config.InsecureSkipVerify  is set to true
+		// Cert is trusted by CA; hostname or IP matches the certificate.
+		// InsecureSkipVerify=true — chain and FIPS checks are done manually in this callback.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -348,16 +345,15 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return err
 			}
 
-			if err := checkPeerCertsFIPS(cs.PeerCertificates); err != nil {
+			if err := verifyHostname(cs.PeerCertificates[0], serverName); err != nil {
 				return err
 			}
 
-			return verifyHostname(cs.PeerCertificates[0], serverName)
+			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	case VerifyCertificate:
-		// Cert is trusted by CA
-		// Does NOT validate hostname or IP addresses
-		// tls.Config.InsecureSkipVerify is set to true
+		// Cert is trusted by CA; hostname/IP is NOT validated.
+		// InsecureSkipVerify=true — chain and FIPS checks are done manually in this callback.
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
@@ -406,10 +402,9 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return checkPeerCertsFIPS(cs.PeerCertificates)
 			}
 		}
-		// Static CAs: Go's stdlib handles chain + hostname verification
-		// (InsecureSkipVerify is false). A VerifyConnection callback is still
-		// required for FIPS key-type enforcement in requirefips builds without
-		// GODEBUG=fips140=only, and for CA pin checking when CASha256 is set.
+		// Static CAs: Go's stdlib handles chain and hostname verification
+		// (InsecureSkipVerify=false). A callback is still needed for FIPS
+		// key-type enforcement and CA pin checking when CASha256 is set.
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
 				if cfg.CATrustedFingerprint != "" {
@@ -427,9 +422,14 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	default:
+		// Validate() rejects unrecognised modes before ToConfig is called, so
+		// this branch is unreachable for a correctly built TLSConfig. An error
+		// callback is returned rather than nil to fail the handshake explicitly.
+		mode := cfg.Verification
+		return func(_ tls.ConnectionState) error {
+			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %d", mode)
+		}
 	}
-
-	return nil
 }
 
 func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error {
@@ -439,6 +439,12 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 		// Chain and client-cert verification are disabled, but FIPS key-type
 		// constraints still apply to any cert the client presents.
 		return func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+					return ErrMissingPeerCertificate
+				}
+				return nil
+			}
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	// VerifyFull would attempt to match 'host' (c.ServerName) that is the host
@@ -487,6 +493,12 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 		}
 		if len(cfg.CASha256) > 0 {
 			return func(cs tls.ConnectionState) error {
+				if len(cs.PeerCertificates) == 0 {
+					if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+						return ErrMissingPeerCertificate
+					}
+					return nil
+				}
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
@@ -494,15 +506,25 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 			}
 		}
 		// Static CAs: Go's stdlib handles chain verification via ClientAuth.
-		// A VerifyConnection callback is still required for FIPS key-type
-		// enforcement in requirefips builds without GODEBUG=fips140=only.
+		// A callback is still needed for FIPS key-type enforcement.
 		return func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				if cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+					return ErrMissingPeerCertificate
+				}
+				return nil
+			}
 			return checkPeerCertsFIPS(cs.PeerCertificates)
 		}
 	default:
+		// Validate() rejects unrecognised modes before ToConfig is called, so
+		// this branch is unreachable for a correctly built TLSConfig. An error
+		// callback is returned rather than nil to fail the handshake explicitly.
+		mode := cfg.Verification
+		return func(_ tls.ConnectionState) error {
+			return fmt.Errorf("tlscommon: unhandled TLSVerificationMode %d", mode)
+		}
 	}
-
-	return nil
 }
 
 func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509.VerifyOptions) error {
