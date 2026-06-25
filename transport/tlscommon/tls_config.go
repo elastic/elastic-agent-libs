@@ -322,13 +322,16 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 		// still apply — all peer certificates are checked for approved key types.
 		return fipsVerifyNoneCallback()
 	case VerifyFull:
-		// Cert is trusted by CA; hostname or IP matches the certificate.
+		// Cert is trusted by CA
+		// Hostname or IP matches the certificate
+		// tls.Config.InsecureSkipVerify is set to true
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
 					return err
 				}
 			}
+			// On the client side, PeerCertificates can't be empty.
 			if len(cs.PeerCertificates) == 0 {
 				return ErrMissingPeerCertificate
 			}
@@ -349,13 +352,16 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 			return checkAllChainsFIPS(chains)
 		}
 	case VerifyCertificate:
-		// Cert is trusted by CA; hostname/IP is NOT validated.
+		// Cert is trusted by CA
+		// Does NOT validate hostname or IP addresses
+		// tls.Config.InsecureSkipVerify is set to true
 		return func(cs tls.ConnectionState) error {
 			if cfg.CATrustedFingerprint != "" {
 				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
 					return err
 				}
 			}
+			// On the client side, PeerCertificates can't be empty.
 			if len(cs.PeerCertificates) == 0 {
 				return ErrMissingPeerCertificate
 			}
@@ -371,19 +377,23 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 			return checkAllChainsFIPS(chains)
 		}
 	case VerifyStrict:
-		// Cert is trusted by CA; hostname or IP must match the certificate's SAN.
-		if cfg.rootCAs != nil && cfg.rootCAs.IsDynamic() {
-			// The CA pool reloads at runtime; the callback must verify the chain
-			// using the current pool on every handshake.
-			return func(cs tls.ConnectionState) error {
-				if cfg.CATrustedFingerprint != "" {
-					if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
-						return err
-					}
+		// Cert is trusted by CA
+		// Hostname or IP matches the certificate
+		// Returns error if SAN is empty
+		return func(cs tls.ConnectionState) error {
+			if cfg.CATrustedFingerprint != "" {
+				if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
+					return err
 				}
-				if len(cs.PeerCertificates) == 0 {
-					return ErrMissingPeerCertificate
-				}
+			}
+			// On the client side, PeerCertificates can't be empty.
+			if len(cs.PeerCertificates) == 0 {
+				return ErrMissingPeerCertificate
+			}
+			if cfg.rootCAs != nil && cfg.rootCAs.IsDynamic() {
+				// When rootCAs is dynamic, InsecureSkipVerify is true so Go's
+				// stdlib won't validate the chain. Do full strict verification
+				// manually using the dynamically reloaded CA pool.
 				opts := x509.VerifyOptions{
 					Roots:         cfg.currentRootCAs(),
 					DNSName:       serverName,
@@ -395,24 +405,17 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				}
 				return checkAllChainsFIPS(chains)
 			}
-		}
-		// Static CAs: chain and hostname are verified by the TLS stack automatically.
-		// A callback is only needed when a CA pin or FIPS key-type check is required.
-		if len(cfg.CASha256) > 0 {
-			return func(cs tls.ConnectionState) error {
-				if cfg.CATrustedFingerprint != "" {
-					if err := trustRootCA(cfg, cs.PeerCertificates, logger); err != nil {
-						return err
-					}
-				}
+			// Static CAs: Go's stdlib handles chain + hostname verification
+			// (InsecureSkipVerify is false). We only need a callback for CA pin or FIPS checking.
+			if len(cfg.CASha256) > 0 {
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
 				}
 				// CA pin verified — the verified chain is guaranteed non-empty.
 				return checkAllChainsFIPS(cs.VerifiedChains)
 			}
+			return checkConnectionCertsFIPS(cs)
 		}
-		return checkConnectionCertsFIPS
 	default:
 		// Unrecognised modes are rejected at config validation time, so this
 		// branch is unreachable in practice. An error callback rather than nil
