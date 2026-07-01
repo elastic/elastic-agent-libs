@@ -592,32 +592,34 @@ func TestRedactHeaderValueKeys(t *testing.T) {
 		expect map[string]any
 	}{
 		{
-			name: "single sensitive header is expanded and redacted",
+			name: "single sensitive header: original becomes REDACTED, expanded entry added",
 			input: map[string]any{
 				"FLEET_HEADER": "X-Elastic-App-Auth=eyJhbGciOiJSUzI1NiJ9",
 			},
 			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADER")},
 			expect: map[string]any{
+				"FLEET_HEADER":                     REDACTED,
 				"FLEET_HEADER::X-Elastic-App-Auth": REDACTED,
 			},
 		},
 		{
-			name: "non-sensitive header is expanded with original value",
+			name: "non-sensitive header: original preserved, no expansion",
 			input: map[string]any{
 				"FLEET_HEADER": "Accept=application/json",
 			},
 			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADER")},
 			expect: map[string]any{
-				"FLEET_HEADER::Accept": "application/json",
+				"FLEET_HEADER": "Accept=application/json",
 			},
 		},
 		{
-			name: "multi-header value expands selectively",
+			name: "multi-header value: original becomes REDACTED when any header is sensitive",
 			input: map[string]any{
 				"FLEET_HEADERS": "X-Elastic-App-Auth=eyJhbGciOiJSUzI1NiJ9,Accept=application/json",
 			},
 			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADERS")},
 			expect: map[string]any{
+				"FLEET_HEADERS":                     REDACTED,
 				"FLEET_HEADERS::X-Elastic-App-Auth": REDACTED,
 				"FLEET_HEADERS::Accept":             "application/json",
 			},
@@ -630,8 +632,36 @@ func TestRedactHeaderValueKeys(t *testing.T) {
 			},
 			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADER", "FLEET_KIBANA_HEADER")},
 			expect: map[string]any{
+				"FLEET_HEADER":                            REDACTED,
 				"FLEET_HEADER::X-Elastic-App-Auth":        REDACTED,
+				"FLEET_KIBANA_HEADER":                     REDACTED,
 				"FLEET_KIBANA_HEADER::X-Elastic-App-Auth": REDACTED,
+			},
+		},
+		{
+			name: "multi-header value: original preserved, no expansion when no header is sensitive",
+			input: map[string]any{
+				"FLEET_HEADERS": "Accept=application/json,Content-Type=application/json",
+			},
+			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADERS")},
+			expect: map[string]any{
+				"FLEET_HEADERS": "Accept=application/json,Content-Type=application/json",
+			},
+		},
+		{
+			name: "one key with sensitive headers expanded, another with only innocuous headers left unchanged",
+			input: map[string]any{
+				"FLEET_HEADERS":        "X-Elastic-App-Auth=eyJhbGciOiJSUzI1NiJ9,Accept=application/json",
+				"FLEET_KIBANA_HEADERS": "Accept=application/json,Content-Type=application/json",
+			},
+			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADERS", "FLEET_KIBANA_HEADERS")},
+			expect: map[string]any{
+				// FLEET_HEADERS had a sensitive header — original redacted, sub-entries added
+				"FLEET_HEADERS":                     REDACTED,
+				"FLEET_HEADERS::X-Elastic-App-Auth": REDACTED,
+				"FLEET_HEADERS::Accept":             "application/json",
+				// FLEET_KIBANA_HEADERS had no sensitive headers — left completely unchanged
+				"FLEET_KIBANA_HEADERS": "Accept=application/json,Content-Type=application/json",
 			},
 		},
 		{
@@ -658,14 +688,15 @@ func TestRedactHeaderValueKeys(t *testing.T) {
 			},
 		},
 		{
-			name: "value with no equals sign produces no expanded entries",
+			name: "value with no equals sign: original preserved, no expanded entries",
 			input: map[string]any{
 				"FLEET_HEADER": "not-a-header-value",
 				"OTHER":        "safe",
 			},
 			opts: []RedactOption{WithHeaderValueKeys("FLEET_HEADER")},
 			expect: map[string]any{
-				"OTHER": "safe",
+				"FLEET_HEADER": "not-a-header-value",
+				"OTHER":        "safe",
 			},
 		},
 	}

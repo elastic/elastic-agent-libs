@@ -40,7 +40,7 @@ type redactOptions struct {
 	errOut          io.Writer
 	markerPrefix    string
 	ignoreKeys      []string
-	headerValueKeys []string
+	headerValueKeys map[string]struct{}
 }
 
 type headerPair struct {
@@ -49,8 +49,9 @@ type headerPair struct {
 }
 
 type headerExpansion struct {
-	origKey string
-	pairs   []headerPair
+	origKey     string
+	pairs       []headerPair
+	anyRedacted bool
 }
 
 // WithErrorOutput determines where any error messages that are encountered are written to.
@@ -84,7 +85,12 @@ func WithIgnoreKeys(keys ...string) RedactOption {
 // replaced with REDACTED.
 func WithHeaderValueKeys(keys ...string) RedactOption {
 	return func(ro *redactOptions) {
-		ro.headerValueKeys = append(ro.headerValueKeys, keys...)
+		if ro.headerValueKeys == nil {
+			ro.headerValueKeys = make(map[string]struct{}, len(keys))
+		}
+		for _, k := range keys {
+			ro.headerValueKeys[k] = struct{}{}
+		}
 	}
 }
 
@@ -177,16 +183,20 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 					val = REDACTED
 				} else if redactedValue, redact := redactURL(cast); redact {
 					val = redactedValue
-				} else if len(ro.headerValueKeys) > 0 {
-					if keyString, ok := any(key).(string); ok && slices.Contains(ro.headerValueKeys, keyString) {
+				} else if keyString, ok := any(key).(string); ok {
+					if _, isHeaderKey := ro.headerValueKeys[keyString]; isHeaderKey {
 						pairs := parseHeaderPairs(cast)
-						for i := range pairs {
-							if redactKey(pairs[i].name, ro) {
-								pairs[i].value = REDACTED
+						if len(pairs) > 0 {
+							anyRedacted := false
+							for i := range pairs {
+								if redactKey(pairs[i].name, ro) {
+									pairs[i].value = REDACTED
+									anyRedacted = true
+								}
 							}
+							headerExpansions = append(headerExpansions, headerExpansion{origKey: keyString, pairs: pairs, anyRedacted: anyRedacted})
+							continue
 						}
-						headerExpansions = append(headerExpansions, headerExpansion{origKey: keyString, pairs: pairs})
-						continue
 					}
 				}
 			case bool: // redaction marker values are always going to be bool, process redaction markers in this case
@@ -225,9 +235,18 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 	}
 
 	for _, exp := range headerExpansions {
-		if k, ok := any(exp.origKey).(K); ok {
-			delete(obj, k)
+		// No sensitive header found in this value, leave the original entry unchanged.
+		if !exp.anyRedacted {
+			continue
 		}
+		// At least one header was sensitive: overwrite the original flat value with
+		// REDACTED so it is clear the entry contained a secret, without leaking which
+		// specific part of the string held it.
+		if k, ok := any(exp.origKey).(K); ok {
+			obj[k] = REDACTED
+		}
+		// Add one sub-entry per parsed header so reviewers can see which headers were
+		// present and which ones were the sensitive ones.
 		for _, p := range exp.pairs {
 			expandedKey := exp.origKey + HeaderValueKeySeparator + p.name
 			if k, ok := any(expandedKey).(K); ok {
