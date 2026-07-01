@@ -636,6 +636,7 @@ func TestRedactHeaderValueKeys(t *testing.T) {
 		},
 		{
 			name: "key-based redaction takes priority over header expansion",
+			//nolint:gosec // fake credentials for testing
 			input: map[string]any{
 				// SECRET_HEADER matches redactKey via "secret", so it is redacted
 				// wholesale before the header expansion logic is reached.
