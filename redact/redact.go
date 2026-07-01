@@ -29,13 +29,28 @@ import (
 // REDACTED is the value that replaces sensitive values.
 const REDACTED = "REDACTED"
 
+// HeaderValueKeySeparator is used when expanding header-valued keys into
+// per-header sub-entries in the redacted output.
+const HeaderValueKeySeparator = "::"
+
 // RedactOption is an optional arg to control how the Redact method works.
 type RedactOption func(ro *redactOptions)
 
 type redactOptions struct {
-	errOut       io.Writer
-	markerPrefix string
-	ignoreKeys   []string
+	errOut          io.Writer
+	markerPrefix    string
+	ignoreKeys      []string
+	headerValueKeys []string
+}
+
+type headerPair struct {
+	name  string
+	value string
+}
+
+type headerExpansion struct {
+	origKey string
+	pairs   []headerPair
 }
 
 // WithErrorOutput determines where any error messages that are encountered are written to.
@@ -61,6 +76,18 @@ func WithIgnoreKeys(keys ...string) RedactOption {
 	}
 }
 
+// WithHeaderValueKeys registers keys whose string values are formatted as
+// comma-separated "Name=Value" pairs (e.g. HTTP header env vars). During
+// redaction each such entry is expanded into "originalKey::Name" sub-entries
+// so that the standard redactKey rules can match the individual header names.
+// Non-sensitive headers are kept with their original value; sensitive ones are
+// replaced with REDACTED.
+func WithHeaderValueKeys(keys ...string) RedactOption {
+	return func(ro *redactOptions) {
+		ro.headerValueKeys = append(ro.headerValueKeys, keys...)
+	}
+}
+
 // Redact walks obj and replaces values of sensitive keys with a redacted
 // placeholder. It mutates obj in place; nested maps and slice elements are
 // modified directly and no copy is returned.
@@ -82,6 +109,7 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 	}
 
 	markers := make([]string, 0)
+	headerExpansions := make([]headerExpansion, 0)
 	for key, val := range obj {
 		// detect if the obj has entries of the form:
 		// - name: Authorization
@@ -149,6 +177,17 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 					val = REDACTED
 				} else if redactedValue, redact := redactURL(cast); redact {
 					val = redactedValue
+				} else if len(ro.headerValueKeys) > 0 {
+					if keyString, ok := any(key).(string); ok && slices.Contains(ro.headerValueKeys, keyString) {
+						pairs := parseHeaderPairs(cast)
+						for i := range pairs {
+							if redactKey(pairs[i].name, ro) {
+								pairs[i].value = REDACTED
+							}
+						}
+						headerExpansions = append(headerExpansions, headerExpansion{origKey: keyString, pairs: pairs})
+						continue
+					}
 				}
 			case bool: // redaction marker values are always going to be bool, process redaction markers in this case
 				if keyString, ok := any(key).(string); ok {
@@ -184,6 +223,35 @@ func redactMap[K comparable](obj map[K]any, ro *redactOptions) {
 			}
 		}
 	}
+
+	for _, exp := range headerExpansions {
+		if k, ok := any(exp.origKey).(K); ok {
+			delete(obj, k)
+		}
+		for _, p := range exp.pairs {
+			expandedKey := exp.origKey + HeaderValueKeySeparator + p.name
+			if k, ok := any(expandedKey).(K); ok {
+				obj[k] = p.value
+			}
+		}
+	}
+}
+
+// parseHeaderPairs splits a comma-separated "Name=Value,Name=Value" string
+// into individual header pairs. Segments without an '=' or with an empty name
+// are silently skipped.
+func parseHeaderPairs(val string) []headerPair {
+	segments := strings.Split(val, ",")
+	pairs := make([]headerPair, 0, len(segments))
+	for _, seg := range segments {
+		seg = strings.TrimSpace(seg)
+		idx := strings.IndexByte(seg, '=')
+		if idx <= 0 {
+			continue
+		}
+		pairs = append(pairs, headerPair{name: seg[:idx], value: seg[idx+1:]})
+	}
+	return pairs
 }
 
 func redactKey(k string, ro *redactOptions) bool {
