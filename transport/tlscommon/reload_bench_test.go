@@ -18,13 +18,8 @@
 package tlscommon
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"math/big"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,68 +27,36 @@ import (
 	"time"
 
 	"github.com/elastic/elastic-agent-libs/logp"
-	"github.com/elastic/elastic-agent-libs/testing/certutil"
 )
 
 // These benchmarks quantify the memory/allocation impact of the
 // CertReloader/CAReloader hot-reload machinery (added in #404, #412, #417,
 // #419) relative to the static, load-once-and-hold behavior that preceded
-// it. They're meant to answer two concrete questions:
+// it. They're meant to answer concrete questions raised about that impact:
 //
 //  1. How much extra memory does enabling reload add per configured TLS
 //     endpoint (i.e. per Config/ServerConfig, not per connection)?
+//     BenchmarkCertLoad, BenchmarkCAPoolLoad, BenchmarkLoadTLSConfig,
+//     BenchmarkLoadTLSServerConfig, BenchmarkTLSConfigMemoryFootprint.
 //  2. Does the cost scale with the number of TLS handshakes/connections
 //     served by an already-loaded config, or only with the number of
 //     distinct configs and the reload interval?
+//     BenchmarkCertReloader_GetCertificate_WithinInterval,
+//     BenchmarkCAReloader_GetCertPool_WithinInterval,
+//     BenchmarkCertReloader_GetCertificate_ReloadEveryCall,
+//     BenchmarkCAReloader_GetCertPool_ReloadEveryCall.
+//  3. Does memory grow over the life of a single reloader as it actually
+//     hot-reloads many times, or does each cycle's old cert/pool get
+//     collected? BenchmarkCertReloader_HeapAfterManyReloadCycles,
+//     BenchmarkCAReloader_HeapAfterManyReloadCycles.
+//  4. Does reload cost scale linearly with the number of independently
+//     configured TLS endpoints, or is there cross-endpoint contention/
+//     super-linear blowup? BenchmarkReloadCost_ScalingWithEndpointCount.
 //
-// genCAFile and genCertKeyFiles are benchmark-only equivalents of the
-// writeCAFile/writeKeyAndCertFiles helpers used by the non-benchmark tests
-// in this package; those take a *testing.T, so they can't be reused from a
-// *testing.B.
-
-func genCAFile(dir, name string) (string, error) {
-	_, _, pair, err := certutil.NewRootCA()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, pair.Cert, 0o600); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func genCertKeyFiles(dir string) (certPath, keyPath string, err error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return "", "", err
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return "", "", err
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-
-	tml := x509.Certificate{
-		SerialNumber: new(big.Int),
-		Subject:      pkix.Name{CommonName: "bench"},
-	}
-	certDER, err := x509.CreateCertificate(rand.Reader, &tml, &tml, &key.PublicKey, key)
-	if err != nil {
-		return "", "", err
-	}
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	certPath = filepath.Join(dir, "cert.pem")
-	keyPath = filepath.Join(dir, "key.pem")
-	if err := os.WriteFile(certPath, certPEM, 0o600); err != nil {
-		return "", "", err
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		return "", "", err
-	}
-	return certPath, keyPath, nil
-}
+// These benchmarks reuse the writeCAFile/writeKeyAndCertFiles helpers from
+// ca_reloader_test.go/cert_reloader_test.go (and, transitively,
+// makeKeyCertPair from tlscommon_test.go), which accept testing.TB so they
+// work from both *testing.T and *testing.B.
 
 // BenchmarkCertLoad isolates the marginal cost of wrapping a loaded
 // certificate in a CertReloader versus the pre-reload behavior of loading it
@@ -103,10 +66,7 @@ func genCertKeyFiles(dir string) (certPath, keyPath string, err error) {
 // the underlying certificate data, which is the same size either way.
 func BenchmarkCertLoad(b *testing.B) {
 	dir := b.TempDir()
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 
 	b.Run("StaticNoReload", func(b *testing.B) {
 		cfg := &CertificateConfig{Certificate: certPath, Key: keyPath}
@@ -139,11 +99,7 @@ func BenchmarkCertLoad(b *testing.B) {
 // BenchmarkCAPoolLoad is the CAReloader equivalent of BenchmarkCertLoad.
 func BenchmarkCAPoolLoad(b *testing.B) {
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
-	caPaths := []string{caPath}
+	caPaths := []string{writeCAFile(b, dir, "ca.pem")}
 
 	b.Run("StaticNoReload", func(b *testing.B) {
 		b.ReportAllocs()
@@ -178,14 +134,8 @@ func BenchmarkCAPoolLoad(b *testing.B) {
 // endpoint" cost, combining both the cert and CA paths.
 func BenchmarkLoadTLSConfig(b *testing.B) {
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	caPath := writeCAFile(b, dir, "ca.pem")
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 	logger := logp.NewLogger("bench")
 
 	disabled, enabled := false, true
@@ -223,14 +173,8 @@ func BenchmarkLoadTLSConfig(b *testing.B) {
 // equivalent of BenchmarkLoadTLSConfig.
 func BenchmarkLoadTLSServerConfig(b *testing.B) {
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	caPath := writeCAFile(b, dir, "ca.pem")
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 	logger := logp.NewLogger("bench")
 
 	disabled, enabled := false, true
@@ -273,10 +217,7 @@ func BenchmarkLoadTLSServerConfig(b *testing.B) {
 // number of distinct configured endpoints does.
 func BenchmarkCertReloader_GetCertificate_WithinInterval(b *testing.B) {
 	dir := b.TempDir()
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Hour))
 	if err != nil {
 		b.Fatalf("creating cert reloader: %v", err)
@@ -294,10 +235,7 @@ func BenchmarkCertReloader_GetCertificate_WithinInterval(b *testing.B) {
 // equivalent of BenchmarkCertReloader_GetCertificate_WithinInterval.
 func BenchmarkCAReloader_GetCertPool_WithinInterval(b *testing.B) {
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
+	caPath := writeCAFile(b, dir, "ca.pem")
 	r, err := NewCAReloader([]string{caPath}, time.Hour)
 	if err != nil {
 		b.Fatalf("creating CA reloader: %v", err)
@@ -317,10 +255,7 @@ func BenchmarkCAReloader_GetCertPool_WithinInterval(b *testing.B) {
 // never with connection/handshake count.
 func BenchmarkCertReloader_GetCertificate_ReloadEveryCall(b *testing.B) {
 	dir := b.TempDir()
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
 	if err != nil {
 		b.Fatalf("creating cert reloader: %v", err)
@@ -338,10 +273,7 @@ func BenchmarkCertReloader_GetCertificate_ReloadEveryCall(b *testing.B) {
 // equivalent of BenchmarkCertReloader_GetCertificate_ReloadEveryCall.
 func BenchmarkCAReloader_GetCertPool_ReloadEveryCall(b *testing.B) {
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
+	caPath := writeCAFile(b, dir, "ca.pem")
 	r, err := NewCAReloader([]string{caPath}, time.Nanosecond)
 	if err != nil {
 		b.Fatalf("creating CA reloader: %v", err)
@@ -368,14 +300,8 @@ func BenchmarkTLSConfigMemoryFootprint(b *testing.B) {
 	const n = 1000
 
 	dir := b.TempDir()
-	caPath, err := genCAFile(dir, "ca.pem")
-	if err != nil {
-		b.Fatalf("generating CA: %v", err)
-	}
-	certPath, keyPath, err := genCertKeyFiles(dir)
-	if err != nil {
-		b.Fatalf("generating cert/key: %v", err)
-	}
+	caPath := writeCAFile(b, dir, "ca.pem")
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 	logger := logp.NewLogger("bench")
 	disabled, enabled := false, true
 
@@ -416,4 +342,155 @@ func BenchmarkTLSConfigMemoryFootprint(b *testing.B) {
 	b.Run("ReloadEnabled", func(b *testing.B) {
 		run(b, CertificateReload{Enabled: &enabled, ReloadInterval: time.Hour})
 	})
+}
+
+// The *_ReloadEveryCall benchmarks above measure bytes allocated per reload
+// (B/op from -benchmem), which is allocation traffic, not retained memory: a
+// reloader that leaked its old cert/pool on every cycle instead of freeing it
+// would show the exact same B/op, since that metric doesn't distinguish
+// garbage from survivors. BenchmarkCertReloader_HeapAfterManyReloadCycles and
+// BenchmarkCAReloader_HeapAfterManyReloadCycles close that gap by checking
+// retained heap on a single long-lived reloader across many reload cycles: if
+// each reload's previous cert/pool were being kept alive instead of collected,
+// heap growth would scale with the number of cycles rather than staying flat.
+
+// BenchmarkCertReloader_HeapAfterManyReloadCycles hot-reloads a single
+// CertReloader many times (reload interval effectively zero, so every call
+// re-reads and re-parses the cert/key from disk) and compares retained heap
+// after a short warm-up window against retained heap after many more cycles.
+// A flat (near-zero or negative, within GC noise) delta shows old
+// certificates are actually being collected each cycle rather than
+// accumulating; a delta that scales with cycles would indicate a leak.
+func BenchmarkCertReloader_HeapAfterManyReloadCycles(b *testing.B) {
+	const warmupCycles = 100
+	const measuredCycles = 20000
+
+	dir := b.TempDir()
+	certPath, keyPath := writeKeyAndCertFiles(b, dir)
+
+	for i := 0; i < b.N; i++ {
+		r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		for c := 0; c < warmupCycles; c++ {
+			if _, err := r.GetCertificate(nil); err != nil {
+				b.Fatal(err)
+			}
+		}
+		runtime.GC()
+		var early runtime.MemStats
+		runtime.ReadMemStats(&early)
+
+		for c := 0; c < measuredCycles; c++ {
+			if _, err := r.GetCertificate(nil); err != nil {
+				b.Fatal(err)
+			}
+		}
+		runtime.GC()
+		var late runtime.MemStats
+		runtime.ReadMemStats(&late)
+
+		b.ReportMetric(float64(late.HeapAlloc)-float64(early.HeapAlloc), "heap-growth-bytes")
+		runtime.KeepAlive(r)
+	}
+}
+
+// BenchmarkCAReloader_HeapAfterManyReloadCycles is the CAReloader equivalent
+// of BenchmarkCertReloader_HeapAfterManyReloadCycles.
+func BenchmarkCAReloader_HeapAfterManyReloadCycles(b *testing.B) {
+	const warmupCycles = 100
+	const measuredCycles = 20000
+
+	dir := b.TempDir()
+	caPath := writeCAFile(b, dir, "ca.pem")
+
+	for i := 0; i < b.N; i++ {
+		r, err := NewCAReloader([]string{caPath}, time.Nanosecond)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		for c := 0; c < warmupCycles; c++ {
+			_ = r.GetCertPool()
+		}
+		runtime.GC()
+		var early runtime.MemStats
+		runtime.ReadMemStats(&early)
+
+		for c := 0; c < measuredCycles; c++ {
+			_ = r.GetCertPool()
+		}
+		runtime.GC()
+		var late runtime.MemStats
+		runtime.ReadMemStats(&late)
+
+		b.ReportMetric(float64(late.HeapAlloc)-float64(early.HeapAlloc), "heap-growth-bytes")
+		runtime.KeepAlive(r)
+	}
+}
+
+// benchEndpoint bundles the reloaders for one independently configured TLS
+// endpoint - the unit this feature actually scales with, per the other
+// benchmarks in this file (not connections/handshakes).
+type benchEndpoint struct {
+	cert *CertReloader
+	ca   *CAReloader
+}
+
+// setupBenchEndpoints creates n independently configured TLS endpoints, each
+// with its own cert/key/CA files on disk and its own CertReloader/CAReloader
+// (own mutex, own reload timer) so endpoints share no state with each other.
+func setupBenchEndpoints(b *testing.B, n int) []benchEndpoint {
+	b.Helper()
+	root := b.TempDir()
+	eps := make([]benchEndpoint, n)
+	for i := 0; i < n; i++ {
+		dir := filepath.Join(root, fmt.Sprintf("ep%d", i))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			b.Fatalf("creating endpoint dir: %v", err)
+		}
+		certPath, keyPath := writeKeyAndCertFiles(b, dir)
+		caPath := writeCAFile(b, dir, "ca.pem")
+		certReloader, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
+		if err != nil {
+			b.Fatalf("creating cert reloader for endpoint %d: %v", i, err)
+		}
+		caReloader, err := NewCAReloader([]string{caPath}, time.Nanosecond)
+		if err != nil {
+			b.Fatalf("creating CA reloader for endpoint %d: %v", i, err)
+		}
+		eps[i] = benchEndpoint{cert: certReloader, ca: caReloader}
+	}
+	return eps
+}
+
+// BenchmarkReloadCost_ScalingWithEndpointCount measures the cost of one
+// reload "sweep" - one GetCertificate + one GetCertPool call per configured
+// endpoint, each of which reloads from disk since the reload interval is
+// effectively zero - as the number of independently configured TLS endpoints
+// (N) grows. Endpoints don't share a mutex or any other state, so per-sweep
+// cost should scale linearly with N: ns/op and B/op for N=1000 should land
+// close to 1000x the N=1 numbers, not super-linearly. That linear
+// relationship is the actual scaling axis for this feature's cost - fleet
+// wide reload cost is (per-endpoint reload cost) x (number of configured
+// endpoints), never a function of connection/handshake volume.
+func BenchmarkReloadCost_ScalingWithEndpointCount(b *testing.B) {
+	for _, n := range []int{1, 10, 100, 1000} {
+		b.Run(fmt.Sprintf("endpoints=%d", n), func(b *testing.B) {
+			eps := setupBenchEndpoints(b, n)
+
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				for _, ep := range eps {
+					if _, err := ep.cert.GetCertificate(nil); err != nil {
+						b.Fatal(err)
+					}
+					_ = ep.ca.GetCertPool()
+				}
+			}
+			b.ReportMetric(float64(n), "endpoints")
+		})
+	}
 }
