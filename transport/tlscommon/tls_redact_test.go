@@ -18,6 +18,7 @@
 package tlscommon
 
 import (
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -168,6 +169,25 @@ func TestLoadCertificateMissingFileShowsPath(t *testing.T) {
 	assert.NotContains(t, err.Error(), "PEM REDACTED", "a real path must not be redacted")
 }
 
+// TestNewPEMReaderMissingFileDropsPathFromError verifies that when os.Open
+// fails, NewPEMReader returns an *fs.PathError with its Path cleared: a
+// malformed inline PEM mistaken for a path must never be echoed, while callers
+// type-asserting for *fs.PathError (or matching fs.ErrNotExist) still work.
+func TestNewPEMReaderMissingFileDropsPathFromError(t *testing.T) {
+	// A single-line, path-like string (not inline PEM) pointing at a
+	// non-existent file, so os.Open fails with an *fs.PathError.
+	missing := filepath.Join(t.TempDir(), "does-not-exist.pem")
+
+	_, err := NewPEMReader(missing)
+	require.Error(t, err)
+
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr, "error type must remain *fs.PathError for callers matching on it")
+	assert.Empty(t, pathErr.Path, "the Path component must be dropped so a mistaken inline PEM can never leak")
+	assert.NotContains(t, err.Error(), missing, "the raw input must not appear in the error")
+	assert.ErrorIs(t, err, fs.ErrNotExist, "fs.ErrNotExist matching must still work after dropping Path")
+}
+
 func TestIsInlinePEM(t *testing.T) {
 	keyPEM, certPEM := makeKeyCertPair(t, blockTypePKCS8, "")
 
@@ -175,17 +195,20 @@ func TestIsInlinePEM(t *testing.T) {
 		in   string
 		want bool
 	}{
-		"valid inline cert":                              {certPEM, true},
-		"valid inline key":                               {keyPEM, true},
-		"malformed, leading dashes":                      {"-----asdasd-----\n" + body(keyPEM), true},
-		"malformed, multiline no dashes":                 {"asdasd-----\n" + body(keyPEM), true},
-		"single line with PEM armor":                     {"asdasd-----MIIE-----END PRIVATE KEY-----", true},
-		"unix file path":                                 {"/etc/pki/tls/key.pem", false},
-		"windows file path":                              {`C:\pki\key.pem`, false},
-		"relative file path":                             {"certs/key.pem", false},
-		"empty string":                                   {"", false},
-		"path with trailing newline (YAML block scalar)": {"/etc/pki/tls/key.pem\n", false},
-		"path with surrounding whitespace":               {"  /etc/pki/tls/key.pem  \n", false},
+		"valid inline cert":                               {certPEM, true},
+		"valid inline key":                                {keyPEM, true},
+		"malformed, leading dashes":                       {"-----asdasd-----\n" + body(keyPEM), true},
+		"malformed, multiline no dashes":                  {"asdasd-----\n" + body(keyPEM), true},
+		"single line with PEM armor":                      {"asdasd-----MIIE-----END PRIVATE KEY-----", true},
+		"unix file path":                                  {"/etc/pki/tls/key.pem", false},
+		"windows file path":                               {`C:\pki\key.pem`, false},
+		"relative file path":                              {"certs/key.pem", false},
+		"empty string":                                    {"", false},
+		"path with trailing newline (YAML block scalar)":  {"/etc/pki/tls/key.pem\n", false},
+		"path with surrounding whitespace":                {"  /etc/pki/tls/key.pem  \n", false},
+		"dashless single-line base64 body":                {strings.Repeat("A", minInlinePEMBodyLen), true},
+		"long path without extension but with separators": {"/very/long/path/to/some/certificate/keyfile", false}, // shoter than any key
+		"short bare base64-looking name":                  {"AAAABBBBCCCC", false},
 	}
 
 	for name, tc := range tests {

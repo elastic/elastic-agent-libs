@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -71,7 +72,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 
 	// Do not log the key if it was provided as a string in the configuration to avoid
 	// leaking private keys in the debug logs. Log when the key is a file path.
-	if IsPEMString(key) {
+	if isInlinePEM(key) {
 		log.Debugf("Loading certificate: %v with key from PEM string in config", pemSource(certificate))
 	} else {
 		log.Debugf("Loading certificate: %v and key %v", certificate,
@@ -117,7 +118,7 @@ func readPEMFile(log *logp.Logger, s, passphrase string, disableLegacy bool) ([]
 		}
 
 		switch {
-		case x509.IsEncryptedPEMBlock(block): //nolint: staticcheck // deprecated PKCS#1 PEM encryption
+		case x509.IsEncryptedPEMBlock(block): // nolint: staticcheck // deprecated PKCS#1 PEM encryption
 			if disableLegacy {
 				return nil, fmt.Errorf("encrypted PKCS#1 PEM keys are not supported; convert to PKCS#8")
 			}
@@ -238,6 +239,17 @@ func NewPEMReader(certificate string) (*PEMReader, error) {
 
 	r, err := os.Open(certificate) //nolint:gosec // certificate is an operator-provided cert/key file path; opening it is the intended behavior
 	if err != nil {
+		// os.Open records the name it tried to open in *fs.PathError.Path
+		// verbatim. Because a malformed inline PEM can be indistinguishable
+		// from a file path (isInlinePEM is only a heuristic), that name may
+		// actually be private key material, so it must never be echoed.
+		// Preserve the *fs.PathError type -- so callers matching on it with
+		// errors.As/errors.Is (e.g. fs.ErrNotExist) keep working -- but drop
+		// the Path component.
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) {
+			return nil, &fs.PathError{Op: pathErr.Op, Err: pathErr.Err}
+		}
 		return nil, err
 	}
 	return &PEMReader{reader: r, debugStr: certificate}, nil
@@ -264,6 +276,19 @@ func IsPEMString(s string) bool {
 	return strings.HasPrefix(strings.TrimSpace(s), "-")
 }
 
+// base64Alphabet is the standard base64 alphabet (RFC 4648) including the '='
+// padding character. A PEM body stripped of its armor is a run of these
+// characters.
+const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+
+// minInlinePEMBodyLen is the length at or above which a bare, single-line,
+// pure-base64 string with no path separators is treated as inline PEM content
+// rather than a file path. The smallest realistic private-key encoding (an
+// Ed25519 32-byte seed) is 44 base64 characters; RSA/EC keys are far longer. A
+// legitimate file path this long that is also pure base64 with no separator or
+// extension is vanishingly rare.
+const minInlinePEMBodyLen = 44
+
 // isInlinePEM reports whether s is (possibly malformed) inline PEM content
 // rather than a filesystem path. A genuine path is a single line and contains
 // no PEM armor; inline PEM is multi-line and/or contains "-----...-----"
@@ -273,11 +298,29 @@ func IsPEMString(s string) bool {
 // out of os.Open errors and log lines: a malformed inline key that lost its
 // leading dashes must not be mistaken for a path and handed to os.Open, which
 // would echo the whole blob.
+//
+// Note this cannot be perfectly accurate: a single-line base64 blob containing
+// a '/' is indistinguishable from a long file path, so such a malformed inline
+// key is still classified as a path. Fully removing the ambiguity would require
+// separate configuration options for inline PEM vs. file path, which would be a
+// breaking change.
 func isInlinePEM(s string) bool {
 	trimmed := strings.TrimSpace(s)
-	return IsPEMString(s) ||
+	if IsPEMString(s) ||
 		strings.ContainsAny(trimmed, "\r\n") ||
-		strings.Contains(trimmed, "-----")
+		strings.Contains(trimmed, "-----") {
+		return true
+	}
+
+	// A malformed inline PEM can lose all of its armor and line breaks (e.g. a
+	// copy-paste that drops the -----BEGIN/END----- lines), leaving a single
+	// line of base64 that the checks above cannot tell apart from a file path.
+	// Treat a long, pure-base64 string with no path-typical separator
+	// (/, \, ., :) as inline content so it is redacted rather than handed to
+	// os.Open, which would echo the whole blob.
+	return len(trimmed) >= minInlinePEMBodyLen &&
+		strings.Trim(trimmed, base64Alphabet) == "" &&
+		!strings.ContainsAny(trimmed, `/\.:`)
 }
 
 // pemSource returns a log-safe description of s: the file path when s is a
