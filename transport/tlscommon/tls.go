@@ -60,8 +60,8 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 
 	keyPEM, err := readPEMFile(log, key, passphrase, config.DisableLegacyPEMSupport)
 	if err != nil {
-		log.Errorf("Failed reading key (%s): %v", pemSource(key), err)
-		return nil, fmt.Errorf("%w (%s)", err, pemSource(key))
+		log.Errorf("Failed reading key : %v", err)
+		return nil, fmt.Errorf("failed reading key: %w", err)
 	}
 
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
@@ -70,13 +70,10 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 		return nil, err
 	}
 
-	// Do not log the key if it was provided as a string in the configuration to avoid
-	// leaking private keys in the debug logs. Log when the key is a file path.
 	if isInlinePEM(key) {
-		log.Debugf("Loading certificate: %v with key from PEM string in config", pemSource(certificate))
+		log.Debug("Loading certificate: with key from PEM")
 	} else {
-		log.Debugf("Loading certificate: %v and key %v", certificate,
-			pemSource(key))
+		log.Debug("Loading certificate with key from file")
 	}
 
 	return &cert, nil

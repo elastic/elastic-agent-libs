@@ -195,20 +195,22 @@ func TestIsInlinePEM(t *testing.T) {
 		in   string
 		want bool
 	}{
-		"valid inline cert":                               {certPEM, true},
-		"valid inline key":                                {keyPEM, true},
-		"malformed, leading dashes":                       {"-----asdasd-----\n" + body(keyPEM), true},
-		"malformed, multiline no dashes":                  {"asdasd-----\n" + body(keyPEM), true},
-		"single line with PEM armor":                      {"asdasd-----MIIE-----END PRIVATE KEY-----", true},
-		"unix file path":                                  {"/etc/pki/tls/key.pem", false},
-		"windows file path":                               {`C:\pki\key.pem`, false},
-		"relative file path":                              {"certs/key.pem", false},
-		"empty string":                                    {"", false},
-		"path with trailing newline (YAML block scalar)":  {"/etc/pki/tls/key.pem\n", false},
-		"path with surrounding whitespace":                {"  /etc/pki/tls/key.pem  \n", false},
-		"dashless single-line base64 body":                {strings.Repeat("A", minInlinePEMBodyLen), true},
-		"long path without extension but with separators": {"/very/long/path/to/some/certificate/keyfile", false}, // shoter than any key
-		"short bare base64-looking name":                  {"AAAABBBBCCCC", false},
+		"valid inline cert":                {in: certPEM, want: true},
+		"valid inline key":                 {in: keyPEM, want: true},
+		"dashless single-line base64 body": {in: strings.Repeat("A", minInlinePEMBodyLen), want: true},
+		"malformed, leading dashes":        {in: "-----asdasd-----\n" + body(keyPEM), want: true},
+		"malformed, multiline no dashes":   {in: "asdasd-----\n" + body(keyPEM), want: true},
+		"single line with PEM armor":       {in: "asdasd-----MIIE-----END PRIVATE KEY-----", want: true},
+
+		"empty":              {in: "", want: false},
+		"unix file path":     {in: "/etc/pki/tls/key.pem", want: false},
+		"windows file path":  {in: `C:\pki\key.pem`, want: false},
+		"relative file path": {in: "certs/key.pem", want: false},
+		"empty string":       {in: "", want: false},
+		"path with trailing newline (YAML block scalar)":  {in: "/etc/pki/tls/key.pem\n", want: false},
+		"path with surrounding whitespace":                {in: "  /etc/pki/tls/key.pem  \n", want: false},
+		"long path without extension but with separators": {in: "/very/long/path/to/some/certificate/keyfile", want: false}, // shoter than any key
+		"short bare base64-looking name":                  {in: "AAAABBBBCCCC", want: false},
 	}
 
 	for name, tc := range tests {
