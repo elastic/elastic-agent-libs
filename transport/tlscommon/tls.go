@@ -60,7 +60,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 
 	keyPEM, err := readPEMFile(log, key, passphrase, config.DisableLegacyPEMSupport)
 	if err != nil {
-		log.Errorf("Failed reading key : %v", err)
+		log.Errorf("Failed reading key: %v", err)
 		return nil, fmt.Errorf("failed reading key: %w", err)
 	}
 
