@@ -43,45 +43,52 @@ func body(pemStr string) string {
 	return pemStr[strings.Index(pemStr, "\n")+1:]
 }
 
-// TestLoadCertificateDoesNotLeakPEM a malformed
-// inline PEM (a private key in particular) must never appear in the error
-// returned by LoadCertificate. The internal log.Errorf calls use the very same
-// inputs (pemSource(...) and err), so a clean returned error implies a clean
-// log line too.
+// TestLoadCertificateDoesNotLeakPEM a malformed inline PEM (a private key in
+// particular) must never appear in the error returned by LoadCertificate. The
+// internal log.Errorf calls are built from the same safe inputs as the returned
+// error, so a clean returned error implies a clean log line too.
 func TestLoadCertificateDoesNotLeakPEM(t *testing.T) {
 	keyPEM, certPEM := makeKeyCertPair(t, blockTypePKCS8, "")
 
 	tests := []struct {
 		name string
-		// mutate returns the cert/key pair to feed LoadCertificate and the
-		// sensitive line that must not appear in the error.
+		// certificate/key are fed to LoadCertificate; secret is the sensitive
+		// line that must not appear in the error; mustContain is a safe
+		// substring the error is expected to carry (proving the redaction path
+		// ran rather than a raw echo).
 		certificate string
 		key         string
 		secret      string
+		mustContain string
 	}{
 		{
 			name:        "malformed key, header keeps leading dashes",
 			certificate: certPEM,
 			key:         "-----asdasd-----\n" + body(keyPEM),
 			secret:      midBodyLine(t, keyPEM),
+			// The key source is never echoed at all (not even a placeholder).
+			mustContain: "failed reading key",
 		},
 		{
 			name:        "malformed key, header without leading dashes",
 			certificate: certPEM,
 			key:         "asdasd-----\n" + body(keyPEM),
 			secret:      midBodyLine(t, keyPEM),
+			mustContain: "failed reading key",
 		},
 		{
 			name:        "malformed cert, header keeps leading dashes",
 			certificate: "-----asdasd-----\n" + body(certPEM),
 			key:         keyPEM,
 			secret:      midBodyLine(t, certPEM),
+			mustContain: "PEM REDACTED",
 		},
 		{
 			name:        "malformed cert, header without leading dashes",
 			certificate: "asdasd-----\n" + body(certPEM),
 			key:         keyPEM,
 			secret:      midBodyLine(t, certPEM),
+			mustContain: "PEM REDACTED",
 		},
 	}
 
@@ -100,8 +107,8 @@ func TestLoadCertificateDoesNotLeakPEM(t *testing.T) {
 				"error leaks a PEM private-key block:\n%s", msg)
 			assert.NotContains(t, msg, "BEGIN",
 				"error leaks PEM block content:\n%s", msg)
-			assert.Contains(t, msg, "PEM REDACTED",
-				"error should label the inline source as redacted")
+			assert.Contains(t, msg, tc.mustContain,
+				"error should carry the safe label/message:\n%s", msg)
 		})
 	}
 }
