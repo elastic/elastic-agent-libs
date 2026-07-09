@@ -209,14 +209,13 @@ func TestIsInlinePEM(t *testing.T) {
 		"malformed, multiline no dashes":   {in: "asdasd-----\n" + body(keyPEM), want: true},
 		"single line with PEM armor":       {in: "asdasd-----MIIE-----END PRIVATE KEY-----", want: true},
 
-		"empty":              {in: "", want: false},
+		"empty string":       {in: "", want: false},
 		"unix file path":     {in: "/etc/pki/tls/key.pem", want: false},
 		"windows file path":  {in: `C:\pki\key.pem`, want: false},
 		"relative file path": {in: "certs/key.pem", want: false},
-		"empty string":       {in: "", want: false},
 		"path with trailing newline (YAML block scalar)":  {in: "/etc/pki/tls/key.pem\n", want: false},
 		"path with surrounding whitespace":                {in: "  /etc/pki/tls/key.pem  \n", want: false},
-		"long path without extension but with separators": {in: "/very/long/path/to/some/certificate/keyfile", want: false}, // shoter than any key
+		"long path without extension but with separators": {in: "/very/long/path/to/some/certificate/keyfile", want: false}, // shorter than any key
 		"short bare base64-looking name":                  {in: "AAAABBBBCCCC", want: false},
 	}
 

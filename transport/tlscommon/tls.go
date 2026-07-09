@@ -71,7 +71,7 @@ func LoadCertificate(config *CertificateConfig) (*tls.Certificate, error) {
 	}
 
 	if isInlinePEM(key) {
-		log.Debug("Loading certificate: with key from PEM")
+		log.Debug("Loading certificate with key from PEM")
 	} else {
 		log.Debug("Loading certificate with key from file")
 	}
@@ -183,7 +183,7 @@ func LoadCertificateAuthorities(CAs []string) (*x509.CertPool, []error) {
 
 		if ok := roots.AppendCertsFromPEM(pemData); !ok {
 			log.Error("Failed to add CA to the cert pool, CA is not a valid PEM document")
-			errors = append(errors, fmt.Errorf("%w adding %v to the list of known CAs", ErrNotACertificate, pemSource(s)))
+			errors = append(errors, fmt.Errorf("%w adding %s to the list of known CAs", ErrNotACertificate, pemSource(s)))
 			continue
 		}
 		log.Debugf("Successfully loaded CA certificate: %v", r)
