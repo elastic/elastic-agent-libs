@@ -65,13 +65,13 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 	var rootCAs certPoolProvider
 
 	if len(config.CAs) > 0 && config.CertificateReload.IsEnabled() {
-		reloader, err := NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval)
+		reloader, err := NewCAReloader(config.CAs, config.CertificateReload.ReloadInterval, logger)
 		logFail(err)
 		if reloader != nil {
 			rootCAs = reloader
 		}
 	} else if len(config.CAs) > 0 {
-		pool, errs := LoadCertificateAuthorities(config.CAs)
+		pool, errs := LoadCertificateAuthorities(config.CAs, logger)
 		logFail(errs...)
 		rootCAs = newStaticCertPool(pool)
 	}
@@ -95,7 +95,7 @@ func LoadTLSConfig(config *Config, logger *logp.Logger) (*TLSConfig, error) {
 		reloader, err = NewCertReloader(config.Certificate.Certificate, config.Certificate.Key, logger, reloadOpts...)
 		logFail(err)
 	} else {
-		cert, err := LoadCertificate(&config.Certificate)
+		cert, err := LoadCertificate(&config.Certificate, logger)
 		logFail(err)
 		if cert != nil {
 			certs = []tls.Certificate{*cert}
