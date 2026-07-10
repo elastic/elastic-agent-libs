@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,7 @@ func TestNewCertReloader_ValidCertPair(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath)
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""))
 	require.NoError(t, err)
 
 	got, err := r.GetCertificate(nil)
@@ -68,17 +69,17 @@ func TestNewCertReloader_InvalidCertPair(t *testing.T) {
 	require.NoError(t, os.WriteFile(certPath, []byte(certPEM1), 0o600))
 	require.NoError(t, os.WriteFile(keyPath, []byte(keyPEM2), 0o600))
 
-	_, err := NewCertReloader(certPath, keyPath)
+	_, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
 }
 
 func TestNewCertReloader_MissingFiles(t *testing.T) {
-	_, err := NewCertReloader("/nonexistent/cert.pem", "/nonexistent/key.pem")
+	_, err := NewCertReloader("/nonexistent/cert.pem", "/nonexistent/key.pem", logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
 }
 
 func TestNewCertReloader_EmptyPaths(t *testing.T) {
-	_, err := NewCertReloader("", "")
+	_, err := NewCertReloader("", "", logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
 }
 
@@ -86,7 +87,7 @@ func TestCertReloader_ReloadsAfterInterval(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(100*time.Millisecond))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
 	// Capture the initial certificate bytes.
@@ -108,7 +109,7 @@ func TestCertReloader_InvalidNewCert_KeepsOld(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(100*time.Millisecond))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
 	initial, err := r.GetCertificate(nil)
@@ -134,7 +135,7 @@ func TestCertReloader_NoReloadBeforeInterval(t *testing.T) {
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
 	// Use a long reload interval so it won't elapse during the test.
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(1*time.Hour))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(1*time.Hour))
 	require.NoError(t, err)
 
 	initial, err := r.GetCertificate(nil)

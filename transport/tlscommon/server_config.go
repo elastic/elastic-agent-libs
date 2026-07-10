@@ -115,7 +115,7 @@ func LoadTLSServerConfig(config *ServerConfig, logger *logp.Logger) (*TLSConfig,
 		if config.CertificateReload.ReloadInterval > 0 {
 			reloadOpts = append(reloadOpts, WithReloadInterval(config.CertificateReload.ReloadInterval))
 		}
-		reloader, err = NewCertReloader(config.Certificate.Certificate, config.Certificate.Key, reloadOpts...)
+		reloader, err = NewCertReloader(config.Certificate.Certificate, config.Certificate.Key, logger, reloadOpts...)
 		logFail(err)
 	} else {
 		cert, err := LoadCertificate(&config.Certificate)

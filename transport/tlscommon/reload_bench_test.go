@@ -86,7 +86,7 @@ func BenchmarkCertLoad(b *testing.B) {
 		b.ReportAllocs()
 		var sink *CertReloader
 		for i := 0; i < b.N; i++ {
-			r, err := NewCertReloader(certPath, keyPath)
+			r, err := NewCertReloader(certPath, keyPath, logp.NewNopLogger())
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -218,7 +218,7 @@ func BenchmarkLoadTLSServerConfig(b *testing.B) {
 func BenchmarkCertReloader_GetCertificate_WithinInterval(b *testing.B) {
 	dir := b.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(b, dir)
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Hour))
+	r, err := NewCertReloader(certPath, keyPath, logp.NewNopLogger(), WithReloadInterval(time.Hour))
 	if err != nil {
 		b.Fatalf("creating cert reloader: %v", err)
 	}
@@ -256,7 +256,7 @@ func BenchmarkCAReloader_GetCertPool_WithinInterval(b *testing.B) {
 func BenchmarkCertReloader_GetCertificate_ReloadEveryCall(b *testing.B) {
 	dir := b.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(b, dir)
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
+	r, err := NewCertReloader(certPath, keyPath, logp.NewNopLogger(), WithReloadInterval(time.Nanosecond))
 	if err != nil {
 		b.Fatalf("creating cert reloader: %v", err)
 	}
@@ -369,7 +369,7 @@ func BenchmarkCertReloader_HeapAfterManyReloadCycles(b *testing.B) {
 	certPath, keyPath := writeKeyAndCertFiles(b, dir)
 
 	for i := 0; i < b.N; i++ {
-		r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
+		r, err := NewCertReloader(certPath, keyPath, logp.NewNopLogger(), WithReloadInterval(time.Nanosecond))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -453,7 +453,7 @@ func setupBenchEndpoints(b *testing.B, n int) []benchEndpoint {
 		}
 		certPath, keyPath := writeKeyAndCertFiles(b, dir)
 		caPath := writeCAFile(b, dir, "ca.pem")
-		certReloader, err := NewCertReloader(certPath, keyPath, WithReloadInterval(time.Nanosecond))
+		certReloader, err := NewCertReloader(certPath, keyPath, logp.NewNopLogger(), WithReloadInterval(time.Nanosecond))
 		if err != nil {
 			b.Fatalf("creating cert reloader for endpoint %d: %v", i, err)
 		}

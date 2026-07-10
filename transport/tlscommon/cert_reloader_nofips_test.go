@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +52,7 @@ func TestNewCertReloader_WithPassphrase_PKCS1(t *testing.T) {
 	passphrase := "test-passphrase"
 	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS1Encrypted, passphrase)
 
-	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithPassphrase(passphrase))
 	require.NoError(t, err)
 
 	got, err := r.GetCertificate(nil)
@@ -65,7 +66,7 @@ func TestNewCertReloader_WithPassphrase_PKCS8(t *testing.T) {
 	passphrase := "test-passphrase"
 	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, passphrase)
 
-	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithPassphrase(passphrase))
 	require.NoError(t, err)
 
 	got, err := r.GetCertificate(nil)
@@ -78,7 +79,7 @@ func TestNewCertReloader_WithPassphrase_WrongPassphrase(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, "correct-passphrase")
 
-	_, err := NewCertReloader(certPath, keyPath, WithPassphrase("wrong-passphrase"))
+	_, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithPassphrase("wrong-passphrase"))
 	assert.Error(t, err)
 }
 
@@ -87,7 +88,7 @@ func TestCertReloader_WithPassphrase_ReloadsAfterInterval(t *testing.T) {
 	passphrase := "test-passphrase"
 	certPath, keyPath := writeEncryptedKeyAndCertFiles(t, dir, blockTypePKCS8Encrypted, passphrase)
 
-	r, err := NewCertReloader(certPath, keyPath, WithPassphrase(passphrase), WithReloadInterval(100*time.Millisecond))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithPassphrase(passphrase), WithReloadInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
 	initial, err := r.GetCertificate(nil)
