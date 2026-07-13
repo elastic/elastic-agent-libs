@@ -86,6 +86,9 @@ func diagCertificate(logger *log.Logger, cfg *CertificateConfig) {
 		logger.Print("certificate keypair is nil.")
 		return
 	}
+
+	// Since current method accepts a std logger which is incompatible
+	// with *logp.Logger type expected below - we use a no-op logger instead.
 	crt, err := LoadCertificate(cfg, logp.NewNopLogger())
 	if err != nil {
 		logger.Printf("certificate keypair error: %v", err)
