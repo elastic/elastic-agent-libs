@@ -79,7 +79,8 @@ func LoggingWithOutputs(beatName string, cfg *config.C, outputs ...zapcore.Core)
 	return logp.ConfigureWithOutputs(config, outputs...)
 }
 
-// LoggingWithTypedOutputsLocal applies some defaults and returns a logger instance
+// LoggingWithTypedOutputsLocal applies some defaults and returns a local logger instance
+// that also routes typed log entries to a separate output.
 func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) (*logp.Logger, error) {
 	config := logp.DefaultConfig(environment)
 	config.Beat = beatName
@@ -110,6 +111,40 @@ func LoggingWithTypedOutputsLocal(beatName string, cfg, typedCfg *config.C, logK
 	}
 
 	return logp.ConfigureWithTypedOutputLocal(config, typedLogpConfig, logKey, kind, outputs...)
+}
+
+// LoggingWithTypedOutputsNonGlobal is identical to LoggingWithTypedOutputsLocal but does not
+// mutate the global logger, making it safe for creating component-specific loggers.
+func LoggingWithTypedOutputsNonGlobal(beatName string, cfg, typedCfg *config.C, logKey, kind string, outputs ...zapcore.Core) (*logp.Logger, error) {
+	config := logp.DefaultConfig(environment)
+	config.Beat = beatName
+	if cfg != nil {
+		if err := cfg.Unpack(&config); err != nil {
+			return nil, err
+		}
+	}
+
+	applyFlags(&config)
+
+	typedLogpConfig := logp.DefaultEventConfig(environment)
+	defaultName := typedLogpConfig.Files.Name
+	typedLogpConfig.Beat = beatName
+	if typedCfg != nil {
+		if err := typedCfg.Unpack(&typedLogpConfig); err != nil {
+			return nil, fmt.Errorf("cannot unpack typed output config: %w", err)
+		}
+	}
+
+	// Make sure we're always running on the same log level
+	typedLogpConfig.Level = config.Level
+	typedLogpConfig.Selectors = config.Selectors
+
+	// If the name has not been configured, make it {beatName}-events-data
+	if typedLogpConfig.Files.Name == defaultName {
+		typedLogpConfig.Files.Name = beatName + "-events-data"
+	}
+
+	return logp.ConfigureWithTypedOutputNonGlobal(config, typedLogpConfig, logKey, kind, outputs...)
 }
 
 func applyFlags(cfg *logp.Config) {
