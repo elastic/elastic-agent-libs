@@ -23,9 +23,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elastic/elastic-agent-libs/logp/logptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 )
 
 // midBodyLine returns a line from the middle of a PEM block, i.e. real base64
