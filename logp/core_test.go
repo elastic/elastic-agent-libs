@@ -793,122 +793,41 @@ func TestConfigureWithCore(t *testing.T) {
 	})
 }
 
-func TestConfigureWithTypedOutputLocalWithLevel(t *testing.T) {
-	t.Run("publishes the global logger", func(t *testing.T) {
-		globalBefore := loadLogger()
-
-		al := zap.NewAtomicLevelAt(zap.InfoLevel)
-		logger, err := ConfigureWithTypedOutputLocalWithLevel(
-			Config{Level: InfoLevel, toIODiscard: true},
-			Config{Level: InfoLevel, toIODiscard: true},
-			"log.type", "event", al,
-		)
-		require.NoError(t, err)
-		require.NotNil(t, logger)
-
-		assert.NotSame(t, globalBefore, loadLogger(), "ConfigureWithTypedOutputLocalWithLevel must replace the global logger")
-	})
-
-	t.Run("returns a working logger", func(t *testing.T) {
-		al := zap.NewAtomicLevelAt(zap.InfoLevel)
-		obsCore, obsLogs := observer.New(zapcore.InfoLevel)
-
-		logger, err := ConfigureWithTypedOutputLocalWithLevel(
-			Config{Level: InfoLevel, toIODiscard: true},
-			Config{Level: InfoLevel, toIODiscard: true},
-			"log.type", "event", al, obsCore,
-		)
-		require.NoError(t, err)
-		require.NotNil(t, logger)
-
-		logger.Info("test message")
-		require.Equal(t, 1, obsLogs.Len())
-		assert.Equal(t, "test message", obsLogs.All()[0].Message)
-	})
-
-	t.Run("level changes are reflected in the global logger", func(t *testing.T) {
-		al := zap.NewAtomicLevelAt(zap.InfoLevel)
-
-		_, err := ConfigureWithTypedOutputLocalWithLevel(
-			Config{Level: InfoLevel, toIODiscard: true},
-			Config{Level: InfoLevel, toIODiscard: true},
-			"log.type", "event", al,
-		)
-		require.NoError(t, err)
-
-		al.SetLevel(zap.DebugLevel)
-		assert.Equal(t, zap.DebugLevel, GetLevel())
-		assert.True(t, NewLogger("child").IsDebug())
-	})
-}
-
-func TestConfigureWithTypedOutputNonGlobalWithLevel(t *testing.T) {
+func TestConfigureWithTypedOutputNonGlobal(t *testing.T) {
 	t.Run("does not mutate global logger", func(t *testing.T) {
 		globalCore, globalLogs := observer.New(zapcore.InfoLevel)
-		require.NoError(t, ConfigureWithCore(Config{}, globalCore))
+		err := ConfigureWithCore(Config{}, globalCore)
+		require.NoError(t, err)
+
 		globalBefore := loadLogger()
 
-		al := zap.NewAtomicLevelAt(zap.InfoLevel)
-		logger, err := ConfigureWithTypedOutputNonGlobalWithLevel(
-			Config{Level: InfoLevel, toIODiscard: true},
-			Config{Level: InfoLevel, toIODiscard: true},
-			"log.type", "event", al,
-		)
+		defaultCfg := Config{Level: InfoLevel, toIODiscard: true}
+		typedCfg := Config{Level: InfoLevel, toIODiscard: true}
+
+		logger, err := ConfigureWithTypedOutputNonGlobal(defaultCfg, typedCfg, "log.type", "event")
 		require.NoError(t, err)
 		require.NotNil(t, logger)
 
-		assert.Same(t, globalBefore, loadLogger(), "ConfigureWithTypedOutputNonGlobalWithLevel must not replace the global logger")
+		assert.Same(t, globalBefore, loadLogger(), "ConfigureWithTypedOutputNonGlobal must not replace the global logger")
+
 		Info("from global logger")
 		require.Equal(t, 1, globalLogs.Len())
 		assert.Equal(t, "from global logger", globalLogs.All()[0].Message)
 	})
 
 	t.Run("returns a working logger", func(t *testing.T) {
-		al := zap.NewAtomicLevelAt(zap.InfoLevel)
-		obsCore, obsLogs := observer.New(zapcore.InfoLevel)
+		defaultObserver, defaultLogs := observer.New(zapcore.InfoLevel)
 
-		logger, err := ConfigureWithTypedOutputNonGlobalWithLevel(
-			Config{Level: InfoLevel, toIODiscard: true},
-			Config{Level: InfoLevel, toIODiscard: true},
-			"log.type", "event", al, obsCore,
-		)
+		defaultCfg := Config{Level: InfoLevel, toIODiscard: true}
+		typedCfg := Config{Level: InfoLevel, toIODiscard: true}
+
+		logger, err := ConfigureWithTypedOutputNonGlobal(defaultCfg, typedCfg, "log.type", "event", defaultObserver)
 		require.NoError(t, err)
 		require.NotNil(t, logger)
 
 		logger.Info("test message")
-		require.Equal(t, 1, obsLogs.Len())
-		assert.Equal(t, "test message", obsLogs.All()[0].Message)
-	})
-
-	t.Run("shared atomic controls both Local and NonGlobal loggers", func(t *testing.T) {
-		al := zap.NewAtomicLevelAt(zap.ErrorLevel)
-		obs1Core, obs1Logs := observer.New(al)
-		obs2Core, obs2Logs := observer.New(al)
-
-		logger1, err := ConfigureWithTypedOutputLocalWithLevel(
-			Config{Level: ErrorLevel, toIODiscard: true},
-			Config{Level: ErrorLevel, toIODiscard: true},
-			"log.type", "event", al, obs1Core,
-		)
-		require.NoError(t, err)
-
-		logger2, err := ConfigureWithTypedOutputNonGlobalWithLevel(
-			Config{Level: ErrorLevel, toIODiscard: true},
-			Config{Level: ErrorLevel, toIODiscard: true},
-			"log.type", "event", al, obs2Core,
-		)
-		require.NoError(t, err)
-
-		logger1.Debug("suppressed")
-		logger2.Debug("suppressed")
-		assert.Equal(t, 0, obs1Logs.Len())
-		assert.Equal(t, 0, obs2Logs.Len())
-
-		al.SetLevel(zap.DebugLevel)
-		logger1.Debug("from logger1")
-		logger2.Debug("from logger2")
-		assert.Equal(t, 1, obs1Logs.Len())
-		assert.Equal(t, 1, obs2Logs.Len())
+		require.Equal(t, 1, defaultLogs.Len())
+		assert.Equal(t, "test message", defaultLogs.All()[0].Message)
 	})
 }
 
