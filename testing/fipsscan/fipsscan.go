@@ -27,7 +27,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -130,16 +132,34 @@ type goListPackage struct {
 	Imports    []string
 }
 
-// scanBinaries is the internal implementation shared by ScanBinaries and
-// CheckModule. It runs a single go list pass over all patterns, attributes each
-// violation to its binary entry point via BFS, and returns the binaries found.
-// When no binaries are present (library module) it falls back to flat violation
-// detection with no Binary set, so CheckModule works for both module types.
-func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
+// moduleRoot walks up from the working directory to find the nearest go.mod
+// and returns its containing directory. go test sets cwd to the test package
+// directory, so relative patterns like ./... need to run from the module root.
+func moduleRoot(t testing.TB) string {
 	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("finding module root: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("finding module root: go.mod not found starting from %s", dir)
+		}
+		dir = parent
+	}
+}
 
+// goListPackages runs go list -json -deps -tags requirefips from the module root
+// and decodes the output. Shared by scanBinaries and Scan.
+func goListPackages(t testing.TB, patterns []string) []goListPackage {
+	t.Helper()
 	args := append([]string{"list", "-json", "-deps", "-tags", "requirefips"}, patterns...)
 	cmd := exec.CommandContext(t.Context(), "go", args...)
+	cmd.Dir = moduleRoot(t)
 	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -148,6 +168,27 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 		}
 		t.Fatalf("go list failed: %v", err)
 	}
+	var pkgs []goListPackage
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var p goListPackage
+		if err := dec.Decode(&p); err != nil {
+			t.Fatalf("parsing go list output: %v", err)
+		}
+		pkgs = append(pkgs, p)
+	}
+	return pkgs
+}
+
+// scanBinaries is the internal implementation shared by ScanBinaries and
+// CheckModule. It runs a single go list pass over all patterns, attributes each
+// violation to its binary entry point via BFS, and returns the binaries found.
+// When no binaries are present (library module) it falls back to flat violation
+// detection with no Binary set, so CheckModule works for both module types.
+func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
+	t.Helper()
+
+	pkgs := goListPackages(t, patterns)
 
 	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
 
@@ -156,15 +197,10 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 		skip[s] = true
 	}
 
-	importGraph := make(map[string][]string)
+	importGraph := make(map[string][]string, len(pkgs))
 	var mains []string
 
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for dec.More() {
-		var p goListPackage
-		if err := dec.Decode(&p); err != nil {
-			t.Fatalf("parsing go list output: %v", err)
-		}
+	for _, p := range pkgs {
 		if p.Name == "main" && !skip[p.ImportPath] {
 			mains = append(mains, p.ImportPath)
 		}
@@ -251,30 +287,24 @@ func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 // errors.
 func Scan(t testing.TB, pkg string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
-
-	cmd := exec.CommandContext(t.Context(), "go", "list", "-json", "-deps", "-tags", "requirefips", pkg)
-	out, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			t.Fatalf("go list failed: %v\n%s", err, exitErr.Stderr)
-		}
-		t.Fatalf("go list failed: %v", err)
-	}
-
+	pkgs := goListPackages(t, []string{pkg})
 	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
-	importGraph := make(map[string][]string)
-
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for dec.More() {
-		var p goListPackage
-		if err := dec.Decode(&p); err != nil {
-			t.Fatalf("parsing go list output: %v", err)
-		}
+	importGraph := make(map[string][]string, len(pkgs))
+	for _, p := range pkgs {
 		importGraph[p.ImportPath] = p.Imports
 	}
-
 	return findViolations(importGraph, forbidden), importGraph
+}
+
+// matchesBinaryKey reports whether a binary key matches an actual binary import
+// path. The key may be an exact import path, a module-root prefix, or "" which
+// matches any binary.
+func matchesBinaryKey(key, binary string) bool {
+	if key == "" {
+		return true
+	}
+	bare := strings.TrimRight(key, "/")
+	return binary == bare || strings.HasPrefix(binary, bare+"/")
 }
 
 func isForbidden(pkg string, forbiddenPkgs []string) bool {
@@ -350,6 +380,8 @@ func FormatChain(chain []string) string {
 //
 // knownViolations is a two-level map:
 //   - Outer key: binary entry-point import path, or "" to match all binaries.
+//     May be a module-root prefix (e.g. "github.com/elastic/myagent") that
+//     matches any binary whose import path starts with that prefix.
 //   - Inner key: component — a package path or module-root prefix that must be
 //     reachable from the binary AND able to reach the violating importer in the
 //     import graph. Use "" to match any violation within that binary.
@@ -448,6 +480,18 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		return kv.Importer == importer || strings.HasPrefix(importer, kv.Importer+"/")
 	}
 
+	// importedMatches reports whether kv.Imported matches the actual imported package.
+	//   - kv.Imported == "": wildcard, matches any forbidden package.
+	//   - exact path or prefix: trailing slash is stripped before matching so
+	//     using an exported constant like XCrypto works correctly.
+	importedMatches := func(kv KnownViolation, imported string) bool {
+		if kv.Imported == "" {
+			return true
+		}
+		bare := strings.TrimRight(kv.Imported, "/")
+		return imported == bare || strings.HasPrefix(imported, bare+"/")
+	}
+
 	// componentCanReachImporter is the stale-detection fast path: returns false
 	// when the component can provably no longer reach the importer (or any
 	// subpackage of it), signalling a silent skip instead of a stale error.
@@ -472,23 +516,38 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		return false
 	}
 
+	// binKeysForBinary returns all keys in knownViolations that should be
+	// consulted for a given binary import path: the exact path, any registered
+	// key that is a module-root prefix of the binary, and always "".
+	binKeysForBinary := func(binary string) []string {
+		if binary == "" {
+			return []string{""}
+		}
+		keys := []string{binary, ""}
+		for key := range knownViolations {
+			if key == "" || key == binary {
+				continue
+			}
+			if matchesBinaryKey(key, binary) {
+				keys = append(keys, key)
+			}
+		}
+		return keys
+	}
+
 	// markKnown finds ALL known entries where the component can reach importer
 	// and (Importer, Imported) matches. Marks each matched entry and returns the
 	// full list so the caller can log reasons. A single violation can match
 	// multiple component keys.
 	markKnown := func(binary, importer, imported string) ([]KnownViolation, bool) {
 		var results []KnownViolation
-		binKeys := []string{binary, ""}
-		if binary == "" {
-			binKeys = []string{""}
-		}
-		for _, binKey := range binKeys {
+		for _, binKey := range binKeysForBinary(binary) {
 			for compKey, kvs := range knownViolations[binKey] {
 				if !componentCanReach(compKey, importer) {
 					continue
 				}
 				for i, kv := range kvs {
-					if importerMatches(kv, importer) && (kv.Imported == "" || kv.Imported == imported || strings.HasPrefix(imported, kv.Imported+"/")) {
+					if importerMatches(kv, importer) && importedMatches(kv, imported) {
 						matched[binKey][compKey][i] = true
 						results = append(results, kv)
 					}
@@ -521,29 +580,42 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		}
 	}
 
-	// Only check staleness for binaries found in this scan — avoids false
-	// stale errors when CheckModule is called per-binary in subtests.
-	scanned := make(map[string]bool, len(mains)+1)
-	for _, bin := range mains {
-		scanned[bin] = true
+	// binsForKey returns all scanned binaries whose import path matches a binary
+	// key (exact or module-root prefix). Returns mains for the "" wildcard.
+	binsForKey := func(key string) []string {
+		if key == "" {
+			return mains
+		}
+		var result []string
+		for _, bin := range mains {
+			if matchesBinaryKey(key, bin) {
+				result = append(result, bin)
+			}
+		}
+		return result
 	}
-	scanned[""] = true
 
 	for binKey, comps := range matched {
-		if !scanned[binKey] {
+		binsToCheck := binsForKey(binKey)
+		// Skip entries whose binary key matched no scanned binary — avoids false
+		// stale errors when CheckModule is called per-binary in subtests.
+		if binKey != "" && len(binsToCheck) == 0 {
 			continue
 		}
-		var binsToCheck []string
-		if binKey == "" {
-			binsToCheck = mains
-		} else {
-			binsToCheck = []string{binKey}
-		}
 		for compKey, hits := range comps {
-			// If the component is no longer reachable from any relevant binary,
-			// the dependency was removed entirely — skip all entries silently.
-			if compKey != "" && !isReachableFromAny(compKey, binsToCheck, reachableFrom) {
-				continue
+			if compKey != "" {
+				if len(binsToCheck) > 0 {
+					// Binary mode: component must be reachable from at least one matching binary.
+					if !isReachableFromAny(compKey, binsToCheck, reachableFrom) {
+						continue
+					}
+				} else {
+					// Library mode: no binary entry points. Check that the component
+					// still exists somewhere in the import graph.
+					if len(compPkgs[compKey]) == 0 {
+						continue
+					}
+				}
 			}
 			for i, hit := range hits {
 				if !hit {

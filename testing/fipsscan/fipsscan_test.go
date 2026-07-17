@@ -20,9 +20,72 @@
 package fipsscan
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+func TestModuleRoot(t *testing.T) {
+	root := moduleRoot(t)
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Fatalf("moduleRoot returned %q but no go.mod found there: %v", root, err)
+	}
+}
+
+func TestMatchesBinaryKey(t *testing.T) {
+	tests := []struct {
+		key    string
+		binary string
+		want   bool
+	}{
+		// wildcard
+		{"", "github.com/foo/cmd/agent", true},
+		// exact match
+		{"github.com/foo/cmd/agent", "github.com/foo/cmd/agent", true},
+		// module-root prefix
+		{"github.com/foo", "github.com/foo/cmd/agent", true},
+		// prefix with trailing slash in key (normalised)
+		{"github.com/foo/", "github.com/foo/cmd/agent", true},
+		// no false prefix: foobar must not match foo
+		{"github.com/foo", "github.com/foobar/cmd/agent", false},
+		// key longer than binary
+		{"github.com/foo/cmd/agent/extra", "github.com/foo/cmd/agent", false},
+	}
+	for _, tc := range tests {
+		got := matchesBinaryKey(tc.key, tc.binary)
+		if got != tc.want {
+			t.Errorf("matchesBinaryKey(%q, %q) = %v, want %v", tc.key, tc.binary, got, tc.want)
+		}
+	}
+}
+
+func TestIsForbidden(t *testing.T) {
+	tests := []struct {
+		pkg      string
+		prefixes []string
+		want     bool
+	}{
+		// exact match without trailing slash
+		{"golang.org/x/crypto", []string{"golang.org/x/crypto/"}, true},
+		// sub-package matched by prefix with trailing slash
+		{"golang.org/x/crypto/md4", []string{"golang.org/x/crypto/"}, true},
+		// sub-package matched by prefix without trailing slash
+		{"golang.org/x/crypto/md4", []string{"golang.org/x/crypto"}, true},
+		// no false prefix: cryptography must not match crypto
+		{"golang.org/x/cryptography", []string{"golang.org/x/crypto/"}, false},
+		// filippo.io prefix
+		{"filippo.io/edwards25519", []string{"filippo.io/"}, true},
+		// not matched
+		{"github.com/safe/pkg", []string{"golang.org/x/crypto/"}, false},
+	}
+	for _, tc := range tests {
+		got := isForbidden(tc.pkg, tc.prefixes)
+		if got != tc.want {
+			t.Errorf("isForbidden(%q, %v) = %v, want %v", tc.pkg, tc.prefixes, got, tc.want)
+		}
+	}
+}
 
 func TestShortestChain(t *testing.T) {
 	graph := map[string][]string{
