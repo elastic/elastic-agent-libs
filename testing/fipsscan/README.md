@@ -35,21 +35,38 @@ import (
     "github.com/elastic/elastic-agent-libs/testing/fipsscan"
 )
 
+// skipBinaries lists non-shipped binaries excluded from the FIPS scan.
+var skipBinaries = []string{
+    // "github.com/elastic/myagent/dev-tools/cmd/sometool",
+}
+
 func TestFIPSCompliance(t *testing.T) {
     fipsscan.CheckModule(t,
         []string{"./..."},
-        nil, // binaries to skip (dev tools, scripts, non-shipped assets)
-        nil, // project-specific extra forbidden pkgs, nil for the default set
-        map[string][]fipsscan.KnownViolation{
-            // Map key is the binary entry point path.
-            // Use "" for violations shared across all binaries or for library modules.
-            // Stale detection is scoped to binaries found in this scan, so
-            // per-binary subtest calls work correctly with per-binary keys.
+        skipBinaries,
+        nil, // project-specific extra forbidden pkgs; nil for the default set
+        map[string]map[string][]fipsscan.KnownViolation{
+            // Outer key: binary entry-point path, or "" for all binaries.
+            // Inner key: component — any package path or module prefix that
+            //   must appear in the BFS chain from the binary to the importer.
+            //   Use a module root (e.g. "github.com/twmb/franz-go") to group
+            //   all subpackage violations under one entry, making it clear
+            //   which library introduces the violation.
+            //   Use "" to match any chain within that binary.
             "github.com/elastic/myagent/cmd/agent": {
-                {
-                    Importer: "github.com/jcmturner/gokrb5/v8/krb5",
-                    Imported: "github.com/jcmturner/aescts/v2",
-                    Reason:   "Kerberos AD auth, tracked in FIPS-123",
+                "github.com/elastic/gokrb5/v8": {
+                    {
+                        Importer: "github.com/elastic/gokrb5/v8/crypto/rfc3962",
+                        Imported: "github.com/jcmturner/aescts/v2",
+                        Reason:   "Elastic gokrb5 fork depends on jcmturner aescts for AES-CBC-CTS",
+                    },
+                },
+                "github.com/twmb/franz-go": {
+                    {
+                        Importer: "github.com/twmb/franz-go/pkg/sasl/scram",
+                        Imported: "golang.org/x/crypto/pbkdf2",
+                        Reason:   "Kafka SCRAM SASL key derivation uses PBKDF2; x/crypto not FIPS-certified",
+                    },
                 },
             },
         },
@@ -67,10 +84,11 @@ go test -tags requirefips ./...
 
 ## Bootstrapping the known-violations map
 
-1. Call `CheckModule` with an empty map (`map[string][]fipsscan.KnownViolation{}`).
-2. The test output lists every violation: `NEW violation: <importer> imports forbidden <imported>`.
-3. Copy the importer paths into the map with a justification comment.
-4. From that point on CI enforces the contract automatically.
+1. Call `CheckModule` with an empty map (`map[string]map[string][]fipsscan.KnownViolation{}`).
+2. The test output lists every violation with its full import chain.
+3. Group violations by the module root of the importer (e.g. `"github.com/twmb/franz-go"`) to make it clear which library introduces each violation.
+4. Add a `Reason` explaining why the dependency cannot be replaced.
+5. From that point on CI enforces the contract automatically.
 
 ## Advanced usage
 
@@ -116,10 +134,14 @@ Pass additional prefixes via `extraForbiddenPkgs` for project-specific libraries
 CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
     Scans all packages matching patterns and their transitive dependencies.
     skipBinaries lists binary import paths to exclude (dev tools, scripts,
-    non-shipped assets). knownViolations is map[binary][]KnownViolation; use
-    "" as the key for violations shared across all binaries or for library
-    modules. Stale detection is scoped to binaries found in this scan.
-    t.Errorf on new violations or stale entries.
+    non-shipped assets). knownViolations is map[binary]map[component][]KnownViolation:
+      - outer key: binary entry-point path, or "" for all binaries
+      - inner key: component prefix that must appear in the BFS chain from
+        the binary to the importer; "" matches any chain
+    Stale detection: entries are flagged stale when the binary was scanned and
+    the component is reachable but the (Importer, Imported) pair is no longer
+    a violation. If the component is no longer reachable, its entries are
+    silently skipped. t.Errorf on new violations or stale entries.
 
 Scan(t, pkg, extraForbiddenPkgs)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).

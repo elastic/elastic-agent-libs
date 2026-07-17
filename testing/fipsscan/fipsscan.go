@@ -336,32 +336,59 @@ func FormatChain(chain []string) string {
 
 // CheckModule scans all packages and their transitive dependencies matching
 // patterns and reports unknown violations or stale knownViolations entries via
-// t.Errorf. Works for both binary and library modules. The map key is the
-// binary entry point path; use "" for violations that apply to all binaries or
-// to library modules. Binaries in skipBinaries are excluded from the scan and
-// from stale detection. Stale detection only covers binaries found in this scan,
-// so per-binary subtest calls work correctly with per-binary map keys.
-func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string][]KnownViolation) {
+// t.Errorf. Works for both binary and library modules.
+//
+// knownViolations is a two-level map:
+//   - Outer key: binary entry-point import path, or "" to match all binaries.
+//   - Inner key: component prefix — a package path or module prefix that must
+//     appear in the BFS chain from the binary to the importer. Use "" to match
+//     any violation chain within that binary.
+//
+// Using a module root as the component key (e.g. "github.com/twmb/franz-go")
+// groups all violations from that module's subpackages under one entry, making
+// it obvious which library introduces each violation.
+//
+// Stale detection: an entry is flagged stale when the binary was scanned, the
+// component prefix is still reachable from it, but the (Importer, Imported)
+// pair is no longer a violation. If the component is no longer reachable at
+// all (dependency removed), its entries are silently skipped.
+//
+// Binaries in skipBinaries are excluded from the scan and from stale detection.
+func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
 
 	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
 
-	// matched[binary][i] tracks whether knownViolations[binary][i] was hit.
-	matched := make(map[string][]bool)
-	for bin, kvs := range knownViolations {
-		matched[bin] = make([]bool, len(kvs))
+	// matched[binKey][compKey][i] tracks whether knownViolations[binKey][compKey][i] was hit.
+	matched := make(map[string]map[string][]bool)
+	for binKey, comps := range knownViolations {
+		matched[binKey] = make(map[string][]bool, len(comps))
+		for compKey, kvs := range comps {
+			matched[binKey][compKey] = make([]bool, len(kvs))
+		}
 	}
 
-	findKnown := func(binary, importer, imported string) (KnownViolation, bool) {
-		bins := []string{binary, ""}
+	// Pre-compute reachable set per binary for stale detection.
+	reachableFrom := make(map[string]map[string]bool, len(mains))
+	for _, bin := range mains {
+		reachableFrom[bin] = bfsReachable(bin, importGraph)
+	}
+
+	findKnown := func(binary, importer, imported string, chain []string) (KnownViolation, bool) {
+		binKeys := []string{binary, ""}
 		if binary == "" {
-			bins = []string{""}
+			binKeys = []string{""}
 		}
-		for _, bin := range bins {
-			for i, kv := range knownViolations[bin] {
-				if kv.Importer == importer && kv.Imported == imported {
-					matched[bin][i] = true
-					return kv, true
+		for _, binKey := range binKeys {
+			for compKey, kvs := range knownViolations[binKey] {
+				if !chainContains(compKey, chain) {
+					continue
+				}
+				for i, kv := range kvs {
+					if kv.Importer == importer && kv.Imported == imported {
+						matched[binKey][compKey][i] = true
+						return kv, true
+					}
 				}
 			}
 		}
@@ -382,7 +409,7 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		copy(displayChain, chain)
 		displayChain[len(chain)] = v.Imported
 
-		if kv, ok := findKnown(v.Binary, v.Importer, v.Imported); ok {
+		if kv, ok := findKnown(v.Binary, v.Importer, v.Imported, chain); ok {
 			t.Logf("known violation (%s):\n%s\n      reason: %s", v.Imported, FormatChain(displayChain), kv.Reason)
 		} else {
 			t.Errorf("NEW violation — add to knownViolations or remove the dependency:\n%s", FormatChain(displayChain))
@@ -397,15 +424,63 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 	}
 	scanned[""] = true
 
-	for bin, hits := range matched {
-		if !scanned[bin] {
+	for binKey, comps := range matched {
+		if !scanned[binKey] {
 			continue
 		}
-		for i, hit := range hits {
-			if !hit {
-				kv := knownViolations[bin][i]
-				t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q importer=%q imported=%q", bin, kv.Importer, kv.Imported)
+		var binsToCheck []string
+		if binKey == "" {
+			binsToCheck = mains
+		} else {
+			binsToCheck = []string{binKey}
+		}
+		for compKey, hits := range comps {
+			// If the component is no longer reachable from any relevant binary,
+			// the dependency was removed entirely — skip silently rather than
+			// reporting every entry as stale.
+			if compKey != "" && !isReachableFromAny(compKey, binsToCheck, reachableFrom) {
+				continue
+			}
+			for i, hit := range hits {
+				if !hit {
+					kv := knownViolations[binKey][compKey][i]
+					t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q component=%q importer=%q imported=%q", binKey, compKey, kv.Importer, kv.Imported)
+				}
 			}
 		}
 	}
+}
+
+// chainContains reports whether key is "" (wildcard) or is a prefix of any
+// package in chain. A key without a trailing slash matches both the package
+// itself and any subpackage (e.g. "github.com/foo/bar" matches
+// "github.com/foo/bar" and "github.com/foo/bar/baz").
+func chainContains(key string, chain []string) bool {
+	if key == "" {
+		return true
+	}
+	for _, pkg := range chain {
+		if pkg == key || strings.HasPrefix(pkg, key+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// isReachableFromAny reports whether key or any subpackage of key is reachable
+// from at least one binary in bins.
+func isReachableFromAny(key string, bins []string, reachableFrom map[string]map[string]bool) bool {
+	prefix := key + "/"
+	for _, bin := range bins {
+		reachable := reachableFrom[bin]
+		if reachable[key] {
+			return true
+		}
+		for pkg := range reachable {
+			if strings.HasPrefix(pkg, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
