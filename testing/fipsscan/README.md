@@ -85,8 +85,21 @@ go test -tags requirefips ./...
 ## Bootstrapping the known-violations map
 
 1. Call `CheckModule` with an empty map (`map[string]map[string][]fipsscan.KnownViolation{}`).
-2. The test output lists every violation with its full import chain.
-3. Group violations by the module root of the importer (e.g. `"github.com/twmb/franz-go"`) to make it clear which library introduces each violation.
+2. The test output lists every `NEW violation` with its full import chain, e.g.:
+   ```
+   cmd/kafkareceiver
+         -> otel-contrib/receiver/kafkareceiver
+         -> otel-contrib/internal/kafka          ← Importer
+         -> gokrb5/v8/client                     ← Imported (forbidden)
+   ```
+3. Choose a component key — any package or prefix in the chain from the binary down to the Importer (not the forbidden package itself):
+   | Component key | Meaning |
+   |---|---|
+   | `""` | matches any chain in this binary |
+   | `"cmd/kafkareceiver"` | binary-level — don't need to know which package does the import |
+   | `"otel-contrib"` | external module root — groups all violations from that module |
+   | `"otel-contrib/receiver/kafkareceiver"` | specific receiver package |
+   | `"otel-contrib/internal/kafka"` | exact direct importer |
 4. Add a `Reason` explaining why the dependency cannot be replaced.
 5. From that point on CI enforces the contract automatically.
 

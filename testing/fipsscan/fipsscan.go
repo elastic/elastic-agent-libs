@@ -344,9 +344,23 @@ func FormatChain(chain []string) string {
 //     appear in the BFS chain from the binary to the importer. Use "" to match
 //     any violation chain within that binary.
 //
-// Using a module root as the component key (e.g. "github.com/twmb/franz-go")
-// groups all violations from that module's subpackages under one entry, making
-// it obvious which library introduces each violation.
+// For a violation like:
+//
+//	cmd/kafkareceiver
+//	      -> otel-contrib/receiver/kafkareceiver
+//	      -> otel-contrib/internal/kafka          ← Importer
+//	      -> gokrb5/v8/client                     ← Imported (forbidden)
+//
+// Any of the following are valid component keys:
+//
+//	""                                    — matches any chain in this binary
+//	"cmd/kafkareceiver"                   — the binary itself (binary-level match)
+//	"otel-contrib"                        — the external module root
+//	"otel-contrib/receiver/kafkareceiver" — the specific receiver package
+//	"otel-contrib/internal/kafka"         — the exact direct importer
+//
+// The component key must match a package in the chain from binary to Importer.
+// It cannot be the forbidden package itself (Imported).
 //
 // Stale detection: an entry is flagged stale when the binary was scanned, the
 // component prefix is still reachable from it, but the (Importer, Imported)
@@ -385,7 +399,7 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 					continue
 				}
 				for i, kv := range kvs {
-					if kv.Importer == importer && kv.Imported == imported {
+					if (kv.Importer == importer || kv.Importer == binary) && kv.Imported == imported {
 						matched[binKey][compKey][i] = true
 						return kv, true
 					}
