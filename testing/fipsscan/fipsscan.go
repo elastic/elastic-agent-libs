@@ -86,6 +86,16 @@ type Violation struct {
 }
 
 // KnownViolation documents an accepted non-FIPS import for use in knownViolations maps.
+//
+// Importer is optional:
+//   - "" (empty): wildcard — matches any intermediate importer reachable from the
+//     component key that directly imports Imported. Use this when you only care
+//     which component owns the violation, not which intermediate package is the
+//     direct importer.
+//   - exact path: "github.com/foo/bar/baz" matches only that exact package.
+//   - module-root prefix: "github.com/foo/bar" matches any subpackage
+//     "github.com/foo/bar/baz" as the direct importer, collapsing many per-subpackage
+//     violations that share the same Imported into a single entry.
 type KnownViolation struct {
 	Importer string
 	Imported string
@@ -427,6 +437,41 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		return false
 	}
 
+	// importerMatches reports whether kv.Importer matches the actual importer.
+	//   - kv.Importer == "": wildcard, matches any importer.
+	//   - exact path: must equal importer exactly.
+	//   - prefix: "github.com/foo/bar" matches "github.com/foo/bar/baz".
+	importerMatches := func(kv KnownViolation, importer string) bool {
+		if kv.Importer == "" {
+			return true
+		}
+		return kv.Importer == importer || strings.HasPrefix(importer, kv.Importer+"/")
+	}
+
+	// componentCanReachImporter is the stale-detection fast path: returns false
+	// when the component can provably no longer reach the importer (or any
+	// subpackage of it), signalling a silent skip instead of a stale error.
+	// When kv.Importer is empty the check is skipped (we can't narrow to a
+	// specific importer, so let the matched flag decide).
+	componentCanReachImporter := func(compKey string, kv KnownViolation) bool {
+		if compKey == "" || kv.Importer == "" {
+			return true
+		}
+		sub := kv.Importer + "/"
+		for _, pkg := range compPkgs[compKey] {
+			reachable := compReach.from(pkg)
+			if reachable[kv.Importer] {
+				return true
+			}
+			for rPkg := range reachable {
+				if strings.HasPrefix(rPkg, sub) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	// markKnown finds ALL known entries where the component can reach importer
 	// and (Importer, Imported) matches. Marks each matched entry and returns the
 	// full list so the caller can log reasons. A single violation can match
@@ -443,7 +488,7 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 					continue
 				}
 				for i, kv := range kvs {
-					if kv.Importer == importer && kv.Imported == imported {
+					if importerMatches(kv, importer) && kv.Imported == imported {
 						matched[binKey][compKey][i] = true
 						results = append(results, kv)
 					}
@@ -503,9 +548,9 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 			for i, hit := range hits {
 				if !hit {
 					kv := knownViolations[binKey][compKey][i]
-					// If the component can no longer reach the importer the import
-					// path was broken (package restructured or removed) — skip silently.
-					if !componentCanReach(compKey, kv.Importer) {
+					// If the component can no longer reach the importer (or any
+					// subpackage of it), the import path was broken — skip silently.
+					if !componentCanReachImporter(compKey, kv) {
 						continue
 					}
 					t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q component=%q importer=%q imported=%q", binKey, compKey, kv.Importer, kv.Imported)
