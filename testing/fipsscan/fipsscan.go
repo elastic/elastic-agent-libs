@@ -24,6 +24,7 @@
 package fipsscan
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os/exec"
@@ -31,8 +32,9 @@ import (
 	"testing"
 )
 
-// Non-FIPS crypto library prefixes. Pass any combination to Scan's
-// extraForbiddenPkgs, or use CommonForbiddenPkgs for the full set.
+// Non-FIPS crypto library prefixes. All are included in ForbiddenPkgs()
+// and checked by Scan automatically. Use individual constants only when
+// passing a subset via extraForbiddenPkgs.
 const (
 	// XCrypto covers golang.org/x/crypto, which is not part of Go's certified
 	// FIPS 140-3 module (GOFIPS140=v1.0.0).
@@ -78,14 +80,19 @@ const (
 
 // Violation is a forbidden import discovered in the dependency tree.
 type Violation struct {
-	Importer string // package that imports the forbidden package
+	Binary   string // binary entry point; empty for library modules
+	Importer string // package that directly imports the forbidden package
 	Imported string // forbidden package being imported
 }
 
-// CommonForbiddenPkgs is the set of well-known non-FIPS crypto libraries.
-// Scan uses this as its baseline; pass extraForbiddenPkgs only for
-// project-specific additions beyond this list.
-var CommonForbiddenPkgs = []string{
+// KnownViolation documents an accepted non-FIPS import for use in knownViolations maps.
+// Use a Go comment next to the entry to explain why it is acceptable.
+type KnownViolation struct {
+	Importer string
+	Imported string
+}
+
+var forbiddenPkgs = []string{
 	XCrypto,
 	JcmturnerAescts,
 	JcmturnerGofork,
@@ -98,16 +105,133 @@ var CommonForbiddenPkgs = []string{
 	FilippioIO,
 }
 
+// ForbiddenPkgs returns a fresh copy of the baseline non-FIPS crypto library
+// prefixes. Scan uses this automatically; pass extraForbiddenPkgs only for
+// project-specific additions beyond this list.
+func ForbiddenPkgs() []string {
+	cp := make([]string, len(forbiddenPkgs))
+	copy(cp, forbiddenPkgs)
+	return cp
+}
+
 type goListPackage struct {
 	ImportPath string
+	Name       string
 	Imports    []string
 }
 
+// scanBinaries is the internal implementation shared by ScanBinaries and
+// CheckModule. It runs a single go list pass, attributes each violation to its
+// binary entry point via BFS, and returns whether any binaries were found.
+// When no binaries are present (library module) it falls back to flat violation
+// detection with no BinaryPath set, so CheckModule works for both module types.
+func scanBinaries(t testing.TB, pattern string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, bool) {
+	t.Helper()
+
+	cmd := exec.CommandContext(t.Context(), "go", "list", "-json", "-deps", "-tags", "requirefips", pattern)
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			t.Fatalf("go list failed: %v\n%s", err, exitErr.Stderr)
+		}
+		t.Fatalf("go list failed: %v", err)
+	}
+
+	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
+
+	importGraph := make(map[string][]string)
+	var mains []string
+
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var p goListPackage
+		if err := dec.Decode(&p); err != nil {
+			t.Fatalf("parsing go list output: %v", err)
+		}
+		if p.Name == "main" {
+			mains = append(mains, p.ImportPath)
+		}
+		importGraph[p.ImportPath] = p.Imports
+	}
+
+	if len(mains) == 0 {
+		return findViolations(importGraph, forbidden), importGraph, false
+	}
+
+	// Per-binary BFS attribution so each violation carries the entry point
+	// that pulls it in.
+	seen := make(map[string]bool)
+	var violations []Violation
+	for _, bin := range mains {
+		for pkg := range bfsReachable(bin, importGraph) {
+			if isForbidden(pkg, forbidden) {
+				continue
+			}
+			for _, imp := range importGraph[pkg] {
+				if isForbidden(imp, forbidden) {
+					if key := bin + "\x00" + pkg + "\x00" + imp; !seen[key] {
+						seen[key] = true
+						violations = append(violations, Violation{Binary: bin, Importer: pkg, Imported: imp})
+					}
+				}
+			}
+		}
+	}
+	return violations, importGraph, true
+}
+
+// bfsReachable returns the set of all packages reachable from from (inclusive)
+// via forward edges in importGraph.
+func bfsReachable(from string, importGraph map[string][]string) map[string]bool {
+	reachable := map[string]bool{from: true}
+	queue := []string{from}
+	for len(queue) > 0 {
+		pkg := queue[0]
+		queue = queue[1:]
+		for _, dep := range importGraph[pkg] {
+			if !reachable[dep] {
+				reachable[dep] = true
+				queue = append(queue, dep)
+			}
+		}
+	}
+	return reachable
+}
+
+// findViolations returns all (Importer, Imported) pairs in importGraph where
+// Importer is not itself forbidden but directly imports a forbidden package.
+func findViolations(importGraph map[string][]string, forbidden []string) []Violation {
+	var violations []Violation
+	for pkg, imports := range importGraph {
+		if isForbidden(pkg, forbidden) {
+			continue
+		}
+		for _, imp := range imports {
+			if isForbidden(imp, forbidden) {
+				violations = append(violations, Violation{Importer: pkg, Imported: imp})
+			}
+		}
+	}
+	return violations
+}
+
+// ScanBinaries runs `go list -json -deps -tags requirefips <pattern>` once,
+// attributes each violation to its binary entry point (Violation.BinaryPath),
+// and returns all violations and the merged import graph. Calls t.Fatalf if no
+// binaries are found or on subprocess/parse errors.
+func ScanBinaries(t testing.TB, pattern string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
+	t.Helper()
+	violations, importGraph, found := scanBinaries(t, pattern, extraForbiddenPkgs)
+	if !found {
+		t.Fatalf("ScanBinaries: no package main found matching %q", pattern)
+	}
+	return violations, importGraph
+}
+
 // Scan runs `go list -json -deps -tags requirefips <pkg>` and returns all
-// packages that directly import any prefix in CommonForbiddenPkgs or
-// extraForbiddenPkgs, along with the full import graph. Packages whose own
-// path matches a forbidden prefix are skipped (avoids flagging internal refs).
-// Calls t.Fatalf on subprocess or parse errors.
+// violations and the full import graph. Calls t.Fatalf on subprocess or parse
+// errors.
 func Scan(t testing.TB, pkg string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
 
@@ -121,38 +245,25 @@ func Scan(t testing.TB, pkg string, extraForbiddenPkgs []string) ([]Violation, m
 		t.Fatalf("go list failed: %v", err)
 	}
 
-	forbidden := append(append([]string(nil), CommonForbiddenPkgs...), extraForbiddenPkgs...)
-
+	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
 	importGraph := make(map[string][]string)
-	var violations []Violation
 
-	dec := json.NewDecoder(strings.NewReader(string(out)))
+	dec := json.NewDecoder(bytes.NewReader(out))
 	for dec.More() {
 		var p goListPackage
 		if err := dec.Decode(&p); err != nil {
 			t.Fatalf("parsing go list output: %v", err)
 		}
 		importGraph[p.ImportPath] = p.Imports
-
-		if isForbidden(p.ImportPath, forbidden) {
-			continue
-		}
-		for _, imp := range p.Imports {
-			if isForbidden(imp, forbidden) {
-				violations = append(violations, Violation{
-					Importer: p.ImportPath,
-					Imported: imp,
-				})
-			}
-		}
 	}
 
-	return violations, importGraph
+	return findViolations(importGraph, forbidden), importGraph
 }
 
 func isForbidden(pkg string, forbiddenPkgs []string) bool {
 	for _, prefix := range forbiddenPkgs {
-		if strings.HasPrefix(pkg, prefix) {
+		bare := strings.TrimRight(prefix, "/")
+		if pkg == bare || strings.HasPrefix(pkg, bare+"/") {
 			return true
 		}
 	}
@@ -216,44 +327,60 @@ func FormatChain(chain []string) string {
 	return strings.Join(parts, "\n")
 }
 
-// CheckViolations scans binaryPkg for golang.org/x/crypto imports and any
-// additional prefixes in extraForbiddenPkgs, attributes each violation to the
-// first-hop component from rootPkg, and reports unknown violations or stale
-// knownViolations entries via t.Errorf.
-func CheckViolations(t testing.TB, binaryPkg, rootPkg string, extraForbiddenPkgs []string, knownViolations map[string]string) {
+// CheckModule scans all packages and their transitive dependencies matching
+// pattern (typically "./...") and reports unknown violations or stale
+// knownViolations entries via t.Errorf. Works for both binary and library
+// modules. The map key is the binary entry point path; use "" for violations
+// that apply to all binaries or to library modules. Each entry lists the
+// (Importer, Imported) pairs that are accepted for that binary.
+func CheckModule(t testing.TB, pattern string, extraForbiddenPkgs []string, knownViolations map[string][]KnownViolation) {
 	t.Helper()
 
-	violations, importGraph := Scan(t, binaryPkg, extraForbiddenPkgs)
+	violations, importGraph, _ := scanBinaries(t, pattern, extraForbiddenPkgs)
 
-	found := make(map[string]bool)
+	// matched[binary][i] tracks whether knownViolations[binary][i] was hit.
+	matched := make(map[string][]bool)
+	for bin, kvs := range knownViolations {
+		matched[bin] = make([]bool, len(kvs))
+	}
+
+	findKnown := func(binary, importer, imported string) (KnownViolation, bool) {
+		for _, bin := range []string{binary, ""} {
+			for i, kv := range knownViolations[bin] {
+				if kv.Importer == importer && kv.Imported == imported {
+					matched[bin][i] = true
+					return kv, true
+				}
+			}
+		}
+		return KnownViolation{}, false
+	}
 
 	for _, v := range violations {
-		chain := ShortestChain(rootPkg, v.Importer, importGraph)
-		if chain == nil {
+		var chain []string
+		if v.Binary != "" {
+			chain = ShortestChain(v.Binary, v.Importer, importGraph)
+			if chain == nil {
+				chain = []string{v.Importer}
+			}
+		} else {
 			chain = []string{v.Importer}
 		}
-		displayChain := make([]string, len(chain)+1)
-		copy(displayChain, chain)
-		displayChain[len(chain)] = v.Imported
+		displayChain := append(chain, v.Imported)
 
-		var component string
-		if len(chain) > 1 {
-			component = chain[1]
+		if _, ok := findKnown(v.Binary, v.Importer, v.Imported); ok {
+			t.Logf("known violation (%s):\n%s", v.Imported, FormatChain(displayChain))
 		} else {
-			component = chain[0]
-		}
-
-		if reason, ok := knownViolations[component]; !ok {
-			t.Errorf("NEW violation via unknown component — add to knownViolations or remove the dependency:\n      -> %s", FormatChain(displayChain))
-		} else {
-			t.Logf("known violation [%s] via %s:\n      -> %s\n      reason: %s", v.Imported, component, FormatChain(displayChain), reason)
-			found[component] = true
+			t.Errorf("NEW violation — add to knownViolations or remove the dependency:\n%s", FormatChain(displayChain))
 		}
 	}
 
-	for component := range knownViolations {
-		if !found[component] {
-			t.Errorf("stale knownViolations entry (component no longer reaches a forbidden package — remove it): %s", component)
+	for bin, hits := range matched {
+		for i, hit := range hits {
+			if !hit {
+				kv := knownViolations[bin][i]
+				t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q importer=%q imported=%q", bin, kv.Importer, kv.Imported)
+			}
 		}
 	}
 }
