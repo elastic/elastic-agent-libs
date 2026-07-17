@@ -37,16 +37,19 @@ import (
 
 func TestFIPSCompliance(t *testing.T) {
     fipsscan.CheckModule(t,
-        "./...",
+        []string{"./..."},
         nil, // project-specific extra forbidden pkgs, nil for the default set
         map[string][]fipsscan.KnownViolation{
             // Map key is the binary entry point path.
-            // Use "" for violations that apply to all binaries or library modules.
-            // Fails on new unlisted violations AND on entries that are no
-            // longer reachable (stale), keeping this map honest over time.
+            // Use "" for violations shared across all binaries or for library modules.
+            // Stale detection is scoped to binaries found in this scan, so
+            // per-binary subtest calls work correctly with per-binary keys.
             "github.com/elastic/myagent/cmd/agent": {
-                // Kerberos AD auth — tracked in FIPS-123
-                {Importer: "github.com/jcmturner/gokrb5/v8/krb5", Imported: "github.com/jcmturner/aescts/v2"},
+                {
+                    Importer: "github.com/jcmturner/gokrb5/v8/krb5",
+                    Imported: "github.com/jcmturner/aescts/v2",
+                    Reason:   "Kerberos AD auth, tracked in FIPS-123",
+                },
             },
         },
     )
@@ -63,7 +66,7 @@ go test -tags requirefips ./...
 
 ## Bootstrapping the known-violations map
 
-1. Call `CheckModule` with an empty map (`map[string]string{}`).
+1. Call `CheckModule` with an empty map (`map[string][]fipsscan.KnownViolation{}`).
 2. The test output lists every violation: `NEW violation: <importer> imports forbidden <imported>`.
 3. Copy the importer paths into the map with a justification comment.
 4. From that point on CI enforces the contract automatically.
@@ -73,14 +76,14 @@ go test -tags requirefips ./...
 `CheckModule` covers most cases. Use the lower-level functions when you need to build a custom reporting pipeline:
 
 ```go
-// all packages in the module (no BinaryPath set)
+// all packages in the module (Binary not set on violations)
 violations, importGraph := fipsscan.Scan(t, "./...", nil)
 
-// only package main entry points (fatals if none found; BinaryPath is set on each violation)
-violations, importGraph := fipsscan.ScanBinaries(t, "./...", nil)
+// only package main entry points (fatals if none found; Binary is set on each violation)
+violations, importGraph := fipsscan.ScanBinaries(t, []string{"./cmd/agent", "./cmd/other"}, nil)
 
 for _, v := range violations {
-    chain := fipsscan.ShortestChain(v.BinaryPath, v.Importer, importGraph)
+    chain := fipsscan.ShortestChain(v.Binary, v.Importer, importGraph)
     fmt.Println(fipsscan.FormatChain(append(chain, v.Imported)))
 }
 ```
@@ -109,19 +112,20 @@ Pass additional prefixes via `extraForbiddenPkgs` for project-specific libraries
 ## API reference
 
 ```
-CheckModule(t, pattern, extraForbiddenPkgs, knownViolations)
-    Scans all packages matching pattern and their transitive dependencies.
+CheckModule(t, patterns, extraForbiddenPkgs, knownViolations)
+    Scans all packages matching patterns and their transitive dependencies.
     knownViolations is map[binary][]KnownViolation; use "" as the key for
-    violations that apply to all binaries or to library modules. t.Errorf on
-    new violations or stale entries.
+    violations shared across all binaries or for library modules. Stale
+    detection is scoped to binaries found in this scan. t.Errorf on new
+    violations or stale entries.
 
 Scan(t, pkg, extraForbiddenPkgs)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).
-    BinaryPath is not set on violations.
+    Binary is not set on violations.
 
-ScanBinaries(t, pattern, extraForbiddenPkgs)
-    Discovers all package main entries matching pattern, scans the combined
-    dependency tree in one go list pass. Sets BinaryPath on each violation.
+ScanBinaries(t, patterns, extraForbiddenPkgs)
+    Discovers all package main entries matching patterns, scans the combined
+    dependency tree in one go list pass. Sets Binary on each violation.
     Fatals if no binaries are found.
 
 ForbiddenPkgs() []string
