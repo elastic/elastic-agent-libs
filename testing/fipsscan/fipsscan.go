@@ -340,9 +340,15 @@ func FormatChain(chain []string) string {
 //
 // knownViolations is a two-level map:
 //   - Outer key: binary entry-point import path, or "" to match all binaries.
-//   - Inner key: component prefix — a package path or module prefix that must
-//     appear in the BFS chain from the binary to the importer. Use "" to match
-//     any violation chain within that binary.
+//   - Inner key: component — a package path or module-root prefix that must be
+//     reachable from the binary AND able to reach the violating importer in the
+//     import graph. Use "" to match any violation within that binary.
+//
+// A single violation can match multiple component keys simultaneously: if both
+// "fbreceiver" and "azureauthextension" can transitively reach the same
+// non-FIPS importer, listing the same (Importer, Imported) pair under both
+// component keys causes both to be suppressed and neither to be flagged stale.
+// This is the intended way to document violations shared by multiple components.
 //
 // For a violation like:
 //
@@ -353,19 +359,16 @@ func FormatChain(chain []string) string {
 //
 // Any of the following are valid component keys:
 //
-//	""                                    — matches any chain in this binary
-//	"cmd/kafkareceiver"                   — the binary itself (binary-level match)
+//	""                                    — matches any violation in this binary
 //	"otel-contrib"                        — the external module root
 //	"otel-contrib/receiver/kafkareceiver" — the specific receiver package
 //	"otel-contrib/internal/kafka"         — the exact direct importer
 //
-// The component key must match a package in the chain from binary to Importer.
-// It cannot be the forbidden package itself (Imported).
-//
 // Stale detection: an entry is flagged stale when the binary was scanned, the
-// component prefix is still reachable from it, but the (Importer, Imported)
-// pair is no longer a violation. If the component is no longer reachable at
-// all (dependency removed), its entries are silently skipped.
+// component can still reach the importer, but the (Importer, Imported) pair is
+// no longer a violation. Entries whose component is no longer reachable from the
+// binary, or whose component can no longer reach the importer, are silently
+// skipped (dependency removed or path broken).
 //
 // Binaries in skipBinaries are excluded from the scan and from stale detection.
 func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
@@ -388,25 +391,66 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		reachableFrom[bin] = bfsReachable(bin, importGraph)
 	}
 
-	findKnown := func(binary, importer, imported string, chain []string) (KnownViolation, bool) {
+	// Pre-compute which packages in importGraph match each component key
+	// (exact path or module-root prefix). Used by componentCanReach.
+	compPkgs := make(map[string][]string)
+	for _, comps := range knownViolations {
+		for compKey := range comps {
+			if compKey == "" {
+				continue
+			}
+			if _, seen := compPkgs[compKey]; seen {
+				continue
+			}
+			prefix := compKey + "/"
+			for pkg := range importGraph {
+				if pkg == compKey || strings.HasPrefix(pkg, prefix) {
+					compPkgs[compKey] = append(compPkgs[compKey], pkg)
+				}
+			}
+		}
+	}
+
+	compReach := newReachabilityCache(importGraph)
+
+	// componentCanReach reports whether the component identified by key can
+	// reach importer via forward edges in the import graph. key "" is a wildcard.
+	componentCanReach := func(key, importer string) bool {
+		if key == "" {
+			return true
+		}
+		for _, pkg := range compPkgs[key] {
+			if compReach.from(pkg)[importer] {
+				return true
+			}
+		}
+		return false
+	}
+
+	// markKnown finds ALL known entries where the component can reach importer
+	// and (Importer, Imported) matches. Marks each matched entry and returns the
+	// full list so the caller can log reasons. A single violation can match
+	// multiple component keys.
+	markKnown := func(binary, importer, imported string) ([]KnownViolation, bool) {
+		var results []KnownViolation
 		binKeys := []string{binary, ""}
 		if binary == "" {
 			binKeys = []string{""}
 		}
 		for _, binKey := range binKeys {
 			for compKey, kvs := range knownViolations[binKey] {
-				if !chainContains(compKey, chain) {
+				if !componentCanReach(compKey, importer) {
 					continue
 				}
 				for i, kv := range kvs {
-					if (kv.Importer == importer || kv.Importer == binary) && kv.Imported == imported {
+					if kv.Importer == importer && kv.Imported == imported {
 						matched[binKey][compKey][i] = true
-						return kv, true
+						results = append(results, kv)
 					}
 				}
 			}
 		}
-		return KnownViolation{}, false
+		return results, len(results) > 0
 	}
 
 	for _, v := range violations {
@@ -423,8 +467,10 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		copy(displayChain, chain)
 		displayChain[len(chain)] = v.Imported
 
-		if kv, ok := findKnown(v.Binary, v.Importer, v.Imported, chain); ok {
-			t.Logf("known violation (%s):\n%s\n      reason: %s", v.Imported, FormatChain(displayChain), kv.Reason)
+		if kvs, ok := markKnown(v.Binary, v.Importer, v.Imported); ok {
+			for _, kv := range kvs {
+				t.Logf("known violation (%s):\n%s\n      reason: %s", v.Imported, FormatChain(displayChain), kv.Reason)
+			}
 		} else {
 			t.Errorf("NEW violation — add to knownViolations or remove the dependency:\n%s", FormatChain(displayChain))
 		}
@@ -450,14 +496,18 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		}
 		for compKey, hits := range comps {
 			// If the component is no longer reachable from any relevant binary,
-			// the dependency was removed entirely — skip silently rather than
-			// reporting every entry as stale.
+			// the dependency was removed entirely — skip all entries silently.
 			if compKey != "" && !isReachableFromAny(compKey, binsToCheck, reachableFrom) {
 				continue
 			}
 			for i, hit := range hits {
 				if !hit {
 					kv := knownViolations[binKey][compKey][i]
+					// If the component can no longer reach the importer the import
+					// path was broken (package restructured or removed) — skip silently.
+					if !componentCanReach(compKey, kv.Importer) {
+						continue
+					}
 					t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q component=%q importer=%q imported=%q", binKey, compKey, kv.Importer, kv.Imported)
 				}
 			}
@@ -465,20 +515,26 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 	}
 }
 
-// chainContains reports whether key is "" (wildcard) or is a prefix of any
-// package in chain. A key without a trailing slash matches both the package
-// itself and any subpackage (e.g. "github.com/foo/bar" matches
-// "github.com/foo/bar" and "github.com/foo/bar/baz").
-func chainContains(key string, chain []string) bool {
-	if key == "" {
-		return true
+// reachabilityCache lazily computes and caches the reachable-package set for
+// any starting package. Shared across multiple componentCanReach calls so each
+// BFS runs at most once per starting package.
+type reachabilityCache struct {
+	importGraph map[string][]string
+	cache       map[string]map[string]bool
+}
+
+func newReachabilityCache(importGraph map[string][]string) *reachabilityCache {
+	return &reachabilityCache{importGraph: importGraph, cache: make(map[string]map[string]bool)}
+}
+
+// from returns the full set of packages reachable from pkg (inclusive).
+func (r *reachabilityCache) from(pkg string) map[string]bool {
+	if cached, ok := r.cache[pkg]; ok {
+		return cached
 	}
-	for _, pkg := range chain {
-		if pkg == key || strings.HasPrefix(pkg, key+"/") {
-			return true
-		}
-	}
-	return false
+	result := bfsReachable(pkg, r.importGraph)
+	r.cache[pkg] = result
+	return result
 }
 
 // isReachableFromAny reports whether key or any subpackage of key is reachable

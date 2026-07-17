@@ -47,12 +47,13 @@ func TestFIPSCompliance(t *testing.T) {
         nil, // project-specific extra forbidden pkgs; nil for the default set
         map[string]map[string][]fipsscan.KnownViolation{
             // Outer key: binary entry-point path, or "" for all binaries.
-            // Inner key: component — any package path or module prefix that
-            //   must appear in the BFS chain from the binary to the importer.
-            //   Use a module root (e.g. "github.com/twmb/franz-go") to group
-            //   all subpackage violations under one entry, making it clear
-            //   which library introduces the violation.
-            //   Use "" to match any chain within that binary.
+            // Inner key: component — a package path or module-root prefix that
+            //   must be reachable from the binary AND able to reach the importer.
+            //   Use a specific component (e.g. "receiver/kafkareceiver") to
+            //   document which component owns the violation. List the same
+            //   (Importer, Imported) under multiple components when several are
+            //   affected by the same shared library.
+            //   Use "" to match any violation within that binary.
             "github.com/elastic/myagent/cmd/agent": {
                 "github.com/elastic/gokrb5/v8": {
                     {
@@ -149,12 +150,18 @@ CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
     skipBinaries lists binary import paths to exclude (dev tools, scripts,
     non-shipped assets). knownViolations is map[binary]map[component][]KnownViolation:
       - outer key: binary entry-point path, or "" for all binaries
-      - inner key: component prefix that must appear in the BFS chain from
-        the binary to the importer; "" matches any chain
-    Stale detection: entries are flagged stale when the binary was scanned and
-    the component is reachable but the (Importer, Imported) pair is no longer
-    a violation. If the component is no longer reachable, its entries are
-    silently skipped. t.Errorf on new violations or stale entries.
+      - inner key: component — a package path or module-root prefix that must
+        be reachable from the binary AND able to reach the violating importer;
+        "" matches any violation within that binary
+    A single violation can match multiple component keys simultaneously. List
+    the same (Importer, Imported) pair under each component that transitively
+    imports the forbidden package — all matched entries are suppressed, none
+    are flagged stale as long as the violation persists.
+    Stale detection: an entry is flagged stale when the binary was scanned,
+    the component can still reach the importer, but the (Importer, Imported)
+    pair is no longer a violation. Entries whose component is no longer
+    reachable from the binary, or whose component can no longer reach the
+    importer, are silently skipped. t.Errorf on new violations or stale entries.
 
 Scan(t, pkg, extraForbiddenPkgs)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).
