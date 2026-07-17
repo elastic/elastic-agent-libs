@@ -87,15 +87,15 @@ type Violation struct {
 
 // KnownViolation documents an accepted non-FIPS import for use in knownViolations maps.
 //
-// Importer is optional:
-//   - "" (empty): wildcard — matches any intermediate importer reachable from the
-//     component key that directly imports Imported. Use this when you only care
-//     which component owns the violation, not which intermediate package is the
-//     direct importer.
-//   - exact path: "github.com/foo/bar/baz" matches only that exact package.
-//   - module-root prefix: "github.com/foo/bar" matches any subpackage
-//     "github.com/foo/bar/baz" as the direct importer, collapsing many per-subpackage
-//     violations that share the same Imported into a single entry.
+// Both Importer and Imported support three forms:
+//   - "" (empty): wildcard — matches anything in that position.
+//     Importer "" matches any intermediate package; Imported "" matches any forbidden package.
+//   - exact path: matches only that specific package.
+//   - module-root prefix: "github.com/foo/bar" matches "github.com/foo/bar" itself
+//     and any subpackage "github.com/foo/bar/baz".
+//
+// Use prefix or wildcard to collapse many per-subpackage entries into one. For example,
+// {Imported: "github.com/jcmturner/gokrb5/v8"} matches violations from any gokrb5 subpackage.
 type KnownViolation struct {
 	Importer string
 	Imported string
@@ -488,7 +488,7 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 					continue
 				}
 				for i, kv := range kvs {
-					if importerMatches(kv, importer) && kv.Imported == imported {
+					if importerMatches(kv, importer) && (kv.Imported == "" || kv.Imported == imported || strings.HasPrefix(imported, kv.Imported+"/")) {
 						matched[binKey][compKey][i] = true
 						results = append(results, kv)
 					}
