@@ -31,15 +31,71 @@ import (
 	"testing"
 )
 
-// XCrypto is the import path prefix for golang.org/x/crypto, which is not
-// covered by Go's certified FIPS 140-3 module. Use as the forbiddenPkgs entry
-// for standard FIPS compliance checks.
-const XCrypto = "golang.org/x/crypto/"
+// Non-FIPS crypto library prefixes. Pass any combination to Scan's
+// extraForbiddenPkgs, or use CommonForbiddenPkgs for the full set.
+const (
+	// XCrypto covers golang.org/x/crypto, which is not part of Go's certified
+	// FIPS 140-3 module (GOFIPS140=v1.0.0).
+	XCrypto = "golang.org/x/crypto/"
+
+	// JcmturnerAescts covers github.com/jcmturner/aescts (AES-CBC-CTS, own
+	// AES block cipher implementation not using crypto/aes).
+	JcmturnerAescts = "github.com/jcmturner/aescts/"
+
+	// JcmturnerGofork covers github.com/jcmturner/gofork, a fork of stdlib
+	// encoding/asn1 and crypto packages with non-FIPS modifications.
+	JcmturnerGofork = "github.com/jcmturner/gofork/"
+
+	// JcmturnerGokrb5 covers github.com/jcmturner/gokrb5 (Kerberos 5); pulls
+	// in JcmturnerAescts and JcmturnerGofork.
+	JcmturnerGokrb5 = "github.com/jcmturner/gokrb5/"
+
+	// XdgGoPbkdf2 covers github.com/xdg-go/pbkdf2, a standalone PBKDF2
+	// implementation independent of Go's crypto/pbkdf2.
+	XdgGoPbkdf2 = "github.com/xdg-go/pbkdf2"
+
+	// ProtonMailGoCrypto covers github.com/ProtonMail/go-crypto (OpenPGP);
+	// implements its own OpenPGP cipher suite including non-FIPS algorithms.
+	ProtonMailGoCrypto = "github.com/ProtonMail/go-crypto/"
+
+	// CloudflareCircl covers github.com/cloudflare/circl; implements a wide
+	// variety of primitives (SIDH, FourQ, Ristretto255, etc.) outside FIPS scope.
+	CloudflareCircl = "github.com/cloudflare/circl/"
+
+	// AzureGoNtlmssp covers github.com/Azure/go-ntlmssp; implements NTLM/SSPI
+	// authentication which relies on MD4/MD5/DES — none FIPS-approved.
+	AzureGoNtlmssp = "github.com/Azure/go-ntlmssp"
+
+	// YoumarkPkcs8 covers github.com/youmark/pkcs8; handles PKCS#8 keys and
+	// may negotiate non-FIPS ciphers (RC2, 3DES, SM4) depending on the key file.
+	YoumarkPkcs8 = "github.com/youmark/pkcs8"
+
+	// FilippioIO covers filippo.io/ packages (edwards25519, age, mlkem768,
+	// etc.). None are part of a FIPS 140-3 certified module boundary, even
+	// when they implement a FIPS-standardized algorithm (e.g. FIPS 203 ML-KEM).
+	FilippioIO = "filippo.io/"
+)
 
 // Violation is a forbidden import discovered in the dependency tree.
 type Violation struct {
 	Importer string // package that imports the forbidden package
 	Imported string // forbidden package being imported
+}
+
+// CommonForbiddenPkgs is the set of well-known non-FIPS crypto libraries.
+// Scan uses this as its baseline; pass extraForbiddenPkgs only for
+// project-specific additions beyond this list.
+var CommonForbiddenPkgs = []string{
+	XCrypto,
+	JcmturnerAescts,
+	JcmturnerGofork,
+	JcmturnerGokrb5,
+	XdgGoPbkdf2,
+	ProtonMailGoCrypto,
+	CloudflareCircl,
+	AzureGoNtlmssp,
+	YoumarkPkcs8,
+	FilippioIO,
 }
 
 type goListPackage struct {
@@ -48,7 +104,7 @@ type goListPackage struct {
 }
 
 // Scan runs `go list -json -deps -tags requirefips <pkg>` and returns all
-// packages that directly import golang.org/x/crypto or any prefix in
+// packages that directly import any prefix in CommonForbiddenPkgs or
 // extraForbiddenPkgs, along with the full import graph. Packages whose own
 // path matches a forbidden prefix are skipped (avoids flagging internal refs).
 // Calls t.Fatalf on subprocess or parse errors.
@@ -65,7 +121,7 @@ func Scan(t testing.TB, pkg string, extraForbiddenPkgs []string) ([]Violation, m
 		t.Fatalf("go list failed: %v", err)
 	}
 
-	forbidden := append([]string{XCrypto}, extraForbiddenPkgs...)
+	forbidden := append(append([]string(nil), CommonForbiddenPkgs...), extraForbiddenPkgs...)
 
 	importGraph := make(map[string][]string)
 	var violations []Violation
