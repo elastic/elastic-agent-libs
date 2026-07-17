@@ -38,6 +38,7 @@ import (
 func TestFIPSCompliance(t *testing.T) {
     fipsscan.CheckModule(t,
         []string{"./..."},
+        nil, // binaries to skip (dev tools, scripts, non-shipped assets)
         nil, // project-specific extra forbidden pkgs, nil for the default set
         map[string][]fipsscan.KnownViolation{
             // Map key is the binary entry point path.
@@ -112,21 +113,23 @@ Pass additional prefixes via `extraForbiddenPkgs` for project-specific libraries
 ## API reference
 
 ```
-CheckModule(t, patterns, extraForbiddenPkgs, knownViolations)
+CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
     Scans all packages matching patterns and their transitive dependencies.
-    knownViolations is map[binary][]KnownViolation; use "" as the key for
-    violations shared across all binaries or for library modules. Stale
-    detection is scoped to binaries found in this scan. t.Errorf on new
-    violations or stale entries.
+    skipBinaries lists binary import paths to exclude (dev tools, scripts,
+    non-shipped assets). knownViolations is map[binary][]KnownViolation; use
+    "" as the key for violations shared across all binaries or for library
+    modules. Stale detection is scoped to binaries found in this scan.
+    t.Errorf on new violations or stale entries.
 
 Scan(t, pkg, extraForbiddenPkgs)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).
     Binary is not set on violations.
 
-ScanBinaries(t, patterns, extraForbiddenPkgs)
+ScanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
     Discovers all package main entries matching patterns, scans the combined
-    dependency tree in one go list pass. Sets Binary on each violation.
-    Fatals if no binaries are found.
+    dependency tree in one go list pass. skipBinaries lists binary import
+    paths to exclude. Sets Binary on each violation. Fatals if no binaries
+    are found.
 
 ForbiddenPkgs() []string
     Returns a fresh copy of the baseline forbidden-prefix list.

@@ -125,7 +125,7 @@ type goListPackage struct {
 // violation to its binary entry point via BFS, and returns the binaries found.
 // When no binaries are present (library module) it falls back to flat violation
 // detection with no Binary set, so CheckModule works for both module types.
-func scanBinaries(t testing.TB, patterns []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
+func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
 	t.Helper()
 
 	args := append([]string{"list", "-json", "-deps", "-tags", "requirefips"}, patterns...)
@@ -141,6 +141,11 @@ func scanBinaries(t testing.TB, patterns []string, extraForbiddenPkgs []string) 
 
 	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
 
+	skip := make(map[string]bool, len(skipBinaries))
+	for _, s := range skipBinaries {
+		skip[s] = true
+	}
+
 	importGraph := make(map[string][]string)
 	var mains []string
 
@@ -150,7 +155,7 @@ func scanBinaries(t testing.TB, patterns []string, extraForbiddenPkgs []string) 
 		if err := dec.Decode(&p); err != nil {
 			t.Fatalf("parsing go list output: %v", err)
 		}
-		if p.Name == "main" {
+		if p.Name == "main" && !skip[p.ImportPath] {
 			mains = append(mains, p.ImportPath)
 		}
 		importGraph[p.ImportPath] = p.Imports
@@ -220,10 +225,11 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 // ScanBinaries runs a single `go list -json -deps -tags requirefips` pass over
 // all patterns, attributes each violation to its binary entry point
 // (Violation.Binary), and returns all violations and the merged import graph.
+// Binaries whose import path appears in skipBinaries are excluded from the scan.
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
-func ScanBinaries(t testing.TB, patterns []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
+func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, extraForbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
 	if len(mains) == 0 {
 		t.Fatalf("ScanBinaries: no package main found matching %v", patterns)
 	}
@@ -332,12 +338,13 @@ func FormatChain(chain []string) string {
 // patterns and reports unknown violations or stale knownViolations entries via
 // t.Errorf. Works for both binary and library modules. The map key is the
 // binary entry point path; use "" for violations that apply to all binaries or
-// to library modules. Stale detection only covers binaries found in this scan,
+// to library modules. Binaries in skipBinaries are excluded from the scan and
+// from stale detection. Stale detection only covers binaries found in this scan,
 // so per-binary subtest calls work correctly with per-binary map keys.
-func CheckModule(t testing.TB, patterns []string, extraForbiddenPkgs []string, knownViolations map[string][]KnownViolation) {
+func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string][]KnownViolation) {
 	t.Helper()
 
-	violations, importGraph, mains := scanBinaries(t, patterns, extraForbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
 
 	// matched[binary][i] tracks whether knownViolations[binary][i] was hit.
 	matched := make(map[string][]bool)
