@@ -20,9 +20,11 @@
 package fipsscan
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -151,6 +153,59 @@ func TestShortestChain(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckViolationsCrossBinaryAttribution is a regression test for the bug
+// where a component reachable only from binary B could suppress a violation
+// attributed to binary A, because markKnown checked component->importer
+// reachability but not binary->component reachability.
+func TestCheckViolationsCrossBinaryAttribution(t *testing.T) {
+	// Import graph:
+	//   cmd/binary-a  ->  importer  ->  golang.org/x/crypto/sha256
+	//   cmd/binary-b  ->  comp-b    ->  importer  ->  golang.org/x/crypto/sha256
+	//
+	// comp-b can reach importer, but comp-b is only reachable from cmd/binary-b.
+	// A violation attributed to cmd/binary-a must NOT be suppressed by the
+	// comp-b entry registered under the "" wildcard binary key.
+	importGraph := map[string][]string{
+		"cmd/binary-a":               {"importer"},
+		"cmd/binary-b":               {"comp-b"},
+		"comp-b":                     {"importer"},
+		"importer":                   {"golang.org/x/crypto/sha256"},
+		"golang.org/x/crypto/sha256": {},
+	}
+	mains := []string{"cmd/binary-a", "cmd/binary-b"}
+	violations := []Violation{
+		{Binary: "cmd/binary-a", Importer: "importer", Imported: "golang.org/x/crypto/sha256"},
+		{Binary: "cmd/binary-b", Importer: "importer", Imported: "golang.org/x/crypto/sha256"},
+	}
+	// comp-b is documented under the wildcard binary key "".
+	// It can reach importer, but must NOT suppress binary-a's violation.
+	knownViolations := map[string]map[string][]KnownViolation{
+		"": {
+			"comp-b": {{Reason: "ok for binary-b"}},
+		},
+	}
+
+	var errors []string
+	tb := &captureT{T: t, errorf: func(f string, a ...any) {
+		errors = append(errors, fmt.Sprintf(f, a...))
+	}}
+	checkViolations(tb, violations, importGraph, mains, knownViolations)
+
+	// binary-a's violation must be reported as NEW (comp-b is not reachable from it).
+	if len(errors) != 1 || !strings.Contains(errors[0], "NEW violation") {
+		t.Errorf("expected exactly one NEW violation for cmd/binary-a, got %v", errors)
+	}
+}
+
+// captureT wraps *testing.T and redirects Errorf so tests can inspect failures.
+type captureT struct {
+	*testing.T
+	errorf func(string, ...any)
+}
+
+func (c *captureT) Errorf(format string, args ...any) { c.errorf(format, args...) }
+func (c *captureT) Helper()                           { c.T.Helper() }
 
 func TestFormatChain(t *testing.T) {
 	tests := []struct {

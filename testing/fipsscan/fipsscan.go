@@ -415,8 +415,14 @@ func FormatChain(chain []string) string {
 // Binaries in skipBinaries are excluded from the scan and from stale detection.
 func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
-
 	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
+	checkViolations(t, violations, importGraph, mains, knownViolations)
+}
+
+// checkViolations is the matching and stale-detection logic for CheckModule,
+// extracted to allow unit testing without a go list subprocess.
+func checkViolations(t testing.TB, violations []Violation, importGraph map[string][]string, mains []string, knownViolations map[string]map[string][]KnownViolation) {
+	t.Helper()
 
 	// matched[binKey][compKey][i] tracks whether knownViolations[binKey][compKey][i] was hit.
 	matched := make(map[string]map[string][]bool)
@@ -427,7 +433,7 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		}
 	}
 
-	// Pre-compute reachable set per binary for stale detection.
+	// Pre-compute reachable set per binary for attribution and stale detection.
 	reachableFrom := make(map[string]map[string]bool, len(mains))
 	for _, bin := range mains {
 		reachableFrom[bin] = bfsReachable(bin, importGraph)
@@ -535,15 +541,21 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraFo
 		return keys
 	}
 
-	// markKnown finds ALL known entries where the component can reach importer
-	// and (Importer, Imported) matches. Marks each matched entry and returns the
-	// full list so the caller can log reasons. A single violation can match
-	// multiple component keys.
+	// markKnown finds ALL known entries where the component can reach the
+	// importer AND is reachable from the binary, and (Importer, Imported)
+	// matches. Marks each matched entry and returns the full list so the caller
+	// can log reasons. A single violation can match multiple component keys.
 	markKnown := func(binary, importer, imported string) ([]KnownViolation, bool) {
 		var results []KnownViolation
 		for _, binKey := range binKeysForBinary(binary) {
 			for compKey, kvs := range knownViolations[binKey] {
 				if !componentCanReach(compKey, importer) {
+					continue
+				}
+				// The component must also be reachable from the violation's binary.
+				// Without this check a component in a different binary can suppress
+				// violations here via the shared merged import graph.
+				if binary != "" && compKey != "" && !isReachableFromAny(compKey, []string{binary}, reachableFrom) {
 					continue
 				}
 				for i, kv := range kvs {
