@@ -46,7 +46,11 @@ func TestFIPSCompliance(t *testing.T) {
         skipBinaries,
         nil, // project-specific extra forbidden pkgs; nil for the default set
         map[string]map[string][]fipsscan.KnownViolation{
-            // Outer key: binary entry-point path, or "" for all binaries.
+            // Outer key: binary entry-point import path, a module-root prefix
+            //   that matches any binary under it, or "" for all binaries.
+            //   E.g. "github.com/elastic/myagent" matches both
+            //   "github.com/elastic/myagent/cmd/agent" and
+            //   "github.com/elastic/myagent/cmd/other".
             // Inner key: component — a package path or module-root prefix that
             //   must be reachable from the binary AND able to reach the importer.
             //   Use a specific component (e.g. "receiver/kafkareceiver") to
@@ -54,20 +58,15 @@ func TestFIPSCompliance(t *testing.T) {
             //   (Importer, Imported) under multiple components when several are
             //   affected by the same shared library.
             //   Use "" to match any violation within that binary.
-            "github.com/elastic/myagent/cmd/agent": {
+            "github.com/elastic/myagent": {
+                // Importer is optional: "" matches any package inside the component.
+                // Imported supports module-root prefixes (trailing slash stripped automatically).
                 "github.com/elastic/gokrb5/v8": {
-                    {
-                        Importer: "github.com/elastic/gokrb5/v8/crypto/rfc3962",
-                        Imported: "github.com/jcmturner/aescts/v2",
-                        Reason:   "Elastic gokrb5 fork depends on jcmturner aescts for AES-CBC-CTS",
-                    },
+                    {Imported: "github.com/jcmturner/aescts", Reason: "Elastic gokrb5 fork depends on jcmturner aescts for AES-CBC-CTS"},
+                    {Imported: "golang.org/x/crypto/md4",     Reason: "Kerberos RC4-HMAC requires MD4; no FIPS-approved substitute"},
                 },
                 "github.com/twmb/franz-go": {
-                    {
-                        Importer: "github.com/twmb/franz-go/pkg/sasl/scram",
-                        Imported: "golang.org/x/crypto/pbkdf2",
-                        Reason:   "Kafka SCRAM SASL key derivation uses PBKDF2; x/crypto not FIPS-certified",
-                    },
+                    {Imported: "golang.org/x/crypto/pbkdf2", Reason: "Kafka SCRAM SASL key derivation uses PBKDF2; x/crypto not FIPS-certified"},
                 },
             },
         },
@@ -149,7 +148,8 @@ CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
     Scans all packages matching patterns and their transitive dependencies.
     skipBinaries lists binary import paths to exclude (dev tools, scripts,
     non-shipped assets). knownViolations is map[binary]map[component][]KnownViolation:
-      - outer key: binary entry-point path, or "" for all binaries
+      - outer key: binary entry-point path, a module-root prefix (matches any
+        binary whose import path starts with it), or "" for all binaries
       - inner key: component — a package path or module-root prefix that must
         be reachable from the binary AND able to reach the violating importer;
         "" matches any violation within that binary
