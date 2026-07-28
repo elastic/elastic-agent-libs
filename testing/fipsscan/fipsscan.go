@@ -34,52 +34,6 @@ import (
 	"testing"
 )
 
-// Non-FIPS crypto library prefixes. All are included in ForbiddenPkgs()
-// and checked by Scan automatically. Use individual constants only when
-// passing a subset via extraForbiddenPkgs.
-const (
-	// XCrypto covers golang.org/x/crypto, which is not part of Go's certified
-	// FIPS 140-3 module (GOFIPS140=v1.0.0).
-	XCrypto = "golang.org/x/crypto/"
-
-	// JcmturnerAescts covers github.com/jcmturner/aescts (AES-CBC-CTS, own
-	// AES block cipher implementation not using crypto/aes).
-	JcmturnerAescts = "github.com/jcmturner/aescts/"
-
-	// JcmturnerGofork covers github.com/jcmturner/gofork, a fork of stdlib
-	// encoding/asn1 and crypto packages with non-FIPS modifications.
-	JcmturnerGofork = "github.com/jcmturner/gofork/"
-
-	// JcmturnerGokrb5 covers github.com/jcmturner/gokrb5 (Kerberos 5); pulls
-	// in JcmturnerAescts and JcmturnerGofork.
-	JcmturnerGokrb5 = "github.com/jcmturner/gokrb5/"
-
-	// XdgGoPbkdf2 covers github.com/xdg-go/pbkdf2, a standalone PBKDF2
-	// implementation independent of Go's crypto/pbkdf2.
-	XdgGoPbkdf2 = "github.com/xdg-go/pbkdf2"
-
-	// ProtonMailGoCrypto covers github.com/ProtonMail/go-crypto (OpenPGP);
-	// implements its own OpenPGP cipher suite including non-FIPS algorithms.
-	ProtonMailGoCrypto = "github.com/ProtonMail/go-crypto/"
-
-	// CloudflareCircl covers github.com/cloudflare/circl; implements a wide
-	// variety of primitives (SIDH, FourQ, Ristretto255, etc.) outside FIPS scope.
-	CloudflareCircl = "github.com/cloudflare/circl/"
-
-	// AzureGoNtlmssp covers github.com/Azure/go-ntlmssp; implements NTLM/SSPI
-	// authentication which relies on MD4/MD5/DES — none FIPS-approved.
-	AzureGoNtlmssp = "github.com/Azure/go-ntlmssp"
-
-	// YoumarkPkcs8 covers github.com/youmark/pkcs8; handles PKCS#8 keys and
-	// may negotiate non-FIPS ciphers (RC2, 3DES, SM4) depending on the key file.
-	YoumarkPkcs8 = "github.com/youmark/pkcs8"
-
-	// FilippioIO covers filippo.io/ packages (edwards25519, age, mlkem768,
-	// etc.). None are part of a FIPS 140-3 certified module boundary, even
-	// when they implement a FIPS-standardized algorithm (e.g. FIPS 203 ML-KEM).
-	FilippioIO = "filippo.io/"
-)
-
 // Violation is a forbidden import discovered in the dependency tree.
 type Violation struct {
 	Binary   string // binary entry point; empty for library modules
@@ -102,28 +56,6 @@ type KnownViolation struct {
 	Importer string
 	Imported string
 	Reason   string // why this violation is acceptable; shown in test output
-}
-
-var forbiddenPkgs = []string{
-	XCrypto,
-	JcmturnerAescts,
-	JcmturnerGofork,
-	JcmturnerGokrb5,
-	XdgGoPbkdf2,
-	ProtonMailGoCrypto,
-	CloudflareCircl,
-	AzureGoNtlmssp,
-	YoumarkPkcs8,
-	FilippioIO,
-}
-
-// ForbiddenPkgs returns a fresh copy of the baseline non-FIPS crypto library
-// prefixes. Scan uses this automatically; pass extraForbiddenPkgs only for
-// project-specific additions beyond this list.
-func ForbiddenPkgs() []string {
-	cp := make([]string, len(forbiddenPkgs))
-	copy(cp, forbiddenPkgs)
-	return cp
 }
 
 type goListPackage struct {
@@ -185,12 +117,10 @@ func goListPackages(t testing.TB, patterns []string) []goListPackage {
 // violation to its binary entry point via BFS, and returns the binaries found.
 // When no binaries are present (library module) it falls back to flat violation
 // detection with no Binary set, so CheckModule works for both module types.
-func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
+func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
 	t.Helper()
 
 	pkgs := goListPackages(t, patterns)
-
-	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
 
 	skip := make(map[string]bool, len(skipBinaries))
 	for _, s := range skipBinaries {
@@ -208,7 +138,7 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 	}
 
 	if len(mains) == 0 {
-		return findViolations(importGraph, forbidden), importGraph, nil
+		return findViolations(importGraph, forbiddenPkgs), importGraph, nil
 	}
 
 	// Per-binary BFS attribution so each violation carries the entry point
@@ -217,11 +147,11 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 	var violations []Violation
 	for _, bin := range mains {
 		for pkg := range bfsReachable(bin, importGraph) {
-			if isForbidden(pkg, forbidden) {
+			if isForbidden(pkg, forbiddenPkgs) {
 				continue
 			}
 			for _, imp := range importGraph[pkg] {
-				if isForbidden(imp, forbidden) {
+				if isForbidden(imp, forbiddenPkgs) {
 					if key := bin + "\x00" + pkg + "\x00" + imp; !seen[key] {
 						seen[key] = true
 						violations = append(violations, Violation{Binary: bin, Importer: pkg, Imported: imp})
@@ -273,9 +203,9 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 // (Violation.Binary), and returns all violations and the merged import graph.
 // Binaries whose import path appears in skipBinaries are excluded from the scan.
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
-func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
+func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
 	if len(mains) == 0 {
 		t.Fatalf("ScanBinaries: no package main found matching %v", patterns)
 	}
@@ -285,15 +215,14 @@ func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, extraF
 // Scan runs `go list -json -deps -tags requirefips <pkg>` and returns all
 // violations and the full import graph. Calls t.Fatalf on subprocess or parse
 // errors.
-func Scan(t testing.TB, pkg string, extraForbiddenPkgs []string) ([]Violation, map[string][]string) {
+func Scan(t testing.TB, pkg string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
 	pkgs := goListPackages(t, []string{pkg})
-	forbidden := append(ForbiddenPkgs(), extraForbiddenPkgs...)
 	importGraph := make(map[string][]string, len(pkgs))
 	for _, p := range pkgs {
 		importGraph[p.ImportPath] = p.Imports
 	}
-	return findViolations(importGraph, forbidden), importGraph
+	return findViolations(importGraph, forbiddenPkgs), importGraph
 }
 
 // matchesBinaryKey reports whether a binary key matches an actual binary import
@@ -413,9 +342,9 @@ func FormatChain(chain []string) string {
 // skipped (dependency removed or path broken).
 //
 // Binaries in skipBinaries are excluded from the scan and from stale detection.
-func CheckModule(t testing.TB, patterns []string, skipBinaries []string, extraForbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
+func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
 	checkViolations(t, violations, importGraph, mains, knownViolations)
 }
 
