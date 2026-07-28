@@ -39,7 +39,7 @@ type Violation struct {
 	Imported string // forbidden package being imported
 }
 
-// KnownViolation documents an accepted non-FIPS import for use in knownViolations maps.
+// KnownViolation documents an accepted import exception for use in knownViolations maps.
 //
 // Both Importer and Imported support three forms:
 //   - "" (empty): wildcard — matches anything in that position.
@@ -83,8 +83,7 @@ func moduleRoot(t testing.TB) string {
 	}
 }
 
-// goListPackages runs go list -json -deps -tags requirefips from the module root
-// and decodes the output. Shared by scanBinaries and Scan.
+// goListPackages runs go list -json -deps from the module root and decodes the output.
 func goListPackages(t testing.TB, patterns []string) []goListPackage {
 	t.Helper()
 	args := append([]string{"list", "-json", "-deps", "-tags", "requirefips"}, patterns...)
@@ -110,11 +109,10 @@ func goListPackages(t testing.TB, patterns []string) []goListPackage {
 	return pkgs
 }
 
-// scanBinaries is the internal implementation shared by ScanBinaries and
-// CheckModule. It runs a single go list pass over all patterns, attributes each
-// violation to its binary entry point via BFS, and returns the binaries found.
+// scanBinaries runs a single go list pass over all patterns, attributes each
+// violation to its binary entry point, and returns the binaries found.
 // When no binaries are present (library module) it falls back to flat violation
-// detection with no Binary set, so CheckModule works for both module types.
+// detection with no Binary set.
 func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
 	t.Helper()
 
@@ -161,8 +159,7 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 	return violations, importGraph, mains
 }
 
-// bfsReachable returns the set of all packages reachable from from (inclusive)
-// via forward edges in importGraph.
+// bfsReachable returns the set of all packages reachable from from (inclusive).
 func bfsReachable(from string, importGraph map[string][]string) map[string]bool {
 	reachable := map[string]bool{from: true}
 	queue := []string{from}
@@ -196,9 +193,8 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 	return violations
 }
 
-// ScanBinaries runs a single `go list -json -deps -tags requirefips` pass over
-// all patterns, attributes each violation to its binary entry point
-// (Violation.Binary), and returns all violations and the merged import graph.
+// ScanBinaries scans all patterns, attributes each violation to its binary entry
+// point (Violation.Binary), and returns all violations and the merged import graph.
 // Binaries whose import path appears in skipBinaries are excluded from the scan.
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
 func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
@@ -210,9 +206,8 @@ func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 	return violations, importGraph
 }
 
-// Scan runs `go list -json -deps -tags requirefips <pkg>` and returns all
-// violations and the full import graph. Calls t.Fatalf on subprocess or parse
-// errors.
+// Scan scans pkg and its full dependency tree and returns all violations and the
+// import graph. Calls t.Fatalf on subprocess or parse errors.
 func Scan(t testing.TB, pkg string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
 	t.Helper()
 	pkgs := goListPackages(t, []string{pkg})
@@ -315,7 +310,7 @@ func FormatChain(chain []string) string {
 //
 // A single violation can match multiple component keys simultaneously: if both
 // "fbreceiver" and "azureauthextension" can transitively reach the same
-// non-FIPS importer, listing the same (Importer, Imported) pair under both
+// forbidden importer, listing the same (Importer, Imported) pair under both
 // component keys causes both to be suppressed and neither to be flagged stale.
 // This is the intended way to document violations shared by multiple components.
 //
@@ -346,8 +341,8 @@ func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbidd
 	checkViolations(t, violations, importGraph, mains, knownViolations)
 }
 
-// checkViolations is the matching and stale-detection logic for CheckModule,
-// extracted to allow unit testing without a go list subprocess.
+// checkViolations matches violations against knownViolations and reports new
+// violations or stale entries via t.Errorf.
 func checkViolations(t testing.TB, violations []Violation, importGraph map[string][]string, mains []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
 
@@ -367,7 +362,7 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 	}
 
 	// Pre-compute which packages in importGraph match each component key
-	// (exact path or module-root prefix). Used by componentCanReach.
+	// (exact path or module-root prefix).
 	compPkgs := make(map[string][]string)
 	for _, comps := range knownViolations {
 		for compKey := range comps {
@@ -415,8 +410,7 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 
 	// importedMatches reports whether kv.Imported matches the actual imported package.
 	//   - kv.Imported == "": wildcard, matches any forbidden package.
-	//   - exact path or prefix: trailing slash is stripped before matching so
-	//     using an exported constant like XCrypto works correctly.
+	//   - exact path or prefix: trailing slash is stripped before matching.
 	importedMatches := func(kv KnownViolation, imported string) bool {
 		if kv.Imported == "" {
 			return true
@@ -449,9 +443,8 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 		return false
 	}
 
-	// binKeysForBinary returns all keys in knownViolations that should be
-	// consulted for a given binary import path: the exact path, any registered
-	// key that is a module-root prefix of the binary, and always "".
+	// binKeysForBinary returns all knownViolations keys applicable to a binary:
+	// the exact path, any module-root prefix key, and always "".
 	binKeysForBinary := func(binary string) []string {
 		if binary == "" {
 			return []string{""}
@@ -479,9 +472,9 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 				if !componentCanReach(compKey, importer) {
 					continue
 				}
-				// The component must also be reachable from the violation's binary.
-				// Without this check a component in a different binary can suppress
-				// violations here via the shared merged import graph.
+				// The component must also be reachable from the violation's own binary;
+				// a component reachable only from a different binary must not suppress
+				// violations here.
 				if binary != "" && compKey != "" && !isReachableFromAny(compKey, []string{binary}, reachableFrom) {
 					continue
 				}
@@ -519,8 +512,8 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 		}
 	}
 
-	// binsForKey returns all scanned binaries whose import path matches a binary
-	// key (exact or module-root prefix). Returns mains for the "" wildcard.
+	// binsForKey returns all scanned binaries matching a binary key
+	// (exact or module-root prefix; "" matches all).
 	binsForKey := func(key string) []string {
 		if key == "" {
 			return mains
@@ -536,8 +529,7 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 
 	for binKey, comps := range matched {
 		binsToCheck := binsForKey(binKey)
-		// Skip entries whose binary key matched no scanned binary — avoids false
-		// stale errors when CheckModule is called per-binary in subtests.
+		// Skip entries whose binary key matched no scanned binary.
 		if binKey != "" && len(binsToCheck) == 0 {
 			continue
 		}
@@ -572,8 +564,7 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 }
 
 // reachabilityCache lazily computes and caches the reachable-package set for
-// any starting package. Shared across multiple componentCanReach calls so each
-// BFS runs at most once per starting package.
+// any starting package so each BFS runs at most once.
 type reachabilityCache struct {
 	importGraph map[string][]string
 	cache       map[string]map[string]bool

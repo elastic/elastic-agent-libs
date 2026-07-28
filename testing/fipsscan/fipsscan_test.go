@@ -152,10 +152,9 @@ func TestShortestChain(t *testing.T) {
 	}
 }
 
-// TestCheckViolationsCrossBinaryAttribution is a regression test for the bug
-// where a component reachable only from binary B could suppress a violation
-// attributed to binary A, because markKnown checked component->importer
-// reachability but not binary->component reachability.
+// TestCheckViolationsCrossBinaryAttribution verifies that a component reachable
+// only from binary B does not suppress a violation attributed to binary A,
+// even when the component can reach the same importer.
 func TestCheckViolationsCrossBinaryAttribution(t *testing.T) {
 	// Import graph:
 	//   cmd/binary-a  ->  importer  ->  golang.org/x/crypto/sha256
