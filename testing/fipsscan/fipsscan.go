@@ -15,12 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build requirefips
-
-// Package fipsscan provides helpers for auditing FIPS 140-3 compliance of Go
-// binaries by scanning their dependency trees for forbidden (non-FIPS) imports.
-// Only crypto/* stdlib packages are covered by Go's certified FIPS 140-3 module
-// (GOFIPS140=v1.0.0); other crypto implementations are potential violations.
+// Package fipsscan provides helpers for auditing import-policy compliance of Go
+// binaries by scanning their dependency trees for forbidden imports.
+// Callers supply the forbidden-package prefixes and known-violations allowlist;
+// the package itself is policy-agnostic and carries no build constraints.
 package fipsscan
 
 import (

@@ -1,8 +1,8 @@
 # fipsscan
 
-`fipsscan` is a Go testing helper for auditing FIPS 140-3 compliance. It scans a package's dependency tree for imports of known non-FIPS crypto libraries and reports violations.
+`fipsscan` is a Go testing helper for auditing import-policy compliance of Go binaries. It scans a module's dependency tree for imports of forbidden packages and reports violations against a caller-supplied allowlist.
 
-The package is guarded by the `requirefips` build tag so it compiles — and incurs zero overhead — only in FIPS-focused test runs.
+The package carries **no build constraints** and ships **no default forbidden-package list** — both are the caller's responsibility. This makes it reusable for any import-policy audit, not just FIPS.
 
 ## Naming convention
 
@@ -35,6 +35,14 @@ import (
     "github.com/elastic/elastic-agent-libs/testing/fipsscan"
 )
 
+// forbiddenPkgs lists import-path prefixes that are not permitted in this
+// module's dependency tree. Adjust to match your project's FIPS policy.
+var forbiddenPkgs = []string{
+    "golang.org/x/crypto/",
+    "github.com/jcmturner/gokrb5/",
+    "github.com/cloudflare/circl/",
+}
+
 // skipBinaries lists non-shipped binaries excluded from the FIPS scan.
 var skipBinaries = []string{
     // "github.com/elastic/myagent/dev-tools/cmd/sometool",
@@ -44,7 +52,7 @@ func TestFIPSCompliance(t *testing.T) {
     fipsscan.CheckModule(t,
         []string{"./..."},
         skipBinaries,
-        nil, // project-specific extra forbidden pkgs; nil for the default set
+        forbiddenPkgs,
         map[string]map[string][]fipsscan.KnownViolation{
             // Outer key: binary entry-point import path, a module-root prefix
             //   that matches any binary under it, or "" for all binaries.
@@ -109,10 +117,10 @@ go test -tags requirefips ./...
 
 ```go
 // all packages in the module (Binary not set on violations)
-violations, importGraph := fipsscan.Scan(t, "./...", nil)
+violations, importGraph := fipsscan.Scan(t, "./...", forbiddenPkgs)
 
 // only package main entry points (fatals if none found; Binary is set on each violation)
-violations, importGraph := fipsscan.ScanBinaries(t, []string{"./cmd/agent", "./cmd/other"}, nil)
+violations, importGraph := fipsscan.ScanBinaries(t, []string{"./cmd/agent", "./cmd/other"}, nil, forbiddenPkgs)
 
 for _, v := range violations {
     chain := fipsscan.ShortestChain(v.Binary, v.Importer, importGraph)
@@ -120,34 +128,15 @@ for _, v := range violations {
 }
 ```
 
-## What is checked
-
-All functions check against `ForbiddenPkgs()` by default — a curated list of third-party crypto libraries that are not part of any FIPS 140-3 certified module boundary:
-
-| Constant | Module prefix | Reason |
-|---|---|---|
-| `XCrypto` | `golang.org/x/crypto/` | Not in Go's GOFIPS140 certified module |
-| `JcmturnerAescts` | `github.com/jcmturner/aescts/` | Own AES block cipher, not `crypto/aes` |
-| `JcmturnerGofork` | `github.com/jcmturner/gofork/` | Fork of stdlib with non-FIPS modifications |
-| `JcmturnerGokrb5` | `github.com/jcmturner/gokrb5/` | Kerberos 5; pulls in the two above |
-| `XdgGoPbkdf2` | `github.com/xdg-go/pbkdf2` | Standalone PBKDF2, not `crypto/pbkdf2` |
-| `ProtonMailGoCrypto` | `github.com/ProtonMail/go-crypto/` | OpenPGP with non-FIPS algorithms |
-| `CloudflareCircl` | `github.com/cloudflare/circl/` | SIDH, FourQ, Ristretto255, etc. |
-| `AzureGoNtlmssp` | `github.com/Azure/go-ntlmssp` | NTLM/SSPI — uses MD4/MD5/DES |
-| `YoumarkPkcs8` | `github.com/youmark/pkcs8` | May negotiate RC2/3DES/SM4 |
-| `FilippioIO` | `filippo.io/` | edwards25519, age, etc. (outside certified boundary even when implementing a FIPS-standardized algorithm) |
-
-Pass additional prefixes via `extraForbiddenPkgs` for project-specific libraries not in this list.
-
-**Deferred — `github.com/go-jose/`:** go-jose wraps stdlib `crypto/aes`, `crypto/rsa`, and `crypto/ecdsa` rather than implementing its own primitives, and its SHA-1 usage in RSA-OAEP is permitted under FIPS for key transport (NIST SP 800-131A). It is not in the baseline list to avoid false positives for common JWT/JWE usage. Projects that want stricter coverage can add it via `extraForbiddenPkgs` and manually review each hit.
-
 ## API reference
 
 ```
-CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
+CheckModule(t, patterns, skipBinaries, forbiddenPkgs, knownViolations)
     Scans all packages matching patterns and their transitive dependencies.
     skipBinaries lists binary import paths to exclude (dev tools, scripts,
-    non-shipped assets). knownViolations is map[binary]map[component][]KnownViolation:
+    non-shipped assets). forbiddenPkgs is the complete list of import-path
+    prefixes to flag as violations — the caller owns this list entirely.
+    knownViolations is map[binary]map[component][]KnownViolation:
       - outer key: binary entry-point path, a module-root prefix (matches any
         binary whose import path starts with it), or "" for all binaries
       - inner key: component — a package path or module-root prefix that must
@@ -163,18 +152,15 @@ CheckModule(t, patterns, skipBinaries, extraForbiddenPkgs, knownViolations)
     reachable from the binary, or whose component can no longer reach the
     importer, are silently skipped. t.Errorf on new violations or stale entries.
 
-Scan(t, pkg, extraForbiddenPkgs)
+Scan(t, pkg, forbiddenPkgs)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).
     Binary is not set on violations.
 
-ScanBinaries(t, patterns, skipBinaries, extraForbiddenPkgs)
+ScanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
     Discovers all package main entries matching patterns, scans the combined
     dependency tree in one go list pass. skipBinaries lists binary import
     paths to exclude. Sets Binary on each violation. Fatals if no binaries
     are found.
-
-ForbiddenPkgs() []string
-    Returns a fresh copy of the baseline forbidden-prefix list.
 
 ShortestChain(from, to, importGraph) []string
     BFS shortest path through the import graph. Useful for building custom
