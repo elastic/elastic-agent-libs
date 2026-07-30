@@ -84,9 +84,13 @@ func moduleRoot(t testing.TB) string {
 }
 
 // goListPackages runs go list -json -deps from the module root and decodes the output.
-func goListPackages(t testing.TB, patterns []string) []goListPackage {
+func goListPackages(t testing.TB, patterns []string, tags []string) []goListPackage {
 	t.Helper()
-	args := append([]string{"list", "-json", "-deps", "-tags", "requirefips"}, patterns...)
+	base := []string{"list", "-json", "-deps"}
+	if len(tags) > 0 {
+		base = append(base, "-tags", strings.Join(tags, ","))
+	}
+	args := append(base, patterns...)
 	cmd := exec.CommandContext(t.Context(), "go", args...)
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.Output()
@@ -113,10 +117,10 @@ func goListPackages(t testing.TB, patterns []string) []goListPackage {
 // violation to its binary entry point, and returns the binaries found.
 // When no binaries are present (library module) it falls back to flat violation
 // detection with no Binary set.
-func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string, []string) {
+func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string, []string) {
 	t.Helper()
 
-	pkgs := goListPackages(t, patterns)
+	pkgs := goListPackages(t, patterns, tags)
 
 	skip := make(map[string]bool, len(skipBinaries))
 	for _, s := range skipBinaries {
@@ -197,9 +201,9 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 // point (Violation.Binary), and returns all violations and the merged import graph.
 // Binaries whose import path appears in skipBinaries are excluded from the scan.
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
-func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
+func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
 	if len(mains) == 0 {
 		t.Fatalf("ScanBinaries: no package main found matching %v", patterns)
 	}
@@ -208,9 +212,9 @@ func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 
 // Scan scans pkg and its full dependency tree and returns all violations and the
 // import graph. Calls t.Fatalf on subprocess or parse errors.
-func Scan(t testing.TB, pkg string, forbiddenPkgs []string) ([]Violation, map[string][]string) {
+func Scan(t testing.TB, pkg string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
 	t.Helper()
-	pkgs := goListPackages(t, []string{pkg})
+	pkgs := goListPackages(t, []string{pkg}, tags)
 	importGraph := make(map[string][]string, len(pkgs))
 	for _, p := range pkgs {
 		importGraph[p.ImportPath] = p.Imports
@@ -335,9 +339,9 @@ func FormatChain(chain []string) string {
 // skipped (dependency removed or path broken).
 //
 // Binaries in skipBinaries are excluded from the scan and from stale detection.
-func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, knownViolations map[string]map[string][]KnownViolation) {
+func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
+	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
 	checkViolations(t, violations, importGraph, mains, knownViolations)
 }
 

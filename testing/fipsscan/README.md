@@ -53,6 +53,7 @@ func TestFIPSCompliance(t *testing.T) {
         []string{"./..."},
         skipBinaries,
         forbiddenPkgs,
+        []string{"requirefips"},
         map[string]map[string][]fipsscan.KnownViolation{
             // Outer key: binary entry-point import path, a module-root prefix
             //   that matches any binary under it, or "" for all binaries.
@@ -117,10 +118,10 @@ go test -tags requirefips ./...
 
 ```go
 // all packages in the module (Binary not set on violations)
-violations, importGraph := fipsscan.Scan(t, "./...", forbiddenPkgs)
+violations, importGraph := fipsscan.Scan(t, "./...", forbiddenPkgs, []string{"requirefips"})
 
 // only package main entry points (fatals if none found; Binary is set on each violation)
-violations, importGraph := fipsscan.ScanBinaries(t, []string{"./cmd/agent", "./cmd/other"}, nil, forbiddenPkgs)
+violations, importGraph := fipsscan.ScanBinaries(t, []string{"./cmd/agent", "./cmd/other"}, nil, forbiddenPkgs, []string{"requirefips"})
 
 for _, v := range violations {
     chain := fipsscan.ShortestChain(v.Binary, v.Importer, importGraph)
@@ -131,11 +132,13 @@ for _, v := range violations {
 ## API reference
 
 ```
-CheckModule(t, patterns, skipBinaries, forbiddenPkgs, knownViolations)
+CheckModule(t, patterns, skipBinaries, forbiddenPkgs, tags, knownViolations)
     Scans all packages matching patterns and their transitive dependencies.
     skipBinaries lists binary import paths to exclude (dev tools, scripts,
     non-shipped assets). forbiddenPkgs is the complete list of import-path
     prefixes to flag as violations — the caller owns this list entirely.
+    tags is the list of build tags passed to go list (e.g. []string{"requirefips"});
+    pass nil or an empty slice for no tags.
     knownViolations is map[binary]map[component][]KnownViolation:
       - outer key: binary entry-point path, a module-root prefix (matches any
         binary whose import path starts with it), or "" for all binaries
@@ -152,11 +155,11 @@ CheckModule(t, patterns, skipBinaries, forbiddenPkgs, knownViolations)
     reachable from the binary, or whose component can no longer reach the
     importer, are silently skipped. t.Errorf on new violations or stale entries.
 
-Scan(t, pkg, forbiddenPkgs)
+Scan(t, pkg, forbiddenPkgs, tags)
     Scans pkg and its full dependency tree. Returns ([]Violation, importGraph).
     Binary is not set on violations.
 
-ScanBinaries(t, patterns, skipBinaries, forbiddenPkgs)
+ScanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
     Discovers all package main entries matching patterns, scans the combined
     dependency tree in one go list pass. skipBinaries lists binary import
     paths to exclude. Sets Binary on each violation. Fatals if no binaries
