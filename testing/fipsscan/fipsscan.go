@@ -90,7 +90,7 @@ func goListPackages(t testing.TB, patterns []string, tags []string) []goListPack
 	if len(tags) > 0 {
 		base = append(base, "-tags", strings.Join(tags, ","))
 	}
-	args := append(base, patterns...)
+	args := append(base[:len(base):len(base)], patterns...)
 	cmd := exec.CommandContext(t.Context(), "go", args...)
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.Output()
@@ -200,6 +200,7 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 // ScanBinaries scans all patterns, attributes each violation to its binary entry
 // point (Violation.Binary), and returns all violations and the merged import graph.
 // Binaries whose import path appears in skipBinaries are excluded from the scan.
+// tags is passed as -tags to go list; nil or empty means no tags.
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
 func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
 	t.Helper()
@@ -211,7 +212,8 @@ func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 }
 
 // Scan scans pkg and its full dependency tree and returns all violations and the
-// import graph. Calls t.Fatalf on subprocess or parse errors.
+// import graph. tags is passed as -tags to go list; nil or empty means no tags.
+// Calls t.Fatalf on subprocess or parse errors.
 func Scan(t testing.TB, pkg string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
 	t.Helper()
 	pkgs := goListPackages(t, []string{pkg}, tags)
@@ -339,6 +341,7 @@ func FormatChain(chain []string) string {
 // skipped (dependency removed or path broken).
 //
 // Binaries in skipBinaries are excluded from the scan and from stale detection.
+// tags is passed as -tags to go list; nil or empty means no tags.
 func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
 	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
