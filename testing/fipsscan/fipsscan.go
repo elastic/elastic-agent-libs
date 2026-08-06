@@ -116,8 +116,9 @@ func goListPackages(t testing.TB, patterns []string, tags []string) []goListPack
 // scanBinaries runs a single go list pass over all patterns, attributes each
 // violation to its binary entry point, and returns the binaries found.
 // When no binaries are present (library module) it falls back to flat violation
-// detection with no Binary set.
-func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string, []string) {
+// detection with no Binary set. binaryModule reports whether any package main
+// was discovered at all (before skip filtering).
+func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) (violations []Violation, importGraph map[string][]string, mains []string, binaryModule bool) {
 	t.Helper()
 
 	pkgs := goListPackages(t, patterns, tags)
@@ -127,24 +128,37 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 		skip[s] = true
 	}
 
-	importGraph := make(map[string][]string, len(pkgs))
-	var mains []string
+	importGraph = make(map[string][]string, len(pkgs))
+	var allMains []string
 
 	for _, p := range pkgs {
-		if p.Name == "main" && !skip[p.ImportPath] {
-			mains = append(mains, p.ImportPath)
+		if p.Name == "main" {
+			allMains = append(allMains, p.ImportPath)
 		}
 		importGraph[p.ImportPath] = p.Imports
 	}
 
+	binaryModule = len(allMains) > 0
+
+	if !binaryModule {
+		// True library module — no binary entry points.
+		return findViolations(importGraph, forbiddenPkgs), importGraph, nil, false
+	}
+
+	for _, m := range allMains {
+		if !skip[m] {
+			mains = append(mains, m)
+		}
+	}
+
 	if len(mains) == 0 {
-		return findViolations(importGraph, forbiddenPkgs), importGraph, nil
+		// All discovered binaries were skipped — nothing to scan.
+		return nil, importGraph, nil, true
 	}
 
 	// Per-binary BFS attribution so each violation carries the entry point
 	// that pulls it in.
 	seen := make(map[string]bool)
-	var violations []Violation
 	for _, bin := range mains {
 		for pkg := range bfsReachable(bin, importGraph) {
 			if isForbidden(pkg, forbiddenPkgs) {
@@ -160,7 +174,7 @@ func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbid
 			}
 		}
 	}
-	return violations, importGraph, mains
+	return violations, importGraph, mains, true
 }
 
 // bfsReachable returns the set of all packages reachable from from (inclusive).
@@ -204,8 +218,8 @@ func findViolations(importGraph map[string][]string, forbidden []string) []Viola
 // Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
 func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
-	if len(mains) == 0 {
+	violations, importGraph, _, binaryModule := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
+	if !binaryModule {
 		t.Fatalf("ScanBinaries: no package main found matching %v", patterns)
 	}
 	return violations, importGraph
@@ -344,7 +358,10 @@ func FormatChain(chain []string) string {
 // tags is passed as -tags to go list; nil or empty means no tags.
 func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string, knownViolations map[string]map[string][]KnownViolation) {
 	t.Helper()
-	violations, importGraph, mains := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
+	violations, importGraph, mains, binaryModule := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
+	if binaryModule && len(mains) == 0 {
+		return // all discovered binaries were skipped
+	}
 	checkViolations(t, violations, importGraph, mains, knownViolations)
 }
 
@@ -388,16 +405,26 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 		}
 	}
 
-	compReach := newReachabilityCache(importGraph)
+	// Build a reverse import graph so "can component reach importer?" becomes
+	// "is any component package in the reverse-reachable set of importer?" —
+	// O(graph) per unique importer rather than O(component-pkgs × graph).
+	reverseGraph := make(map[string][]string, len(importGraph))
+	for pkg, imports := range importGraph {
+		for _, imp := range imports {
+			reverseGraph[imp] = append(reverseGraph[imp], pkg)
+		}
+	}
+	reverseReach := newReachabilityCache(reverseGraph)
 
 	// componentCanReach reports whether the component identified by key can
-	// reach importer via forward edges in the import graph. key "" is a wildcard.
+	// reach importer. key "" is a wildcard.
 	componentCanReach := func(key, importer string) bool {
 		if key == "" {
 			return true
 		}
+		canReach := reverseReach.from(importer)
 		for _, pkg := range compPkgs[key] {
-			if compReach.from(pkg)[importer] {
+			if canReach[pkg] {
 				return true
 			}
 		}
@@ -435,14 +462,15 @@ func checkViolations(t testing.TB, violations []Violation, importGraph map[strin
 		if compKey == "" || kv.Importer == "" {
 			return true
 		}
-		sub := kv.Importer + "/"
-		for _, pkg := range compPkgs[compKey] {
-			reachable := compReach.from(pkg)
-			if reachable[kv.Importer] {
-				return true
+		bare := kv.Importer
+		sub := bare + "/"
+		for imp := range importGraph {
+			if imp != bare && !strings.HasPrefix(imp, sub) {
+				continue
 			}
-			for rPkg := range reachable {
-				if strings.HasPrefix(rPkg, sub) {
+			canReach := reverseReach.from(imp)
+			for _, pkg := range compPkgs[compKey] {
+				if canReach[pkg] {
 					return true
 				}
 			}

@@ -195,6 +195,23 @@ func TestCheckViolationsCrossBinaryAttribution(t *testing.T) {
 	}
 }
 
+// TestScanBinariesAllSkipped verifies that when every discovered binary is in
+// skipBinaries, scanBinaries returns no violations and signals binary mode so
+// callers do not fall through to a library-mode flat scan.
+func TestScanBinariesAllSkipped(t *testing.T) {
+	const certutilCmd = "github.com/elastic/elastic-agent-libs/testing/certutil/cmd"
+	violations, _, mains, binaryModule := scanBinaries(t, []string{"./testing/certutil/cmd"}, []string{certutilCmd}, []string{"forbiddenX/"}, nil)
+	if !binaryModule {
+		t.Fatal("expected binaryModule=true (a package main exists), got false")
+	}
+	if len(mains) != 0 {
+		t.Fatalf("expected empty mains after skipping the only binary, got %v", mains)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations when all binaries are skipped, got %v", violations)
+	}
+}
+
 // captureT wraps *testing.T and redirects Errorf so tests can inspect failures.
 type captureT struct {
 	*testing.T
