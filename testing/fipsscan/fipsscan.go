@@ -17,8 +17,8 @@
 
 // Package fipsscan provides helpers for auditing import-policy compliance of Go
 // binaries by scanning their dependency trees for forbidden imports.
-// Callers supply the forbidden-package prefixes and known-violations allowlist;
-// the package itself is policy-agnostic and carries no build constraints.
+// The package is policy-agnostic: callers supply the forbidden-package prefixes
+// and the known-violations allowlist.
 package fipsscan
 
 import (
@@ -28,32 +28,97 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
 
-// Violation is a forbidden import discovered in the dependency tree.
+// Violation is a forbidden import found in the dependency graph.
 type Violation struct {
-	Binary   string // binary entry point; empty for library modules
-	Importer string // package that directly imports the forbidden package
-	Imported string // forbidden package being imported
+	Binary   string // entry-point binary import path; "" for library-scope violations (flat scan)
+	Importer string // the package directly importing the forbidden one; set for flat-scan violations
+	Imported string // the forbidden package
 }
 
-// KnownViolation documents an accepted import exception for use in knownViolations maps.
+// KnownViolation documents one accepted violation for a specific binary and component.
 //
-// Both Importer and Imported support three forms:
-//   - "" (empty): wildcard — matches anything in that position.
-//     Importer "" matches any intermediate package; Imported "" matches any forbidden package.
-//   - exact path: matches only that specific package.
-//   - module-root prefix: "github.com/foo/bar" matches "github.com/foo/bar" itself
-//     and any subpackage "github.com/foo/bar/baz".
-//
-// Use prefix or wildcard to collapse many per-subpackage entries into one. For example,
-// {Imported: "github.com/jcmturner/gokrb5/v8"} matches violations from any gokrb5 subpackage.
+//	Imported: prefix-matched against the forbidden package; "" matches anything.
+//	Reason:   why this violation is accepted; documentation only, never printed.
 type KnownViolation struct {
-	Importer string
 	Imported string
-	Reason   string // why this violation is acceptable; shown in test output
+	Reason   string
+}
+
+// CheckModule scans all packages matching patterns and reports via t.Errorf:
+//
+//   - NEW violation: a forbidden import with no matching knownViolations entry.
+//   - stale entry:   a knownViolations entry whose violation no longer exists.
+//   - unknown key:   a non-"" binary key that matches no scanned binary.
+//
+// known is map[binary]map[component][]KnownViolation:
+//
+//	binary key    — full import path of a package main, or "" for library scope.
+//	                "" is always active. Non-"" keys that match no scanned binary
+//	                are reported as errors.
+//	component key — full import path prefix of a package that must lie on the
+//	                path from the binary to the forbidden package. "" skips this
+//	                check (any path from binary to forbidden is covered).
+//
+// Matching is by path prefix everywhere; trailing slashes in patterns are ignored.
+//
+// Both binary and flat scopes always run:
+//
+//	Binary scope: every package transitively imported by a non-skipped package main.
+//	Flat scope:   all packages not reachable from any binary (library packages).
+//
+// Violations from the flat scope carry Binary="".
+func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string, known map[string]map[string][]KnownViolation) {
+	t.Helper()
+	violations, graph, scannedBinaries := scan(t, patterns, skipBinaries, forbiddenPkgs, tags)
+	checkViolations(t, violations, graph, scannedBinaries, known)
+}
+
+// Scan returns raw violations without consulting an allowlist.
+// Useful for bootstrapping a new allowlist or custom reporting.
+func Scan(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) []Violation {
+	t.Helper()
+	violations, _, _ := scan(t, patterns, skipBinaries, forbiddenPkgs, tags)
+	return violations
+}
+
+// scan returns scanned binaries with skipBinaries already filtered out.
+func scan(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string, []string) {
+	t.Helper()
+	if len(patterns) == 0 {
+		t.Fatalf("fipsscan: patterns must not be empty")
+	}
+	if len(forbiddenPkgs) == 0 {
+		t.Fatalf("fipsscan: forbiddenPkgs must not be empty")
+	}
+
+	graph, allMains := goListPackages(t, moduleRoot(t), patterns, tags)
+	validateSkipBinaries(t, skipBinaries, allMains)
+
+	var scannedBinaries []string
+	for _, m := range allMains {
+		if !isSkipped(m, skipBinaries) {
+			scannedBinaries = append(scannedBinaries, m)
+		}
+	}
+
+	violations, unionReach := scanBinaryViolations(graph, scannedBinaries, forbiddenPkgs)
+	violations = append(violations, scanFlatViolations(graph, unionReach, forbiddenPkgs)...)
+
+	sort.Slice(violations, func(i, j int) bool {
+		if violations[i].Binary != violations[j].Binary {
+			return violations[i].Binary < violations[j].Binary
+		}
+		if violations[i].Importer != violations[j].Importer {
+			return violations[i].Importer < violations[j].Importer
+		}
+		return violations[i].Imported < violations[j].Imported
+	})
+	return violations, graph, scannedBinaries
 }
 
 type goListPackage struct {
@@ -62,9 +127,45 @@ type goListPackage struct {
 	Imports    []string
 }
 
-// moduleRoot walks up from the working directory to find the nearest go.mod
-// and returns its containing directory. go test sets cwd to the test package
-// directory, so relative patterns like ./... need to run from the module root.
+func goListPackages(t testing.TB, dir string, patterns []string, tags []string) (map[string][]string, []string) {
+	t.Helper()
+	// Field filtering keeps the decoded output small on large dependency trees.
+	args := []string{"list", "-json=ImportPath,Name,Imports", "-deps"}
+	if len(tags) > 0 {
+		args = append(args, "-tags", strings.Join(tags, ","))
+	}
+	args = append(args, patterns...)
+
+	cmd := exec.CommandContext(t.Context(), "go", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			t.Fatalf("go list failed: %v\n%s", err, exitErr.Stderr)
+		}
+		t.Fatalf("go list failed: %v", err)
+	}
+
+	graph := make(map[string][]string)
+	var mains []string
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var p goListPackage
+		if err := dec.Decode(&p); err != nil {
+			t.Fatalf("parsing go list output: %v", err)
+		}
+		graph[p.ImportPath] = p.Imports
+		if p.Name == "main" {
+			mains = append(mains, p.ImportPath)
+		}
+	}
+	sort.Strings(mains)
+	return graph, mains
+}
+
+// go test sets cwd to the test package directory, so relative patterns like
+// ./... need to run from the module root.
 func moduleRoot(t testing.TB) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -78,228 +179,288 @@ func moduleRoot(t testing.TB) string {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			t.Fatalf("finding module root: go.mod not found starting from %s", dir)
+			return ""
 		}
 		dir = parent
 	}
 }
 
-// goListPackages runs go list -json -deps from the module root and decodes the output.
-func goListPackages(t testing.TB, patterns []string, tags []string) []goListPackage {
-	t.Helper()
-	base := []string{"list", "-json", "-deps"}
-	if len(tags) > 0 {
-		base = append(base, "-tags", strings.Join(tags, ","))
-	}
-	args := append(base[:len(base):len(base)], patterns...)
-	cmd := exec.CommandContext(t.Context(), "go", args...)
-	cmd.Dir = moduleRoot(t)
-	out, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			t.Fatalf("go list failed: %v\n%s", err, exitErr.Stderr)
-		}
-		t.Fatalf("go list failed: %v", err)
-	}
-	var pkgs []goListPackage
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for dec.More() {
-		var p goListPackage
-		if err := dec.Decode(&p); err != nil {
-			t.Fatalf("parsing go list output: %v", err)
-		}
-		pkgs = append(pkgs, p)
-	}
-	return pkgs
-}
-
-// scanBinaries runs a single go list pass over all patterns, attributes each
-// violation to its binary entry point, and returns the binaries found.
-// When no binaries are present (library module) it falls back to flat violation
-// detection with no Binary set. binaryModule reports whether any package main
-// was discovered at all (before skip filtering).
-func scanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) (violations []Violation, importGraph map[string][]string, mains []string, binaryModule bool) {
-	t.Helper()
-
-	pkgs := goListPackages(t, patterns, tags)
-
-	skip := make(map[string]bool, len(skipBinaries))
+func isSkipped(binary string, skipBinaries []string) bool {
 	for _, s := range skipBinaries {
-		skip[s] = true
-	}
-
-	importGraph = make(map[string][]string, len(pkgs))
-	var allMains []string
-
-	for _, p := range pkgs {
-		if p.Name == "main" {
-			allMains = append(allMains, p.ImportPath)
-		}
-		importGraph[p.ImportPath] = p.Imports
-	}
-
-	binaryModule = len(allMains) > 0
-
-	if !binaryModule {
-		// True library module — no binary entry points.
-		return findViolations(importGraph, forbiddenPkgs), importGraph, nil, false
-	}
-
-	for _, m := range allMains {
-		if !skip[m] {
-			mains = append(mains, m)
-		}
-	}
-
-	if len(mains) == 0 {
-		// All discovered binaries were skipped — nothing to scan.
-		return nil, importGraph, nil, true
-	}
-
-	// Per-binary BFS attribution so each violation carries the entry point
-	// that pulls it in.
-	seen := make(map[string]bool)
-	for _, bin := range mains {
-		for pkg := range bfsReachable(bin, importGraph) {
-			if isForbidden(pkg, forbiddenPkgs) {
-				continue
-			}
-			for _, imp := range importGraph[pkg] {
-				if isForbidden(imp, forbiddenPkgs) {
-					if key := bin + "\x00" + pkg + "\x00" + imp; !seen[key] {
-						seen[key] = true
-						violations = append(violations, Violation{Binary: bin, Importer: pkg, Imported: imp})
-					}
-				}
-			}
-		}
-	}
-	return violations, importGraph, mains, true
-}
-
-// bfsReachable returns the set of all packages reachable from from (inclusive).
-func bfsReachable(from string, importGraph map[string][]string) map[string]bool {
-	reachable := map[string]bool{from: true}
-	queue := []string{from}
-	for len(queue) > 0 {
-		pkg := queue[0]
-		queue = queue[1:]
-		for _, dep := range importGraph[pkg] {
-			if !reachable[dep] {
-				reachable[dep] = true
-				queue = append(queue, dep)
-			}
-		}
-	}
-	return reachable
-}
-
-// findViolations returns all (Importer, Imported) pairs in importGraph where
-// Importer is not itself forbidden but directly imports a forbidden package.
-func findViolations(importGraph map[string][]string, forbidden []string) []Violation {
-	var violations []Violation
-	for pkg, imports := range importGraph {
-		if isForbidden(pkg, forbidden) {
-			continue
-		}
-		for _, imp := range imports {
-			if isForbidden(imp, forbidden) {
-				violations = append(violations, Violation{Importer: pkg, Imported: imp})
-			}
-		}
-	}
-	return violations
-}
-
-// ScanBinaries scans all patterns, attributes each violation to its binary entry
-// point (Violation.Binary), and returns all violations and the merged import graph.
-// Binaries whose import path appears in skipBinaries are excluded from the scan.
-// tags is passed as -tags to go list; nil or empty means no tags.
-// Calls t.Fatalf if no binaries are found or on subprocess/parse errors.
-func ScanBinaries(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
-	t.Helper()
-	violations, importGraph, _, binaryModule := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
-	if !binaryModule {
-		t.Fatalf("ScanBinaries: no package main found matching %v", patterns)
-	}
-	return violations, importGraph
-}
-
-// Scan scans pkg and its full dependency tree and returns all violations and the
-// import graph. tags is passed as -tags to go list; nil or empty means no tags.
-// Calls t.Fatalf on subprocess or parse errors.
-func Scan(t testing.TB, pkg string, forbiddenPkgs []string, tags []string) ([]Violation, map[string][]string) {
-	t.Helper()
-	pkgs := goListPackages(t, []string{pkg}, tags)
-	importGraph := make(map[string][]string, len(pkgs))
-	for _, p := range pkgs {
-		importGraph[p.ImportPath] = p.Imports
-	}
-	return findViolations(importGraph, forbiddenPkgs), importGraph
-}
-
-// matchesBinaryKey reports whether a binary key matches an actual binary import
-// path. The key may be an exact import path, a module-root prefix, or "" which
-// matches any binary.
-func matchesBinaryKey(key, binary string) bool {
-	if key == "" {
-		return true
-	}
-	bare := strings.TrimRight(key, "/")
-	return binary == bare || strings.HasPrefix(binary, bare+"/")
-}
-
-func isForbidden(pkg string, forbiddenPkgs []string) bool {
-	for _, prefix := range forbiddenPkgs {
-		bare := strings.TrimRight(prefix, "/")
-		if pkg == bare || strings.HasPrefix(pkg, bare+"/") {
+		if pathMatches(s, binary) {
 			return true
 		}
 	}
 	return false
 }
 
-// ShortestChain returns the shortest path from `from` to `to` using forward
-// edges in importGraph (package -> packages it imports). Returns nil if no path.
-func ShortestChain(from, to string, importGraph map[string][]string) []string {
+func checkViolations(t testing.TB, violations []Violation, graph map[string][]string, scannedBinaries []string, known map[string]map[string][]KnownViolation) {
+	t.Helper()
+
+	// reach memoizes bfsReachable: the same binary or component root is queried
+	// once per violation, so cache results to avoid redundant graph walks.
+	reachCache := make(map[string]map[string]bool)
+	reach := func(pkg string) map[string]bool {
+		if r, ok := reachCache[pkg]; ok {
+			return r
+		}
+		r := bfsReachable(pkg, graph)
+		reachCache[pkg] = r
+		return r
+	}
+
+	// Pre-resolve each non-empty component key to the concrete packages it
+	// matches. componentOnPath would otherwise scan the full graph on every
+	// (violation, component) pair.
+	componentPkgs := make(map[string][]string)
+	for _, comps := range known {
+		for ck := range comps {
+			if ck == "" {
+				continue
+			}
+			if _, done := componentPkgs[ck]; done {
+				continue
+			}
+			var pkgs []string
+			for pkg := range graph {
+				if pathMatches(ck, pkg) {
+					pkgs = append(pkgs, pkg)
+				}
+			}
+			sort.Strings(pkgs)
+			componentPkgs[ck] = pkgs
+		}
+	}
+
+	// entryKey identifies one KnownViolation by its position in the nested map.
+	// The index is needed because each entry goes stale independently: a wildcard
+	// "" Imported entry matches many violations but is stale only when none do.
+	type entryKey struct {
+		bk, ck string
+		i      int
+	}
+	matchedEntries := make(map[entryKey]bool)
+
+	for _, v := range violations {
+		matched := false
+		for bk, comps := range known {
+			if !pathMatches(bk, v.Binary) {
+				continue
+			}
+			for ck, kvs := range comps {
+				if !componentOnPath(v.Binary, ck, v.Imported, componentPkgs[ck], reach) {
+					continue
+				}
+				for i, kv := range kvs {
+					if pathMatches(kv.Imported, v.Imported) {
+						matchedEntries[entryKey{bk, ck, i}] = true
+						matched = true
+					}
+				}
+			}
+		}
+		if matched {
+			continue
+		}
+		// ShortestChain returns nil when Binary=="" (flat-scope violation) or
+		// the binary is absent from the graph; fall back to a minimal chain so
+		// the error message is still useful.
+		chain := ShortestChain(v.Binary, v.Imported, graph)
+		if chain == nil {
+			if v.Binary != "" {
+				chain = []string{v.Binary, v.Imported}
+			} else if v.Importer != "" {
+				chain = []string{v.Importer, v.Imported}
+			} else {
+				chain = []string{v.Imported}
+			}
+		}
+		t.Errorf("NEW violation:\n    %s", FormatChain(chain))
+	}
+
+	binKeys := make([]string, 0, len(known))
+	for bk := range known {
+		binKeys = append(binKeys, bk)
+	}
+	sort.Strings(binKeys)
+
+	for _, bk := range binKeys {
+		// The "" key is library scope: always active, never an unknown binary.
+		if bk != "" {
+			active := false
+			for _, sb := range scannedBinaries {
+				if pathMatches(bk, sb) {
+					active = true
+					break
+				}
+			}
+			if !active {
+				t.Errorf("knownViolations binary key %q matches no scanned binary — remove it or fix the path", bk)
+				continue
+			}
+		}
+		compKeys := make([]string, 0, len(known[bk]))
+		for ck := range known[bk] {
+			compKeys = append(compKeys, ck)
+		}
+		sort.Strings(compKeys)
+		for _, ck := range compKeys {
+			for i, kv := range known[bk][ck] {
+				if !matchedEntries[entryKey{bk, ck, i}] {
+					t.Errorf("stale entry in knownViolations: binary=%q component=%q imported=%q — remove it", bk, ck, kv.Imported)
+				}
+			}
+		}
+	}
+}
+
+// A single package matching ck must satisfy both halves: reachable from the
+// binary AND able to reach the forbidden package.
+func componentOnPath(binary, ck, forbidden string, pkgsForCK []string, reach func(string) map[string]bool) bool {
+	if ck == "" {
+		return true
+	}
+	if binary == "" {
+		// Flat-scan violations have no binary root; a component key has no
+		// meaningful path constraint without one.
+		return false
+	}
+	binaryReach := reach(binary)
+	for _, p := range pkgsForCK {
+		if !binaryReach[p] {
+			continue
+		}
+		if reach(p)[forbidden] {
+			return true
+		}
+	}
+	return false
+}
+
+func validateSkipBinaries(t testing.TB, skipBinaries, discoveredBinaries []string) {
+	t.Helper()
+	for _, skip := range skipBinaries {
+		found := false
+		for _, discovered := range discoveredBinaries {
+			if pathMatches(skip, discovered) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("skipBinaries entry %q matches no discovered binary — remove it or fix the path", skip)
+		}
+	}
+}
+
+func scanBinaryViolations(graph map[string][]string, binaries []string, forbiddenPkgs []string) ([]Violation, map[string]bool) {
+	var violations []Violation
+	// unionReach accumulates every package reachable from any binary.
+	// scanFlatViolations uses it to exclude binary-reachable packages from the
+	// flat scope, so they are not double-reported.
+	unionReach := make(map[string]bool)
+	seen := make(map[Violation]bool)
+
+	for _, bin := range binaries {
+		for pkg := range bfsReachable(bin, graph) {
+			unionReach[pkg] = true
+			for _, imp := range graph[pkg] {
+				if !isForbidden(imp, forbiddenPkgs) {
+					continue
+				}
+				v := Violation{Binary: bin, Imported: imp}
+				if !seen[v] {
+					seen[v] = true
+					violations = append(violations, v)
+				}
+			}
+		}
+	}
+	return violations, unionReach
+}
+
+// scanFlatViolations covers packages no binary reaches, so library code is
+// still audited.
+func scanFlatViolations(graph map[string][]string, unionReach map[string]bool, forbiddenPkgs []string) []Violation {
+	var violations []Violation
+	seen := make(map[string]bool)
+
+	for pkg, imports := range graph {
+		if unionReach[pkg] {
+			continue
+		}
+		for _, imp := range imports {
+			if !isForbidden(imp, forbiddenPkgs) {
+				continue
+			}
+			// NUL separator prevents "a/b"+"c" from colliding with "a"+"bc".
+			key := pkg + "\x00" + imp
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			violations = append(violations, Violation{Importer: pkg, Imported: imp})
+		}
+	}
+	return violations
+}
+
+// bfsReachable returns the set of packages reachable from root, inclusive.
+// An absent root yields an empty set: it is not a real package, so returning it
+// would make a typo'd component key look reachable.
+func bfsReachable(root string, graph map[string][]string) map[string]bool {
+	visited := make(map[string]bool)
+	if _, ok := graph[root]; !ok {
+		return visited
+	}
+	visited[root] = true
+	queue := []string{root}
+	for i := 0; i < len(queue); i++ {
+		for _, dep := range graph[queue[i]] {
+			if !visited[dep] {
+				visited[dep] = true
+				queue = append(queue, dep)
+			}
+		}
+	}
+	return visited
+}
+
+// ShortestChain returns the shortest import path from→to in graph, inclusive.
+// Returns nil if no path exists.
+func ShortestChain(from, to string, graph map[string][]string) []string {
 	if from == to {
 		return []string{from}
 	}
 
-	type state struct {
-		pkg  string
-		path []string
-	}
-
-	visited := make(map[string]bool)
-	visited[from] = true
-	queue := []state{{pkg: from, path: []string{from}}}
-
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-
-		for _, next := range importGraph[cur.pkg] {
-			if visited[next] {
+	parent := map[string]string{from: ""}
+	queue := []string{from}
+	for i := 0; i < len(queue); i++ {
+		for _, next := range graph[queue[i]] {
+			if _, seen := parent[next]; seen {
 				continue
 			}
-			newPath := make([]string, len(cur.path)+1)
-			copy(newPath, cur.path)
-			newPath[len(cur.path)] = next
-
+			parent[next] = queue[i]
 			if next == to {
-				return newPath
+				// Reconstruct path by following parent pointers from target
+				// back to root, then reverse: BFS builds the path backward.
+				var chain []string
+				for p := to; p != from; p = parent[p] {
+					chain = append(chain, p)
+				}
+				chain = append(chain, from)
+				for l, r := 0, len(chain)-1; l < r; l, r = l+1, r-1 {
+					chain[l], chain[r] = chain[r], chain[l]
+				}
+				return chain
 			}
-
-			visited[next] = true
-			queue = append(queue, state{pkg: next, path: newPath})
+			queue = append(queue, next)
 		}
 	}
-
 	return nil
 }
 
-// FormatChain joins a chain with indented " -> " separators for readable output:
+// FormatChain renders an import chain as:
 //
 //	pkg/a
 //	      -> pkg/b
@@ -316,322 +477,17 @@ func FormatChain(chain []string) string {
 	return strings.Join(parts, "\n")
 }
 
-// CheckModule scans all packages and their transitive dependencies matching
-// patterns and reports unknown violations or stale knownViolations entries via
-// t.Errorf. Works for both binary and library modules.
-//
-// knownViolations is a two-level map:
-//   - Outer key: binary entry-point import path, or "" to match all binaries.
-//     May be a module-root prefix (e.g. "github.com/elastic/myagent") that
-//     matches any binary whose import path starts with that prefix.
-//   - Inner key: component — a package path or module-root prefix that must be
-//     reachable from the binary AND able to reach the violating importer in the
-//     import graph. Use "" to match any violation within that binary.
-//
-// A single violation can match multiple component keys simultaneously: if both
-// "fbreceiver" and "azureauthextension" can transitively reach the same
-// forbidden importer, listing the same (Importer, Imported) pair under both
-// component keys causes both to be suppressed and neither to be flagged stale.
-// This is the intended way to document violations shared by multiple components.
-//
-// For a violation like:
-//
-//	cmd/kafkareceiver
-//	      -> otel-contrib/receiver/kafkareceiver
-//	      -> otel-contrib/internal/kafka          ← Importer
-//	      -> gokrb5/v8/client                     ← Imported (forbidden)
-//
-// Any of the following are valid component keys:
-//
-//	""                                    — matches any violation in this binary
-//	"otel-contrib"                        — the external module root
-//	"otel-contrib/receiver/kafkareceiver" — the specific receiver package
-//	"otel-contrib/internal/kafka"         — the exact direct importer
-//
-// Stale detection: an entry is flagged stale when the binary was scanned, the
-// component can still reach the importer, but the (Importer, Imported) pair is
-// no longer a violation. Entries whose component is no longer reachable from the
-// binary, or whose component can no longer reach the importer, are silently
-// skipped (dependency removed or path broken).
-//
-// Binaries in skipBinaries are excluded from the scan and from stale detection.
-// tags is passed as -tags to go list; nil or empty means no tags.
-func CheckModule(t testing.TB, patterns []string, skipBinaries []string, forbiddenPkgs []string, tags []string, knownViolations map[string]map[string][]KnownViolation) {
-	t.Helper()
-	violations, importGraph, mains, binaryModule := scanBinaries(t, patterns, skipBinaries, forbiddenPkgs, tags)
-	if binaryModule && len(mains) == 0 {
-		return // all discovered binaries were skipped
-	}
-	checkViolations(t, violations, importGraph, mains, knownViolations)
+// pathMatches reports whether path equals pattern or is a sub-package of it.
+// An empty pattern is a wildcard.
+func pathMatches(pattern, path string) bool {
+	bare := strings.TrimRight(pattern, "/")
+	return bare == "" || path == bare || strings.HasPrefix(path, bare+"/")
 }
 
-// checkViolations matches violations against knownViolations and reports new
-// violations or stale entries via t.Errorf.
-func checkViolations(t testing.TB, violations []Violation, importGraph map[string][]string, mains []string, knownViolations map[string]map[string][]KnownViolation) {
-	t.Helper()
-
-	// matched[binKey][compKey][i] tracks whether knownViolations[binKey][compKey][i] was hit.
-	matched := make(map[string]map[string][]bool)
-	for binKey, comps := range knownViolations {
-		matched[binKey] = make(map[string][]bool, len(comps))
-		for compKey, kvs := range comps {
-			matched[binKey][compKey] = make([]bool, len(kvs))
-		}
-	}
-
-	// Pre-compute reachable set per binary for attribution and stale detection.
-	reachableFrom := make(map[string]map[string]bool, len(mains))
-	for _, bin := range mains {
-		reachableFrom[bin] = bfsReachable(bin, importGraph)
-	}
-
-	// Pre-compute which packages in importGraph match each component key
-	// (exact path or module-root prefix).
-	compPkgs := make(map[string][]string)
-	for _, comps := range knownViolations {
-		for compKey := range comps {
-			if compKey == "" {
-				continue
-			}
-			if _, seen := compPkgs[compKey]; seen {
-				continue
-			}
-			prefix := compKey + "/"
-			for pkg := range importGraph {
-				if pkg == compKey || strings.HasPrefix(pkg, prefix) {
-					compPkgs[compKey] = append(compPkgs[compKey], pkg)
-				}
-			}
-		}
-	}
-
-	// Build a reverse import graph so "can component reach importer?" becomes
-	// "is any component package in the reverse-reachable set of importer?" —
-	// O(graph) per unique importer rather than O(component-pkgs × graph).
-	reverseGraph := make(map[string][]string, len(importGraph))
-	for pkg, imports := range importGraph {
-		for _, imp := range imports {
-			reverseGraph[imp] = append(reverseGraph[imp], pkg)
-		}
-	}
-	reverseReach := newReachabilityCache(reverseGraph)
-
-	// componentCanReach reports whether the component identified by key can
-	// reach importer. key "" is a wildcard.
-	componentCanReach := func(key, importer string) bool {
-		if key == "" {
+func isForbidden(pkg string, forbiddenPkgs []string) bool {
+	for _, prefix := range forbiddenPkgs {
+		if pathMatches(prefix, pkg) {
 			return true
-		}
-		canReach := reverseReach.from(importer)
-		for _, pkg := range compPkgs[key] {
-			if canReach[pkg] {
-				return true
-			}
-		}
-		return false
-	}
-
-	// importerMatches reports whether kv.Importer matches the actual importer.
-	//   - kv.Importer == "": wildcard, matches any importer.
-	//   - exact path: must equal importer exactly.
-	//   - prefix: "github.com/foo/bar" matches "github.com/foo/bar/baz".
-	importerMatches := func(kv KnownViolation, importer string) bool {
-		if kv.Importer == "" {
-			return true
-		}
-		return kv.Importer == importer || strings.HasPrefix(importer, kv.Importer+"/")
-	}
-
-	// importedMatches reports whether kv.Imported matches the actual imported package.
-	//   - kv.Imported == "": wildcard, matches any forbidden package.
-	//   - exact path or prefix: trailing slash is stripped before matching.
-	importedMatches := func(kv KnownViolation, imported string) bool {
-		if kv.Imported == "" {
-			return true
-		}
-		bare := strings.TrimRight(kv.Imported, "/")
-		return imported == bare || strings.HasPrefix(imported, bare+"/")
-	}
-
-	// componentCanReachImporter is the stale-detection fast path: returns false
-	// when the component can provably no longer reach the importer (or any
-	// subpackage of it), signalling a silent skip instead of a stale error.
-	// When kv.Importer is empty the check is skipped (we can't narrow to a
-	// specific importer, so let the matched flag decide).
-	componentCanReachImporter := func(compKey string, kv KnownViolation) bool {
-		if compKey == "" || kv.Importer == "" {
-			return true
-		}
-		bare := kv.Importer
-		sub := bare + "/"
-		for imp := range importGraph {
-			if imp != bare && !strings.HasPrefix(imp, sub) {
-				continue
-			}
-			canReach := reverseReach.from(imp)
-			for _, pkg := range compPkgs[compKey] {
-				if canReach[pkg] {
-					return true
-				}
-			}
-		}
-		return false
-	}
-
-	// binKeysForBinary returns all knownViolations keys applicable to a binary:
-	// the exact path, any module-root prefix key, and always "".
-	binKeysForBinary := func(binary string) []string {
-		if binary == "" {
-			return []string{""}
-		}
-		keys := []string{binary, ""}
-		for key := range knownViolations {
-			if key == "" || key == binary {
-				continue
-			}
-			if matchesBinaryKey(key, binary) {
-				keys = append(keys, key)
-			}
-		}
-		return keys
-	}
-
-	// markKnown finds ALL known entries where the component can reach the
-	// importer AND is reachable from the binary, and (Importer, Imported)
-	// matches. Marks each matched entry and returns the full list so the caller
-	// can log reasons. A single violation can match multiple component keys.
-	markKnown := func(binary, importer, imported string) ([]KnownViolation, bool) {
-		var results []KnownViolation
-		for _, binKey := range binKeysForBinary(binary) {
-			for compKey, kvs := range knownViolations[binKey] {
-				if !componentCanReach(compKey, importer) {
-					continue
-				}
-				// The component must also be reachable from the violation's own binary;
-				// a component reachable only from a different binary must not suppress
-				// violations here.
-				if binary != "" && compKey != "" && !isReachableFromAny(compKey, []string{binary}, reachableFrom) {
-					continue
-				}
-				for i, kv := range kvs {
-					if importerMatches(kv, importer) && importedMatches(kv, imported) {
-						matched[binKey][compKey][i] = true
-						results = append(results, kv)
-					}
-				}
-			}
-		}
-		return results, len(results) > 0
-	}
-
-	for _, v := range violations {
-		var chain []string
-		if v.Binary != "" {
-			chain = ShortestChain(v.Binary, v.Importer, importGraph)
-			if chain == nil {
-				chain = []string{v.Importer}
-			}
-		} else {
-			chain = []string{v.Importer}
-		}
-		displayChain := make([]string, len(chain)+1)
-		copy(displayChain, chain)
-		displayChain[len(chain)] = v.Imported
-
-		if kvs, ok := markKnown(v.Binary, v.Importer, v.Imported); ok {
-			for _, kv := range kvs {
-				t.Logf("known violation (%s):\n%s\n      reason: %s", v.Imported, FormatChain(displayChain), kv.Reason)
-			}
-		} else {
-			t.Errorf("NEW violation — add to knownViolations or remove the dependency:\n%s", FormatChain(displayChain))
-		}
-	}
-
-	// binsForKey returns all scanned binaries matching a binary key
-	// (exact or module-root prefix; "" matches all).
-	binsForKey := func(key string) []string {
-		if key == "" {
-			return mains
-		}
-		var result []string
-		for _, bin := range mains {
-			if matchesBinaryKey(key, bin) {
-				result = append(result, bin)
-			}
-		}
-		return result
-	}
-
-	for binKey, comps := range matched {
-		binsToCheck := binsForKey(binKey)
-		// Skip entries whose binary key matched no scanned binary.
-		if binKey != "" && len(binsToCheck) == 0 {
-			continue
-		}
-		for compKey, hits := range comps {
-			if compKey != "" {
-				if len(binsToCheck) > 0 {
-					// Binary mode: component must be reachable from at least one matching binary.
-					if !isReachableFromAny(compKey, binsToCheck, reachableFrom) {
-						continue
-					}
-				} else {
-					// Library mode: no binary entry points. Check that the component
-					// still exists somewhere in the import graph.
-					if len(compPkgs[compKey]) == 0 {
-						continue
-					}
-				}
-			}
-			for i, hit := range hits {
-				if !hit {
-					kv := knownViolations[binKey][compKey][i]
-					// If the component can no longer reach the importer (or any
-					// subpackage of it), the import path was broken — skip silently.
-					if !componentCanReachImporter(compKey, kv) {
-						continue
-					}
-					t.Errorf("stale knownViolations entry (no longer a violation — remove it): binary=%q component=%q importer=%q imported=%q", binKey, compKey, kv.Importer, kv.Imported)
-				}
-			}
-		}
-	}
-}
-
-// reachabilityCache lazily computes and caches the reachable-package set for
-// any starting package so each BFS runs at most once.
-type reachabilityCache struct {
-	importGraph map[string][]string
-	cache       map[string]map[string]bool
-}
-
-func newReachabilityCache(importGraph map[string][]string) *reachabilityCache {
-	return &reachabilityCache{importGraph: importGraph, cache: make(map[string]map[string]bool)}
-}
-
-// from returns the full set of packages reachable from pkg (inclusive).
-func (r *reachabilityCache) from(pkg string) map[string]bool {
-	if cached, ok := r.cache[pkg]; ok {
-		return cached
-	}
-	result := bfsReachable(pkg, r.importGraph)
-	r.cache[pkg] = result
-	return result
-}
-
-// isReachableFromAny reports whether key or any subpackage of key is reachable
-// from at least one binary in bins.
-func isReachableFromAny(key string, bins []string, reachableFrom map[string]map[string]bool) bool {
-	prefix := key + "/"
-	for _, bin := range bins {
-		reachable := reachableFrom[bin]
-		if reachable[key] {
-			return true
-		}
-		for pkg := range reachable {
-			if strings.HasPrefix(pkg, prefix) {
-				return true
-			}
 		}
 	}
 	return false
