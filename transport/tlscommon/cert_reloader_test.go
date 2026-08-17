@@ -26,11 +26,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 )
 
 // writeKeyAndCertFiles generates a cert/key pair and writes them to dir,
 // returning the file paths. Each call generates a distinct pair.
-func writeKeyAndCertFiles(t *testing.T, dir string) (certPath, keyPath string) {
+func writeKeyAndCertFiles(t testing.TB, dir string) (certPath, keyPath string) {
 	t.Helper()
 
 	keyPEM, certPEM := makeKeyCertPair(t, blockTypePKCS8, "")
@@ -47,7 +49,7 @@ func TestNewCertReloader_ValidCertPair(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath)
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""))
 	require.NoError(t, err)
 
 	got, err := r.GetCertificate(nil)
@@ -68,25 +70,56 @@ func TestNewCertReloader_InvalidCertPair(t *testing.T) {
 	require.NoError(t, os.WriteFile(certPath, []byte(certPEM1), 0o600))
 	require.NoError(t, os.WriteFile(keyPath, []byte(keyPEM2), 0o600))
 
-	_, err := NewCertReloader(certPath, keyPath)
+	_, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
 }
 
 func TestNewCertReloader_MissingFiles(t *testing.T) {
-	_, err := NewCertReloader("/nonexistent/cert.pem", "/nonexistent/key.pem")
+	_, err := NewCertReloader("/nonexistent/cert.pem", "/nonexistent/key.pem", logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
 }
 
 func TestNewCertReloader_EmptyPaths(t *testing.T) {
-	_, err := NewCertReloader("", "")
+	_, err := NewCertReloader("", "", logptest.NewTestingLogger(t, ""))
 	assert.Error(t, err)
+}
+
+// TestNewCertReloader_RejectsInlinePEM ensures inline PEM content — including a
+// malformed blob that lost its leading dashes — is rejected at construction, so
+// a private key can never be stored on the reloader's path fields and later
+// leaked to logs on a reload failure.
+func TestNewCertReloader_RejectsInlinePEM(t *testing.T) {
+	keyPEM, certPEM := makeKeyCertPair(t, blockTypePKCS8, "")
+	dir := t.TempDir()
+	certPath, keyPath := writeKeyAndCertFiles(t, dir)
+
+	// Malformed inline content that does not start with '-' (so the old
+	// IsPEMString guard would have let it through) but is clearly not a path.
+	armoredNoDash := "asdasd-----\n" + body(keyPEM)
+
+	tests := map[string]struct {
+		cert string
+		key  string
+	}{
+		"inline key, leading dashes":      {certPath, keyPEM},
+		"inline cert, leading dashes":     {certPEM, keyPath},
+		"malformed key, no leading dash":  {certPath, armoredNoDash},
+		"malformed cert, no leading dash": {armoredNoDash, keyPath},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewCertReloader(tc.cert, tc.key, logptest.NewTestingLogger(t, ""))
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestCertReloader_ReloadsAfterInterval(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(100*time.Millisecond))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
 	// Capture the initial certificate bytes.
@@ -108,7 +141,7 @@ func TestCertReloader_InvalidNewCert_KeepsOld(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(100*time.Millisecond))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(100*time.Millisecond))
 	require.NoError(t, err)
 
 	initial, err := r.GetCertificate(nil)
@@ -134,7 +167,7 @@ func TestCertReloader_NoReloadBeforeInterval(t *testing.T) {
 	certPath, keyPath := writeKeyAndCertFiles(t, dir)
 
 	// Use a long reload interval so it won't elapse during the test.
-	r, err := NewCertReloader(certPath, keyPath, WithReloadInterval(1*time.Hour))
+	r, err := NewCertReloader(certPath, keyPath, logptest.NewTestingLogger(t, ""), WithReloadInterval(1*time.Hour))
 	require.NoError(t, err)
 
 	initial, err := r.GetCertificate(nil)

@@ -78,14 +78,14 @@ func WithDisableLegacyPEMSupport(disable bool) CertReloaderOption {
 // NewCertReloader creates a CertReloader for the given cert and key file paths.
 // It performs an initial load of the certificate pair, returning an error if the
 // initial load fails.
-func NewCertReloader(certPath, keyPath string, opts ...CertReloaderOption) (*CertReloader, error) {
+func NewCertReloader(certPath, keyPath string, logger *logp.Logger, opts ...CertReloaderOption) (*CertReloader, error) {
 	if certPath == "" || keyPath == "" {
 		return nil, fmt.Errorf("certificate and key paths must be non-empty")
 	}
-	if IsPEMString(certPath) {
+	if isInlinePEM(certPath) {
 		return nil, fmt.Errorf("certificate must be a file path, not an inline PEM")
 	}
-	if IsPEMString(keyPath) {
+	if isInlinePEM(keyPath) {
 		return nil, fmt.Errorf("key must be a file path, not an inline PEM")
 	}
 
@@ -93,7 +93,7 @@ func NewCertReloader(certPath, keyPath string, opts ...CertReloaderOption) (*Cer
 		certPath:       certPath,
 		keyPath:        keyPath,
 		reloadInterval: defaultReloadInterval,
-		log:            logp.NewLogger("tls"),
+		log:            logger.Named("tls"),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -156,7 +156,7 @@ func (r *CertReloader) getCertificate() (*tls.Certificate, error) {
 
 	cert, err := r.loadKeyPair()
 	if err != nil {
-		r.log.Errorf("Failed to reload TLS certificate from %s and %s, continuing with current certificate: %v", r.certPath, r.keyPath, err)
+		r.log.Errorf("Failed to reload TLS certificate from %s and %s, continuing with current certificate: %v", pemSource(r.certPath), pemSource(r.keyPath), err)
 		return r.cert, nil
 	}
 	r.cert = &cert
