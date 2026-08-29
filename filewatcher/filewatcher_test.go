@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elastic/elastic-agent-libs/logp/logptest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,7 +45,7 @@ func TestFileWatcher(t *testing.T) {
 		filenames = append(filenames, filename)
 	}
 
-	watcher := New(filenames...)
+	watcher := New(logptest.NewTestingLogger(t, ""), filenames...)
 
 	// Modification timestamps usually have second precision,
 	// we wait to make sure we're not in the second the files were created

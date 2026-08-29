@@ -55,7 +55,7 @@ func HandleSignals(stopFunction func(), cancel context.CancelFunc) {
 	}()
 
 	// Handle the Windows service events
-	go ProcessWindowsControlEvents(func() {
+	go ProcessWindowsControlEvents(logger, func() {
 		logger.Info("Received Windows SVC stop/shutdown request")
 		callback.Do(stopFunction)
 	})
