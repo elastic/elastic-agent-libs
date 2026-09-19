@@ -19,8 +19,10 @@
 
 package service
 
+import "github.com/elastic/elastic-agent-libs/logp"
+
 // ProcessWindowsControlEvents is not used on non-windows platforms.
-func ProcessWindowsControlEvents(stopCallback func()) {
+func ProcessWindowsControlEvents(logger *logp.Logger, stopCallback func()) {
 }
 
 func notifyWindowsServiceStopped() {
