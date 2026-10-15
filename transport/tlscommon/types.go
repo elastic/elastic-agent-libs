@@ -55,7 +55,7 @@ var tlsCipherSuites = map[string]CipherSuite{
 	"ECDHE-RSA-AES-128-GCM-SHA256": CipherSuite(tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256),
 	"ECDHE-RSA-AES-256-CBC-SHA":    CipherSuite(tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA),
 	"ECDHE-RSA-AES-256-GCM-SHA384": CipherSuite(tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384),
-	"ECDHE-RSA-CHACHA20-POLY1205":  CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305),
+	"ECDHE-RSA-CHACHA20-POLY1305":  CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305),
 	"ECDHE-RSA-RC4-128-SHA":        CipherSuite(tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA),
 
 	// RSA-X
@@ -72,6 +72,13 @@ var tlsCipherSuites = map[string]CipherSuite{
 	"TLS-AES-128-GCM-SHA256":       CipherSuite(tls.TLS_AES_128_GCM_SHA256),
 	"TLS-AES-256-GCM-SHA384":       CipherSuite(tls.TLS_AES_256_GCM_SHA384),
 	"TLS-CHACHA20-POLY1305-SHA256": CipherSuite(tls.TLS_CHACHA20_POLY1305_SHA256),
+}
+
+// deprecatedTLSCipherSuites holds names that are still accepted when unpacking
+// a configuration but are never returned by CipherSuite.String.
+var deprecatedTLSCipherSuites = map[string]CipherSuite{
+	// Misspelling of ECDHE-RSA-CHACHA20-POLY1305.
+	"ECDHE-RSA-CHACHA20-POLY1205": CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305),
 }
 
 var (
@@ -263,6 +270,9 @@ func (cs *CipherSuite) Unpack(i any) error {
 	switch o := i.(type) {
 	case string:
 		suite, found := tlsCipherSuites[o]
+		if !found {
+			suite, found = deprecatedTLSCipherSuites[o]
+		}
 		if !found {
 			return fmt.Errorf("invalid tls cipher suite '%v'", o)
 		}
