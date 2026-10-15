@@ -429,6 +429,16 @@ func Test_CipherSuite_Unpack(t *testing.T) {
 		in:     "RSA-AES-128-CBC-SHA",
 		exp:    CipherSuite(tls.TLS_RSA_WITH_AES_128_CBC_SHA),
 	}, {
+		name:   "ECDHE-RSA-CHACHA20-POLY1305",
+		hasErr: false,
+		in:     "ECDHE-RSA-CHACHA20-POLY1305",
+		exp:    CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305),
+	}, {
+		name:   "deprecated ECDHE-RSA-CHACHA20-POLY1205",
+		hasErr: false,
+		in:     "ECDHE-RSA-CHACHA20-POLY1205",
+		exp:    CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305),
+	}, {
 		name:   "int64",
 		hasErr: false,
 		in:     int64(47),
@@ -454,6 +464,15 @@ func Test_CipherSuite_Unpack(t *testing.T) {
 				assert.Equal(t, tc.exp, *v)
 			}
 		})
+	}
+}
+
+func Test_CipherSuite_String(t *testing.T) {
+	assert.Equal(t, "ECDHE-RSA-CHACHA20-POLY1305", CipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305).String())
+	assert.Equal(t, "ECDHE-RSA-CHACHA20-POLY1305", ResolveCipherSuite(tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305))
+
+	for name, suite := range tlsCipherSuites {
+		assert.Equal(t, name, suite.String())
 	}
 }
 
