@@ -406,7 +406,13 @@ func makeVerifyConnection(cfg *TLSConfig, logger *logp.Logger) func(tls.Connecti
 				return checkAllChainsFIPS(chains)
 			}
 			// Static CAs: Go's stdlib handles chain + hostname verification
-			// (InsecureSkipVerify is false). We only need a callback for CA pin or FIPS checking.
+			// (InsecureSkipVerify is false). We only need a callback for the
+			// distrusted key, CA pin and FIPS checks.
+			chains, err := filterDistrustedChains(cs.VerifiedChains)
+			if err != nil {
+				return err
+			}
+			cs.VerifiedChains = chains
 			if len(cfg.CASha256) > 0 {
 				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
 					return err
@@ -451,11 +457,15 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 				if len(cs.PeerCertificates) == 0 {
 					return noPeerCertsError(cfg)
 				}
-				if err := verifyCAPin(cfg.CASha256, cs.VerifiedChains); err != nil {
+				chains, err := filterDistrustedChains(cs.VerifiedChains)
+				if err != nil {
+					return err
+				}
+				if err := verifyCAPin(cfg.CASha256, chains); err != nil {
 					return err
 				}
 				// CA pin verified — the verified chain is guaranteed non-empty.
-				return checkAllChainsFIPS(cs.VerifiedChains)
+				return checkAllChainsFIPS(chains)
 			}
 		}
 		// Static CAs: the TLS stack builds a verified chain for RequireAndVerifyClientCert
@@ -468,6 +478,11 @@ func makeVerifyServerConnection(cfg *TLSConfig) func(tls.ConnectionState) error 
 			if len(cs.PeerCertificates) == 0 {
 				return noPeerCertsError(cfg)
 			}
+			chains, err := filterDistrustedChains(cs.VerifiedChains)
+			if err != nil {
+				return err
+			}
+			cs.VerifiedChains = chains
 			return checkConnectionCertsFIPS(cs)
 		}
 	default:
@@ -486,6 +501,12 @@ func verifyCertsWithOpts(certs []*x509.Certificate, casha256 []string, opts x509
 		opts.Intermediates.AddCert(cert)
 	}
 	chains, err := certs[0].Verify(opts)
+	if err != nil {
+		return nil, err
+	}
+	// Verify only checks that a chain leads to a trusted root; drop chains
+	// through CA keys known to be compromised before pinning and FIPS checks.
+	chains, err = filterDistrustedChains(chains)
 	if err != nil {
 		return nil, err
 	}
