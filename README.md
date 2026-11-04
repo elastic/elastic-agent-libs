@@ -1,5 +1,10 @@
 # elastic-agent-libs
 
+> [!IMPORTANT]
+> The contents of this repository have been moved into Beats repository ([#53386](https://github.com/elastic/beats/pull/53386)).
+> This repository no longer accepts changes.
+> To make changes, contribute to the [Beats](https://github.com/elastic/beats/) repository.
+
 This repository is the home to the common libraries used by Elastic Agent and Beats.
 
 Provided packages:
