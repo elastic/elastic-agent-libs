@@ -334,6 +334,42 @@ func TestRotateExtension(t *testing.T) {
 	AssertDirContents(t, dir, secondFile, thirdFile)
 }
 
+func TestRotateIgnoresFilesSharingPrefix(t *testing.T) {
+	dir := t.TempDir()
+	logname := "elastic-agent"
+	filename := filepath.Join(dir, logname)
+
+	unrelated := []string{
+		"elastic-agent-metrics.ndjson",
+		"elastic-agent-20211111-metrics.ndjson",
+		"elastic-agent-.ndjson",
+	}
+	for _, name := range unrelated {
+		CreateFile(t, filepath.Join(dir, name))
+	}
+
+	c := &testClock{time.Date(2021, 11, 11, 0, 0, 0, 0, time.Local)}
+	r, err := file.NewFileRotator(filename, file.MaxBackups(1), file.WithClock(c))
+	require.NoError(t, err, "creating the rotator should succeed")
+	defer r.Close()
+
+	WriteMsg(t, r)
+	firstFile := fmt.Sprintf("%s-%s.ndjson", logname, c.Now().Format(file.DateFormat))
+	AssertDirContents(t, dir, append([]string{firstFile}, unrelated...)...)
+
+	c.time = time.Date(2021, 11, 12, 0, 0, 0, 0, time.Local)
+	Rotate(t, r)
+	WriteMsg(t, r)
+	secondFile := fmt.Sprintf("%s-%s.ndjson", logname, c.Now().Format(file.DateFormat))
+
+	c.time = time.Date(2021, 11, 13, 0, 0, 0, 0, time.Local)
+	Rotate(t, r)
+	WriteMsg(t, r)
+	thirdFile := fmt.Sprintf("%s-%s.ndjson", logname, c.Now().Format(file.DateFormat))
+
+	AssertDirContents(t, dir, append([]string{secondFile, thirdFile}, unrelated...)...)
+}
+
 func CreateFile(t *testing.T, filename string) {
 	t.Helper()
 	f, err := os.Create(filename)

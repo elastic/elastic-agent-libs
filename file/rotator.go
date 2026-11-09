@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -448,7 +449,7 @@ func newDateRotater(log Logger, filename, extension string, clock clock) rotater
 	d.extensionLen = len(d.extension)
 
 	d.currentFilename = d.filenamePrefix + d.clock.Now().Format(d.format) + d.extension
-	files, err := filepath.Glob(d.filenamePrefix + "*" + d.extension)
+	files, err := d.globLogs(d.filenamePrefix)
 	if err != nil {
 		return d
 	}
@@ -478,7 +479,7 @@ func (d *dateRotator) Rotate(reason rotateReason, rotateTime time.Time) error {
 	d.logOrderCache = make(map[string]logOrder, 0)
 
 	newFileNamePrefix := d.filenamePrefix + rotateTime.Format(d.format)
-	files, err := filepath.Glob(newFileNamePrefix + "*" + d.extension)
+	files, err := d.globLogs(newFileNamePrefix)
 	if err != nil {
 		return fmt.Errorf("failed to get possible files: %w", err)
 	}
@@ -497,7 +498,7 @@ func (d *dateRotator) Rotate(reason rotateReason, rotateTime time.Time) error {
 }
 
 func (d *dateRotator) RotatedFiles() []string {
-	files, err := filepath.Glob(d.filenamePrefix + "*" + d.extension)
+	files, err := d.globLogs(d.filenamePrefix)
 	if err != nil {
 		if d.log != nil {
 			d.log.Debugw("failed to list existing logs: %+v", err)
@@ -513,6 +514,43 @@ func (d *dateRotator) RotatedFiles() []string {
 
 	d.SortModTimeLogs(files)
 	return files
+}
+
+// globLogs returns the files starting with prefix that follow the
+// {filename}-{datetime}[-{index}]{extension} naming scheme. The glob alone also
+// matches unrelated files sharing the prefix, such as
+// elastic-agent-metrics.ndjson, which must never be rotated or purged.
+func (d *dateRotator) globLogs(prefix string) ([]string, error) {
+	files, err := filepath.Glob(prefix + "*" + d.extension)
+	if err != nil {
+		return nil, err
+	}
+	logs := files[:0]
+	for _, name := range files {
+		if d.isRotatorFile(name) {
+			logs = append(logs, name)
+		}
+	}
+	return logs, nil
+}
+
+func (d *dateRotator) isRotatorFile(filename string) bool {
+	if len(filename) < d.filenameLen+d.extensionLen ||
+		!strings.HasPrefix(filename, d.filenamePrefix) ||
+		!strings.HasSuffix(filename, d.extension) {
+		return false
+	}
+	if _, err := time.Parse(d.format, filename[d.prefixLen:d.filenameLen]); err != nil {
+		return false
+	}
+	if !d.isFilenameWithIndex(filename) {
+		return true
+	}
+	if filename[d.filenameLen] != '-' {
+		return false
+	}
+	index, err := d.filenameIndex(filename)
+	return err == nil && index > 0
 }
 
 // SortModTimeLogs puts newest file to the last
