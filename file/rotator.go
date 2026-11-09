@@ -70,9 +70,10 @@ type Rotator struct {
 	mutex sync.Mutex
 }
 
-// Logger allows the rotator to write debug information.
+// Logger allows the rotator to write debug information and report failures.
 type Logger interface {
 	Debugw(msg string, keysAndValues ...interface{}) // Debug
+	Warnw(msg string, keysAndValues ...interface{})  // Warn
 }
 
 // RotatorOption is a configuration option for Rotator.
@@ -271,9 +272,7 @@ func (r *Rotator) openNew() error {
 		if err = r.rot.Rotate(reason, t); err != nil {
 			return fmt.Errorf("failed to rotate backups: %w", err)
 		}
-		if err = r.purge(); err != nil {
-			return fmt.Errorf("failed to purge unnecessary rotated files: %w", err)
-		}
+		r.purgeAndReport()
 	}
 
 	return r.openFile()
@@ -325,9 +324,22 @@ func (r *Rotator) rotateWithTime(reason rotateReason, rotationTime time.Time) er
 		return fmt.Errorf("failed to rotate backups: %w", err)
 	}
 
-	return r.purge()
+	r.purgeAndReport()
+	return nil
 }
 
+// purgeAndReport logs purge failures instead of returning them
+func (r *Rotator) purgeAndReport() {
+	err := r.purge()
+	if err == nil || r.log == nil {
+		return
+	}
+	if r.log != nil {
+		r.log.Warnw("Failed to purge rotated files", "error", err)
+	}
+}
+
+// purge removes the oldest rotated files beyond maxBackups.
 func (r *Rotator) purge() error {
 	rotatedFiles := r.rot.RotatedFiles()
 	count := uint(len(rotatedFiles))
@@ -337,21 +349,14 @@ func (r *Rotator) purge() error {
 
 	purgeUntil := count - r.maxBackups
 	filesToPurge := rotatedFiles[:purgeUntil]
+	var errs []error
 	for _, name := range filesToPurge {
-		_, err := os.Stat(name)
-		switch {
-		case err == nil:
-			if err = os.Remove(name); err != nil {
-				return fmt.Errorf("failed to delete %v during rotation: %w", name, err)
-			}
-		case os.IsNotExist(err):
-			return nil
-		default:
-			return fmt.Errorf("failed on %v during rotation: %w", name, err)
+		if err := os.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("failed to delete %v during rotation: %w", name, err))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func (r *Rotator) isRotationTriggered(dataLen uint) (rotateReason, time.Time) {
